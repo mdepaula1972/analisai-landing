@@ -71,7 +71,7 @@ export default function BpoLandingMain() {
   const faqs = [
     {
       question: 'Vocês têm acesso ao saldo ou movimentação da minha conta bancária?',
-      answer: 'ABSOLUTAMENTE NÃO. Você mantém 100% de controle da sua conta bancária. Não solicitamos senhas, assinaturas nem acessos bancários diretos. Operamos exclusivamente com base nos extratos e comprovantes que você envia ou autoriza.'
+      answer: 'Para a conciliação bancária, sim — trabalhamos com os extratos e saldos que você nos disponibiliza. O que não fazemos, em nenhuma circunstância, é movimentar sua conta: não realizamos pagamentos, transferências nem temos senha de acesso. Você aprova e executa 100% das movimentações. Essa separação é formalizada em cláusula contratual de confidencialidade e limitação de acesso.'
     },
     {
       question: 'Como funciona a precificação do BPO Financeiro?',
@@ -182,8 +182,8 @@ export default function BpoLandingMain() {
           <div className="max-w-2xl mx-auto mb-10 bg-slate-900/90 border border-emerald-500/40 rounded-2xl p-4 sm:p-5 flex items-center justify-center gap-3 shadow-xl text-left">
             <ShieldCheck className="w-8 h-8 text-emerald-400 flex-shrink-0" />
             <div>
-              <p className="text-xs sm:text-sm font-bold text-white">100% Seguro — Zero Acesso Bancário Direto</p>
-              <p className="text-xs text-slate-400">Não movimentamos suas contas nem temos acesso aos seus saldos. Você mantém total controle.</p>
+              <p className="text-xs sm:text-sm font-bold text-white">Acesso Restrito, Zero Movimentação</p>
+              <p className="text-xs text-slate-400">Leitura de extratos para conciliação · Zero pagamentos ou transferências · Protegido por contrato formal de confidencialidade.</p>
             </div>
           </div>
 
@@ -209,7 +209,7 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── DESTAQUE DE PRIVACIDADE E SEGURANÇA ── */}
+      {/* ── DESTAQUE DE PRIVACIDADE E SEGURANÇA (REESCRITA PRECISA E HONESTA) ── */}
       <section id="seguranca" className="py-20 bg-slate-900/60 border-y border-slate-800/80 relative overflow-hidden">
         <div ref={semAcessoRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${semAcessoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-amber-500/30 rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-2xl">
@@ -224,22 +224,22 @@ export default function BpoLandingMain() {
 
               <div className="md:col-span-9 space-y-4 text-left">
                 <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
-                  Garantia de Sigilo & Proteção
+                  Segurança & Confidencialidade Contratual
                 </span>
                 <h2 className="text-2xl sm:text-4xl font-extrabold text-white">
-                  Não temos acesso às suas contas nem aos seus saldos bancários.
+                  Acesso Restrito, Zero Movimentação
                 </h2>
                 <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                  Sua privacidade financeira é intocável. No nosso modelo de BPO, <strong className="text-white">nossa equipe não possui senhas, não faz movimentações financeiras diretas e não consulta saldos no seu banco</strong>.
+                  Para realizar a conciliação bancária e o registro de contas a pagar, nossa equipe pode visualizar extratos e saldos fornecidos por você. <strong className="text-white">Porém, em nenhuma hipótese realizamos pagamentos, transferências ou qualquer movimentação em sua conta</strong> — toda efetivação financeira é feita exclusivamente por você ou por pessoa autorizada da sua empresa. Todo colaborador com acesso a essas informações está vinculado a cláusula de confidencialidade em contrato.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4 pt-2">
                   <div className="flex items-start gap-2.5">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span className="text-xs sm:text-sm text-slate-300">Você aprova e realiza todos os pagamentos finais</span>
+                    <span className="text-xs sm:text-sm text-slate-300">Você aprova e realiza 100% dos pagamentos finais</span>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span className="text-xs sm:text-sm text-slate-300">Trabalhamos com agendamentos e extratos fornecidos</span>
+                    <span className="text-xs sm:text-sm text-slate-300">Colaboradores protegidos por contrato formal de NDA</span>
                   </div>
                 </div>
               </div>
@@ -293,7 +293,7 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── PERFIS ATENDIDOS / CASOS DE USO (SUBSTITUI DEPOIMENTOS FICTÍCIOS) ── */}
+      {/* ── PERFIS ATENDIDOS / CASOS DE USO ── */}
       <section id="casos" className="py-24 bg-slate-900/30 border-y border-slate-800/60">
         <div ref={casosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${casosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
@@ -432,7 +432,7 @@ export default function BpoLandingMain() {
               <p className="text-slate-500">CNPJ: 57.740.336/0001-08 · Todos os direitos reservados.</p>
             </div>
             <p className="text-slate-600 max-w-md text-[11px] leading-relaxed">
-              O BPO Financeiro é um serviço consultivo de gestão operacional. Não realizamos movimentações bancárias diretas nem solicitamos acessos a contas de nossos clientes.
+              O BPO Financeiro é um serviço consultivo de gestão operacional. A visualização de extratos e saldos é restrita à conciliação e registro, sem qualquer poder de movimentação ou transferência bancária.
             </p>
           </div>
         </div>
