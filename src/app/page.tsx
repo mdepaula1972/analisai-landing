@@ -4,10 +4,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  ArrowRight, CheckCircle2, ChevronDown, Star,
+  ArrowRight, CheckCircle2, ChevronDown,
   DollarSign, RefreshCw, TrendingUp, FileText, Receipt,
   PieChart, Zap, Shield, Users, Target, BarChart3,
-  MessageCircle, Lock, Sparkles, AlertTriangle, ShieldCheck, Clock
+  MessageCircle, Lock, Sparkles, AlertTriangle, ShieldCheck, Clock,
+  Building2, Stethoscope, Briefcase
 } from 'lucide-react';
 
 /* ── CONFIGURAÇÃO DO WHATSAPP ── */
@@ -63,15 +64,18 @@ export default function BpoLandingMain() {
   const [heroRef, heroInView] = useInView(0.05);
   const [semAcessoRef, semAcessoInView] = useInView();
   const [servicosRef, servicosInView] = useInView();
+  const [casosRef, casosInView] = useInView();
   const [emBreveRef, emBreveInView] = useInView();
-  const [diferenciaisRef, diferenciaisInView] = useInView();
-  const [depoimentosRef, depoimentosInView] = useInView();
   const [faqRef, faqInView] = useInView();
 
   const faqs = [
     {
       question: 'Vocês têm acesso ao saldo ou movimentação da minha conta bancária?',
-      answer: 'ABSOLUTAMENTE NÃO. Você mantém 100% de controle da sua conta bancária. Não solicitamos senhas, assinaturas nem acessos bancários diretos. Operamos com base nos extratos e comprovantes que você envia ou autoriza.'
+      answer: 'ABSOLUTAMENTE NÃO. Você mantém 100% de controle da sua conta bancária. Não solicitamos senhas, assinaturas nem acessos bancários diretos. Operamos exclusivamente com base nos extratos e comprovantes que você envia ou autoriza.'
+    },
+    {
+      question: 'Como funciona a precificação do BPO Financeiro?',
+      answer: 'A precificação é personalizada sob medida de acordo com o volume de transações e o porte da sua empresa, garantindo o melhor custo-benefício sem custos fixos desnecessários. Apresentamos a proposta ideal em poucos minutos diretamente pelo WhatsApp.'
     },
     {
       question: 'O BPO Financeiro substitui a minha contabilidade?',
@@ -83,14 +87,26 @@ export default function BpoLandingMain() {
     },
     {
       question: 'E o AnalisAI.me (IA Preditiva)? Quando estará disponível?',
-      answer: 'O AnalisAI.me é nossa plataforma própria de inteligência preditiva que está em fase final de testes. Todos os clientes de BPO Financeiro terão acesso prioritário assim que for lançado!'
+      answer: 'O AnalisAI.me é nossa plataforma própria de inteligência preditiva que está em fase final de desenvolvimento. Todos os clientes de BPO Financeiro terão acesso prioritário assim que for lançado!'
     },
   ];
 
-  const testimonials = [
-    { name: 'Carlos Mendes', role: 'CEO · Distribuidora Meridian', stars: 5, text: 'Antes do BPO, eu gastava horas tentando organizar boletos. Hoje tudo roda redondo e recebo o relatório no WhatsApp toda semana.' },
-    { name: 'Ana Paula Ramos', role: 'Diretora · Clínica Vitallis', stars: 5, text: 'A tranquilidade de não precisar dar senha de banco para ninguém e ter controle total do caixa foi o grande diferencial para fecharmos.' },
-    { name: 'Felipe Souza', role: 'Sócio · Construtora FSB', stars: 5, text: 'Atendimento rápido direto no WhatsApp. Reduzimos custos e finalmente temos um fluxo de caixa previsível.' },
+  const casosDeUso = [
+    {
+      icon: <Building2 className="w-6 h-6 text-amber-400" />,
+      title: 'Comércio & Distribuição',
+      desc: 'Gestão de alto volume de boletos, conciliação diária de recebíveis, controle de fornecedores e fluxo de caixa contínuo.'
+    },
+    {
+      icon: <Stethoscope className="w-6 h-6 text-amber-400" />,
+      title: 'Clínicas & Serviços de Saúde',
+      desc: 'Organização de repasses, controle de contas a pagar, conciliação de recebimentos e DRE gerencial mensal simplificado.'
+    },
+    {
+      icon: <Briefcase className="w-6 h-6 text-amber-400" />,
+      title: 'Prestadores de Serviços & Tech',
+      desc: 'Previsibilidade de faturamento recorrente, acompanhamento de inadimplência, suporte na emissão de NFs e relatórios executivos.'
+    },
   ];
 
   return (
@@ -113,12 +129,13 @@ export default function BpoLandingMain() {
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Image src="/logo.png" alt="AnalisAI.me" width={480} height={132} className="h-14 sm:h-18 w-auto object-contain" priority />
+            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-14 sm:h-18 w-auto object-contain" priority />
           </div>
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
             <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
             <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços BPO</a>
+            <a href="#casos" className="hover:text-amber-400 transition-colors">Perfis Atendidos</a>
             <a href="#em-breve" className="hover:text-emerald-400 transition-colors flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> AnalisAI (Em Breve)
             </a>
@@ -149,7 +166,7 @@ export default function BpoLandingMain() {
           {/* Badge BPO */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider mb-8">
             <Zap className="w-4 h-4" />
-            BPO Financeiro — Seu Departamento Terceirizado
+            BPO Financeiro — Solucione Assessoria Virtual
           </div>
 
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 max-w-5xl mx-auto leading-[1.06]">
@@ -192,7 +209,7 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── DESTAQUE DE PRIVACIDADE E SEGURANÇA (CONSTE SOBRE NÃO TER ACESSO ÀS CONTAS/SALDOS) ── */}
+      {/* ── DESTAQUE DE PRIVACIDADE E SEGURANÇA ── */}
       <section id="seguranca" className="py-20 bg-slate-900/60 border-y border-slate-800/80 relative overflow-hidden">
         <div ref={semAcessoRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${semAcessoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-amber-500/30 rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-2xl">
@@ -270,14 +287,37 @@ export default function BpoLandingMain() {
               className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-8 py-4 rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-amber-500/20 text-sm"
             >
               <MessageCircle className="w-4 h-4 fill-slate-950" />
-              Solicitar Proposta no WhatsApp
+              Solicitar Proposta Sob Medida no WhatsApp
             </a>
           </div>
         </div>
       </section>
 
+      {/* ── PERFIS ATENDIDOS / CASOS DE USO (SUBSTITUI DEPOIMENTOS FICTÍCIOS) ── */}
+      <section id="casos" className="py-24 bg-slate-900/30 border-y border-slate-800/60">
+        <div ref={casosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${casosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="text-center mb-14">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-4">Soluções por Segmento</span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white">Perfis de Negócios que Atendemos</h2>
+            <p className="text-slate-400 text-sm mt-2">Processos financeiros desenhados para a realidade de cada setor empresarial.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {casosDeUso.map(({ icon, title, desc }, i) => (
+              <div key={i} className="card-glow-amber bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-2">
+                  {icon}
+                </div>
+                <h3 className="text-lg font-bold text-white">{title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed flex-1">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── CATÁLOGO / MANIFESTO DE INTERESSE: ANALISAI.ME EM BREVE ── */}
-      <section id="em-breve" className="py-24 bg-slate-900/50 border-y border-slate-800/80 relative overflow-hidden">
+      <section id="em-breve" className="py-24 bg-slate-900/50 border-b border-slate-800/80 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(16,185,129,0.08),transparent)] pointer-events-none" />
 
         <div ref={emBreveRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${emBreveInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
@@ -323,31 +363,6 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── DEPOIMENTOS ── */}
-      <section className="py-24">
-        <div ref={depoimentosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${depoimentosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          <div className="text-center mb-14">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-4">Depoimentos</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white">Empresas que confiam na nossa gestão</h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map(({ name, role, stars, text }, i) => (
-              <div key={i} className="card-glow-amber bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4">
-                <div className="flex gap-0.5">
-                  {Array.from({ length: stars }).map((_, j) => <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />)}
-                </div>
-                <p className="text-slate-300 text-sm leading-relaxed flex-1">&ldquo;{text}&rdquo;</p>
-                <div className="border-t border-slate-800 pt-4">
-                  <p className="text-white font-semibold text-sm">{name}</p>
-                  <p className="text-slate-500 text-xs">{role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── FAQ ── */}
       <section id="faq" className="py-24 bg-slate-900/30 border-t border-slate-800/60">
         <div ref={faqRef} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
@@ -361,7 +376,7 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── SEÇÃO FINAL: CONTATO DIRETO NO WHATSAPP (SEM FORMULÁRIOS) ── */}
+      {/* ── SEÇÃO FINAL: CONTATO DIRETO NO WHATSAPP ── */}
       <section className="py-28 relative overflow-hidden bg-slate-900/60 border-t border-slate-800/80">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/40 rounded-3xl p-8 sm:p-14 shadow-2xl relative overflow-hidden">
@@ -397,14 +412,28 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── FOOTER ── */}
-      <footer className="border-t border-slate-800/80 bg-slate-950 py-10 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <Image src="/logo.png" alt="AnalisAI.me" width={360} height={100} className="h-10 w-auto object-contain" />
-          <p>© {new Date().getFullYear()} AnalisAI.me. Todos os direitos reservados.</p>
-          <div className="flex gap-4">
-            <a href={WA_BPO_HERO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">WhatsApp</a>
-            <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
+      {/* ── FOOTER CORPORATIVO (CDC & LEI DO E-COMMERCE COMPLIANT) ── */}
+      <footer className="border-t border-slate-800/80 bg-slate-950 py-12 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-4">
+              <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={360} height={100} className="h-10 w-auto object-contain" />
+            </div>
+            <div className="flex gap-6 text-slate-400 font-medium">
+              <a href={WA_BPO_HERO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">Atendimento WhatsApp</a>
+              <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança & Sigilo</a>
+              <a href="#casos" className="hover:text-amber-400 transition-colors">Perfis Atendidos</a>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-800/60 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left">
+            <div>
+              <p className="text-slate-300 font-semibold mb-1">Solucione Assessoria Virtual</p>
+              <p className="text-slate-500">CNPJ: 57.740.336/0001-08 · Todos os direitos reservados.</p>
+            </div>
+            <p className="text-slate-600 max-w-md text-[11px] leading-relaxed">
+              O BPO Financeiro é um serviço consultivo de gestão operacional. Não realizamos movimentações bancárias diretas nem solicitamos acessos a contas de nossos clientes.
+            </p>
           </div>
         </div>
       </footer>
