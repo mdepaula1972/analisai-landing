@@ -10,9 +10,8 @@ import {
   MessageCircle, Lock, Sparkles, AlertTriangle, ShieldCheck, Clock
 } from 'lucide-react';
 
-/* ── CONFIGURAÇÃO DO WHATSAPP ──
-   Altere o número abaixo para o seu WhatsApp (DDI + DDD + Número) */
-const PHONE_NUMBER = '5511999999999'; // Exemplo: 5511999999999
+/* ── CONFIGURAÇÃO DO WHATSAPP ── */
+const PHONE_NUMBER = '5514930855878';
 
 const WA_BPO_HERO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de falar com um especialista sobre o BPO Financeiro do AnalisAI.me.')}`;
 const WA_BPO_PROPOSTA = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Quero solicitar uma proposta de BPO Financeiro para a minha empresa.')}`;
