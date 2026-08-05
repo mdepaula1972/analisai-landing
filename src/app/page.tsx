@@ -19,16 +19,16 @@ export default function HomePage() {
 
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80' : 'bg-transparent'}`}>
-        <div className="max-w-6xl mx-auto px-6 h-18 flex items-center justify-between py-4">
-          <Image src="/logo.png" alt="AnalisAI.me" width={160} height={44} className="h-10 w-auto object-contain" priority />
-          <a href="mailto:contato@analisai.me" className="text-xs text-slate-400 hover:text-emerald-400 transition-colors hidden sm:block">
+        <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between py-4">
+          <Image src="/logo.png" alt="AnalisAI.me" width={480} height={132} className="h-16 sm:h-18 w-auto object-contain" priority />
+          <a href="mailto:contato@analisai.me" className="text-xs text-slate-400 hover:text-emerald-400 transition-colors hidden sm:block font-medium">
             contato@analisai.me
           </a>
         </div>
       </header>
 
       {/* ── HERO ── */}
-      <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden px-4 pt-24 pb-20">
+      <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden px-4 pt-32 pb-20">
 
         {/* Backgrounds */}
         <div className="absolute inset-0 bg-grid opacity-30 pointer-events-none" />
@@ -38,16 +38,16 @@ export default function HomePage() {
 
         <div className="relative z-10 text-center max-w-4xl mx-auto transition-all duration-700 animate-fadeInUp">
 
-          {/* Logo grande */}
-          <div className="flex justify-center mb-8">
-            <div className="relative p-1">
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-amber-500/20 rounded-2xl blur-xl" />
+          {/* Logo grande 3x */}
+          <div className="flex justify-center mb-10">
+            <div className="relative p-2">
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/25 to-amber-500/25 rounded-3xl blur-2xl" />
               <Image
                 src="/logo.png"
                 alt="AnalisAI.me — Inteligência Financeira"
-                width={360}
-                height={100}
-                className="relative h-20 w-auto object-contain drop-shadow-2xl"
+                width={900}
+                height={250}
+                className="relative h-32 sm:h-44 md:h-52 w-auto object-contain drop-shadow-2xl"
                 priority
               />
             </div>

@@ -287,13 +287,13 @@ export default function AnalisaiPage() {
 
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl shadow-black/30' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/" id="analisai-back-home" className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-400 transition-colors text-sm font-medium">
               <ArrowLeft className="w-4 h-4" /> Início
             </Link>
             <span className="text-slate-700">|</span>
-            <Image src="/logo.png" alt="AnalisAI.me" width={150} height={42} className="h-9 w-auto object-contain" priority />
+            <Image src="/logo.png" alt="AnalisAI.me" width={480} height={132} className="h-14 sm:h-16 w-auto object-contain" priority />
           </div>
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
             {[['#demo-ia','Demo IA'],['#solucao','Solução'],['#recursos','Recursos'],['#seguranca','Segurança'],['#faq','FAQ']].map(([h,l])=>(
