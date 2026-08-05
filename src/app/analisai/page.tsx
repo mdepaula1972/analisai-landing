@@ -5,14 +5,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
   TrendingUp, ShieldCheck, Cpu, ArrowRight, ArrowLeft, Zap,
-  Lock, BarChart3, CheckCircle2, Users, Target, LineChart,
+  Lock, BarChart3, CheckCircle2, Target, LineChart,
   AlertCircle, ChevronDown, Star, Send, RefreshCw, Sparkles,
+  Users,
 } from 'lucide-react';
 
 const MAX_QUESTIONS = 5;
 const STORAGE_KEY = 'analisai_demo_count';
 
-/* ── useInView ── */
 function useInView(threshold = 0.12) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -26,10 +26,9 @@ function useInView(threshold = 0.12) {
     obs.observe(el);
     return () => obs.disconnect();
   }, [threshold]);
-  return { ref, inView };
+  return [ref, inView] as const;
 }
 
-/* ── FAQ Item ── */
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -49,29 +48,27 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
   );
 }
 
-/* ── Demo IA ── */
 interface Message { role: 'user' | 'ai'; text: string; }
 
 function AiDemo() {
-  const [remaining, setRemaining] = useState(MAX_QUESTIONS);
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  /* Restaura contagem da sessão via localStorage */
-  useEffect(() => {
+  const [remaining, setRemaining] = useState(() => {
+    if (typeof window === 'undefined') return MAX_QUESTIONS;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const { count, date } = JSON.parse(stored);
         const today = new Date().toDateString();
-        if (date === today) setRemaining(Math.max(0, MAX_QUESTIONS - count));
-        else localStorage.removeItem(STORAGE_KEY);
+        if (date === today) return Math.max(0, MAX_QUESTIONS - count);
+        localStorage.removeItem(STORAGE_KEY);
       }
-    } catch { /* ignora erros de parsing */ }
-  }, []);
+    } catch { /* ignora */ }
+    return MAX_QUESTIONS;
+  });
+
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -87,7 +84,6 @@ function AiDemo() {
     const question = text.trim();
     if (!question || loading || remaining <= 0) return;
 
-    setError('');
     setMessages(prev => [...prev, { role: 'user', text: question }]);
     setInput('');
     setLoading(true);
@@ -128,7 +124,6 @@ function AiDemo() {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl shadow-black/40">
-      {/* Header do demo */}
       <div className="bg-gradient-to-r from-emerald-900/30 to-slate-900 border-b border-slate-800 px-6 py-5 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
@@ -149,7 +144,6 @@ function AiDemo() {
         </div>
       </div>
 
-      {/* Área de conversa */}
       <div className="h-80 overflow-y-auto px-6 py-5 space-y-4 scroll-smooth" style={{ scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
         {messages.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4">
@@ -192,7 +186,6 @@ function AiDemo() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Sugestões */}
       {messages.length === 0 && remaining > 0 && (
         <div className="px-6 pb-3 flex flex-wrap gap-2">
           {suggestions.slice(0, 4).map((s, i) => (
@@ -208,7 +201,6 @@ function AiDemo() {
         </div>
       )}
 
-      {/* Input */}
       <div className="border-t border-slate-800 px-4 py-4">
         {remaining > 0 ? (
           <div className="flex gap-3">
@@ -255,7 +247,6 @@ function AiDemo() {
   );
 }
 
-/* ── Main Page ── */
 export default function AnalisaiPage() {
   const [scrolled, setScrolled] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', company: '' });
@@ -269,13 +260,13 @@ export default function AnalisaiPage() {
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); setSubmitted(true); };
 
-  const demoSection  = useInView();
-  const solucao      = useInView();
-  const recursos     = useInView();
-  const seguranca    = useInView();
-  const stats        = useInView();
-  const depoimentos  = useInView();
-  const faqSection   = useInView();
+  const [demoRef, demoInView] = useInView();
+  const [solucaoRef, solucaoInView] = useInView();
+  const [recursosRef, recursosInView] = useInView();
+  const [segurancaRef, segurancaInView] = useInView();
+  const [statsRef, statsInView] = useInView();
+  const [depoimentosRef, depoimentosInView] = useInView();
+  const [faqRef, faqInView] = useInView();
 
   const faqs = [
     { question: 'O AnalisAI.me precisa de acesso à minha conta bancária?', answer: 'Não. O AnalisAI.me trabalha com dados inseridos manualmente ou exportados de planilhas/ERPs. Nunca solicitamos senhas ou integrações bancárias diretas. Seu sigilo financeiro é 100% preservado.' },
@@ -350,7 +341,7 @@ export default function AnalisaiPage() {
             </a>
           </div>
 
-          <div ref={stats.ref} className={`mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-slate-800/80 pt-10 max-w-4xl mx-auto text-left transition-all duration-700 ${stats.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div ref={statsRef} className={`mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-slate-800/80 pt-10 max-w-4xl mx-auto text-left transition-all duration-700 ${statsInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             {[
               { v: '100%',      l: 'Sem Acesso Bancário Direto',   c: 'text-white' },
               { v: '+40%',      l: 'Precisão de Fluxo de Caixa',   c: 'text-emerald-400' },
@@ -369,7 +360,7 @@ export default function AnalisaiPage() {
       {/* ── DEMO DE IA ── */}
       <section id="demo-ia" className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(16,185,129,0.08),transparent)] pointer-events-none" />
-        <div ref={demoSection.ref} className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${demoSection.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={demoRef} className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${demoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-10">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-4">Experimente Agora</span>
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">
@@ -386,7 +377,7 @@ export default function AnalisaiPage() {
       {/* ── SOLUÇÃO ── */}
       <section id="solucao" className="py-28 bg-slate-900/40 border-y border-slate-800/60 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_100%,rgba(16,185,129,0.06),transparent)] pointer-events-none" />
-        <div ref={solucao.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${solucao.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={solucaoRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${solucaoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-4">Nossa Solução</span>
             <h2 className="text-3xl sm:text-5xl font-bold text-white mb-5 leading-tight">
@@ -415,7 +406,7 @@ export default function AnalisaiPage() {
 
       {/* ── RECURSOS ── */}
       <section id="recursos" className="py-28">
-        <div ref={recursos.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${recursos.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={recursosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${recursosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-4">Recursos</span>
             <h2 className="text-3xl sm:text-5xl font-bold text-white mb-5 leading-tight">
@@ -446,7 +437,7 @@ export default function AnalisaiPage() {
       {/* ── SEGURANÇA ── */}
       <section id="seguranca" className="py-28 bg-slate-900/40 border-y border-slate-800/60 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_60%_at_80%_50%,rgba(16,185,129,0.07),transparent)] pointer-events-none" />
-        <div ref={seguranca.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${seguranca.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={segurancaRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${segurancaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
               <span className="inline-block text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-4">Segurança</span>
@@ -495,7 +486,7 @@ export default function AnalisaiPage() {
 
       {/* ── DEPOIMENTOS ── */}
       <section className="py-28">
-        <div ref={depoimentos.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${depoimentos.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={depoimentosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${depoimentosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-4">Depoimentos</span>
             <h2 className="text-3xl sm:text-5xl font-bold text-white leading-tight">Empresas que já <span className="text-emerald-400">transformaram</span> seu financeiro</h2>
@@ -514,7 +505,7 @@ export default function AnalisaiPage() {
 
       {/* ── FAQ ── */}
       <section id="faq" className="py-28 bg-slate-900/40 border-t border-slate-800/60">
-        <div ref={faqSection.ref} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqSection.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={faqRef} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-4">FAQ</span>
             <h2 className="text-3xl sm:text-5xl font-bold text-white leading-tight">Perguntas <span className="text-emerald-400">frequentes</span></h2>

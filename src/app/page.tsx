@@ -7,10 +7,8 @@ import { ArrowRight, BarChart3, Cpu, ChevronRight } from 'lucide-react';
 
 export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const handler = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handler);
     return () => window.removeEventListener('scroll', handler);
@@ -38,7 +36,7 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none animate-float" />
         <div className="absolute bottom-10 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none animate-float delay-300" />
 
-        <div className={`relative z-10 text-center max-w-4xl mx-auto transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+        <div className="relative z-10 text-center max-w-4xl mx-auto transition-all duration-700 animate-fadeInUp">
 
           {/* Logo grande */}
           <div className="flex justify-center mb-8">

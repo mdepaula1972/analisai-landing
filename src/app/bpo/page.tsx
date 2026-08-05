@@ -6,10 +6,9 @@ import Link from 'next/link';
 import {
   ArrowRight, ArrowLeft, CheckCircle2, ChevronDown, Star,
   DollarSign, RefreshCw, TrendingUp, FileText, Receipt,
-  PieChart, Zap, Shield, Users, Clock, Target, BarChart3,
+  PieChart, Zap, Target, BarChart3, Users,
 } from 'lucide-react';
 
-/* ── useInView ── */
 function useInView(threshold = 0.12) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -20,10 +19,9 @@ function useInView(threshold = 0.12) {
     obs.observe(el);
     return () => obs.disconnect();
   }, [threshold]);
-  return { ref, inView };
+  return [ref, inView] as const;
 }
 
-/* ── FAQ Item ── */
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -45,7 +43,6 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
   );
 }
 
-/* ── Main ── */
 export default function BpoPage() {
   const [scrolled, setScrolled] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', company: '', phone: '' });
@@ -59,13 +56,13 @@ export default function BpoPage() {
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); setSubmitted(true); };
 
-  const hero      = useInView(0.05);
-  const dores     = useInView();
-  const servicos  = useInView();
-  const diferenciais = useInView();
-  const numeros   = useInView();
-  const depoimentos = useInView();
-  const faqSec    = useInView();
+  const [heroRef, heroInView] = useInView(0.05);
+  const [doresRef, doresInView] = useInView();
+  const [servicosRef, servicosInView] = useInView();
+  const [diferenciaisRef, diferenciaisInView] = useInView();
+  const [numerosRef, numerosInView] = useInView();
+  const [depoimentosRef, depoimentosInView] = useInView();
+  const [faqRef, faqInView] = useInView();
 
   const faqs = [
     { question: 'BPO Financeiro substitui meu contador?', answer: 'Não. O BPO Financeiro cuida da operação financeira do dia a dia (fluxo de caixa, contas a pagar/receber, conciliação). Já o contador trata das obrigações fiscais, tributárias e legais. As duas soluções se complementam e trabalhamos em conjunto com seu contador atual.' },
@@ -115,7 +112,7 @@ export default function BpoPage() {
         <div className="absolute top-1/4 -left-40 w-80 h-80 bg-amber-500/8 rounded-full blur-3xl animate-float pointer-events-none" />
         <div className="absolute top-1/3 -right-40 w-96 h-96 bg-amber-600/5 rounded-full blur-3xl animate-float delay-300 pointer-events-none" />
 
-        <div ref={hero.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center transition-all duration-700 ${hero.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div ref={heroRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center transition-all duration-700 ${heroInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-semibold uppercase tracking-wider mb-8">
             <Zap className="w-3.5 h-3.5" />
             BPO Financeiro — Terceirização Especializada
@@ -159,7 +156,7 @@ export default function BpoPage() {
 
       {/* ── DORES ── */}
       <section className="py-20 bg-slate-900/30 border-y border-slate-800/60 relative overflow-hidden">
-        <div ref={dores.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${dores.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={doresRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${doresInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">Você se identifica com alguma dessas situações?</h2>
             <p className="text-slate-400">Essas são as principais dores que o BPO Financeiro resolve.</p>
@@ -182,7 +179,7 @@ export default function BpoPage() {
 
       {/* ── SERVIÇOS ── */}
       <section id="servicos" className="py-28">
-        <div ref={servicos.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${servicos.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={servicosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${servicosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-amber-400 mb-4">O Que Fazemos</span>
             <h2 className="text-3xl sm:text-5xl font-bold text-white mb-5 leading-tight">
@@ -216,7 +213,7 @@ export default function BpoPage() {
       {/* ── DIFERENCIAIS ── */}
       <section id="diferenciais" className="py-28 bg-slate-900/40 border-y border-slate-800/60 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_60%_at_80%_50%,rgba(245,158,11,0.06),transparent)] pointer-events-none" />
-        <div ref={diferenciais.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${diferenciais.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={diferenciaisRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${diferenciaisInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
               <span className="inline-block text-xs font-semibold uppercase tracking-widest text-amber-400 mb-4">Nosso Diferencial</span>
@@ -278,7 +275,7 @@ export default function BpoPage() {
 
       {/* ── NÚMEROS ── */}
       <section id="numeros" className="py-28">
-        <div ref={numeros.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${numeros.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={numerosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${numerosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-2xl mx-auto mb-14">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-amber-400 mb-4">O Mercado</span>
             <h2 className="text-3xl sm:text-5xl font-bold text-white leading-tight">
@@ -304,7 +301,7 @@ export default function BpoPage() {
 
       {/* ── DEPOIMENTOS ── */}
       <section className="py-24 bg-slate-900/40 border-y border-slate-800/60">
-        <div ref={depoimentos.ref} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${depoimentos.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={depoimentosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${depoimentosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-amber-400 mb-4">Resultados Reais</span>
             <h2 className="text-3xl sm:text-4xl font-bold text-white">Empresas que já transformaram seu financeiro</h2>
@@ -328,7 +325,7 @@ export default function BpoPage() {
 
       {/* ── FAQ ── */}
       <section id="faq" className="py-28">
-        <div ref={faqSec.ref} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqSec.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={faqRef} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest text-amber-400 mb-4">FAQ</span>
             <h2 className="text-3xl sm:text-4xl font-bold text-white">Dúvidas frequentes</h2>
