@@ -242,6 +242,19 @@ export default function BpoLandingMain() {
                     <span className="text-xs sm:text-sm text-slate-300">Colaboradores protegidos por contrato formal de NDA</span>
                   </div>
                 </div>
+
+                {/* LINKS DOS DOCUMENTOS LEGAIS NA SEÇÃO DE SEGURANÇA */}
+                <div className="pt-4 border-t border-slate-800/80 flex flex-wrap gap-3">
+                  <Link href="/contrato" className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 font-semibold px-4 py-2 rounded-xl text-xs transition-colors">
+                    <FileText className="w-4 h-4" /> Modelo de Contrato BPO (DOCX / Online)
+                  </Link>
+                  <Link href="/privacidade" className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 hover:bg-slate-750 text-slate-300 font-semibold px-4 py-2 rounded-xl text-xs transition-colors">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Política de Privacidade
+                  </Link>
+                  <Link href="/termos" className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 hover:bg-slate-750 text-slate-300 font-semibold px-4 py-2 rounded-xl text-xs transition-colors">
+                    Termos de Uso
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -419,10 +432,11 @@ export default function BpoLandingMain() {
             <div className="flex items-center gap-4">
               <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={360} height={100} className="h-10 w-auto object-contain" />
             </div>
-            <div className="flex gap-6 text-slate-400 font-medium">
+            <div className="flex flex-wrap justify-center gap-6 text-slate-400 font-medium">
               <a href={WA_BPO_HERO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">Atendimento WhatsApp</a>
-              <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança & Sigilo</a>
-              <a href="#casos" className="hover:text-amber-400 transition-colors">Perfis Atendidos</a>
+              <Link href="/contrato" className="hover:text-amber-400 transition-colors">Modelo de Contrato</Link>
+              <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Política de Privacidade</Link>
+              <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos de Uso</Link>
             </div>
           </div>
 
