@@ -8,15 +8,17 @@ import {
   DollarSign, RefreshCw, TrendingUp, FileText, Receipt,
   PieChart, Zap, Shield, Users, Target, BarChart3,
   MessageCircle, Lock, Sparkles, AlertTriangle, ShieldCheck, Clock,
-  Building2, Stethoscope, Briefcase
+  Building2, Stethoscope, Briefcase, Star, Check, Calendar
 } from 'lucide-react';
 
 /* ── CONFIGURAÇÃO DO WHATSAPP ── */
 const PHONE_NUMBER = '5514930855878';
 
-const WA_BPO_HERO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de falar com um especialista sobre o BPO Financeiro do AnalisAI.me.')}`;
-const WA_BPO_PROPOSTA = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Quero solicitar uma proposta de BPO Financeiro para a minha empresa.')}`;
-const WA_ANALISAI_LISTA = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Tenho interesse no AnalisAI.me (IA Preditiva) e gostaria de entrar na lista de espera para testar em breve.')}`;
+const WA_DIAGNOSTICO_DIRETO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de agendar um Diagnóstico Financeiro Gratuito (30 a 45 min) para a minha empresa.')}`;
+const WA_PLANO_ESSENCIAL = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Tenho interesse no Plano Essencial de BPO Financeiro e gostaria de agendar um Diagnóstico Gratuito.')}`;
+const WA_PLANO_GESTAO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Tenho interesse no Plano Gestão (Mais Contratado) e quero agendar o Diagnóstico Financeiro Gratuito.')}`;
+const WA_PLANO_ESTRATEGICO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Tenho interesse no Plano Estratégico e gostaria de agendar uma reunião de diagnóstico sob medida.')}`;
+const WA_ANALISAI_BETA = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de me candidatar para participar do Programa Beta do Plano Inteligência Financeira (AnalisAI.me).')}`;
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -64,6 +66,7 @@ export default function BpoLandingMain() {
   const [heroRef, heroInView] = useInView(0.05);
   const [semAcessoRef, semAcessoInView] = useInView();
   const [servicosRef, servicosInView] = useInView();
+  const [planosRef, planosInView] = useInView();
   const [casosRef, casosInView] = useInView();
   const [emBreveRef, emBreveInView] = useInView();
   const [faqRef, faqInView] = useInView();
@@ -74,8 +77,8 @@ export default function BpoLandingMain() {
       answer: 'Para a conciliação bancária, sim — trabalhamos com os extratos e saldos que você nos disponibiliza. O que não fazemos, em nenhuma circunstância, é movimentar sua conta: não realizamos pagamentos, transferências nem temos senha de acesso. Você aprova e executa 100% das movimentações. Essa separação é formalizada em cláusula contratual de confidencialidade e limitação de acesso.'
     },
     {
-      question: 'Como funciona a precificação do BPO Financeiro?',
-      answer: 'A precificação é personalizada sob medida de acordo com o volume de transações e o porte da sua empresa, garantindo o melhor custo-benefício sem custos fixos desnecessários. Apresentamos a proposta ideal em poucos minutos diretamente pelo WhatsApp.'
+      question: 'Como funciona o Diagnóstico Financeiro Gratuito?',
+      answer: 'É uma reunião técnica de 30 a 45 minutos onde nosso especialista analisa a rotina atual da sua empresa, mapeia gargalos operacionais e dimensiona a solução exata para a sua realidade, sem compromisso.'
     },
     {
       question: 'O BPO Financeiro substitui a minha contabilidade?',
@@ -83,11 +86,11 @@ export default function BpoLandingMain() {
     },
     {
       question: 'Como faço para começar o atendimento?',
-      answer: 'É imediato! Não há formulários burocráticos. Basta clicar no botão de WhatsApp, conversar com nosso especialista e em até 48 horas fazemos o alinhamento inicial da sua empresa.'
+      answer: 'É imediato! Não há formulários burocráticos. Basta clicar no botão de WhatsApp para agendar o seu diagnóstico gratuito e iniciarmos o alinhamento da sua empresa.'
     },
     {
       question: 'E o AnalisAI.me (IA Preditiva)? Quando estará disponível?',
-      answer: 'O AnalisAI.me é nossa plataforma própria de inteligência preditiva que está em fase final de desenvolvimento. Todos os clientes de BPO Financeiro terão acesso prioritário assim que for lançado!'
+      answer: 'O AnalisAI.me é nosso laboratório de inteligência preditiva em constante evolução. Clientes de BPO Financeiro têm acesso prioritário ao Programa Beta conforme disponibilização gradual dos recursos.'
     },
   ];
 
@@ -114,15 +117,15 @@ export default function BpoLandingMain() {
 
       {/* ── BOTÃO FLUTUANTE DE WHATSAPP ── */}
       <a
-        href={WA_BPO_HERO}
+        href={WA_DIAGNOSTICO_DIRETO}
         target="_blank"
         rel="noopener noreferrer"
         id="btn-whatsapp-float"
         className="fixed bottom-6 right-6 z-50 bg-emerald-500 hover:bg-emerald-400 text-slate-950 p-4 rounded-full shadow-2xl shadow-emerald-500/40 flex items-center gap-3 group transition-all duration-300 hover:scale-110 animate-bounce"
-        aria-label="Falar no WhatsApp"
+        aria-label="Agendar Diagnóstico no WhatsApp"
       >
         <MessageCircle className="w-7 h-7 fill-slate-950 stroke-none" />
-        <span className="font-bold text-sm hidden sm:inline pr-1">Falar no WhatsApp</span>
+        <span className="font-bold text-sm hidden sm:inline pr-1">Agendar Diagnóstico</span>
       </a>
 
       {/* ── NAVBAR ── */}
@@ -133,27 +136,25 @@ export default function BpoLandingMain() {
           </div>
 
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+            <a href="#planos" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">Planos</a>
             <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
             <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços BPO</a>
             <a href="#casos" className="hover:text-amber-400 transition-colors">Perfis Atendidos</a>
-            <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors flex items-center gap-1">
+            <Link href="/parceiros" className="hover:text-amber-400 transition-colors flex items-center gap-1">
               🤝 Para Contadores
             </Link>
-            <a href="#em-breve" className="hover:text-emerald-400 transition-colors flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> AnalisAI (Em Breve)
-            </a>
             <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
           </nav>
 
           <a
-            href={WA_BPO_HERO}
+            href={WA_DIAGNOSTICO_DIRETO}
             target="_blank"
             rel="noopener noreferrer"
             id="nav-cta-whatsapp"
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-3 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-emerald-500/25 text-sm flex items-center gap-2"
           >
-            <MessageCircle className="w-4 h-4 fill-slate-950" />
-            Falar no WhatsApp
+            <Calendar className="w-4 h-4" />
+            Agendar Diagnóstico Gratuito
           </a>
         </div>
       </header>
@@ -193,27 +194,215 @@ export default function BpoLandingMain() {
           {/* CTAs WHATSAPP DERRUBANDO BARREIRAS */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
             <a
-              href={WA_BPO_HERO}
+              href={WA_DIAGNOSTICO_DIRETO}
               target="_blank"
               rel="noopener noreferrer"
               id="hero-cta-whatsapp-main"
               className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-8 py-4 rounded-2xl transition-all shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-3 text-base hover:scale-[1.03]"
             >
-              <MessageCircle className="w-5 h-5 fill-slate-950 stroke-none" />
-              Falar no WhatsApp Agora
+              <Calendar className="w-5 h-5 stroke-[2.5]" />
+              Agendar Diagnóstico Financeiro Gratuito
               <ArrowRight className="w-5 h-5" />
             </a>
           </div>
 
           <p className="text-xs text-slate-500 mt-4 flex items-center justify-center gap-2">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
-            Sem formulários chatos · Resposta rápida em minutos
+            Sessão de 30 a 45 minutos · Sem compromisso · Atendimento via WhatsApp
           </p>
         </div>
       </section>
 
-      {/* ── DESTAQUE DE PRIVACIDADE E SEGURANÇA (REESCRITA PRECISA E HONESTA) ── */}
-      <section id="seguranca" className="py-20 bg-slate-900/60 border-y border-slate-800/80 relative overflow-hidden">
+      {/* ── SEÇÃO PLANOS (NOVA SEÇÃO COM DESTAQUE VISUAL CRESCENTE) ── */}
+      <section id="planos" className="py-28 relative overflow-hidden bg-slate-900/40 border-y border-slate-800/80">
+        <div ref={planosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${planosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Planos sob medida</span>
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-4">
+              Escolha a estrutura ideal para a sua empresa
+            </h2>
+            <p className="text-slate-400 text-base sm:text-lg">Preços transparentes e soluções escaláveis para cada momento do seu negócio.</p>
+          </div>
+
+          {/* Grid dos 3 Planos Principais */}
+          <div className="grid md:grid-cols-3 gap-8 items-stretch mb-12">
+            
+            {/* Card 1: Plano Essencial */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col justify-between hover:border-amber-500/30 transition-all duration-300 text-left">
+              <div>
+                <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-800 px-3 py-1 rounded-full mb-4">
+                  Para começar com organização
+                </span>
+                <h3 className="text-2xl font-extrabold text-white mb-2">Plano Essencial</h3>
+                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+                  Ideal para empresas que precisam organizar sua rotina financeira com precisão.
+                </p>
+
+                <div className="border-t border-slate-800 pt-6 mb-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">O que inclui:</p>
+                  <ul className="space-y-2.5 text-xs text-slate-300">
+                    {['Contas a pagar', 'Contas a receber', 'Emissão de notas', 'Emissão de boletos', 'Conciliação bancária', 'Fluxo de caixa', 'Relatórios mensais', 'Suporte operacional'].map((item, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div>
+                <div className="border-t border-slate-800 pt-6 mb-6">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">A partir de</p>
+                  <p className="text-3xl font-black text-white">R$ 690<span className="text-xs font-normal text-slate-400">/mês</span></p>
+                </div>
+
+                <a
+                  href={WA_PLANO_ESSENCIAL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-slate-800 hover:bg-slate-750 text-white font-bold py-3.5 px-4 rounded-xl transition-all text-xs flex items-center justify-center gap-2 group"
+                >
+                  Agendar Diagnóstico Gratuito
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+            </div>
+
+            {/* Card 2: Plano Gestão (DESTAQUE MAIS CONTRATADO) */}
+            <div className="bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/70 rounded-3xl p-8 flex flex-col justify-between relative shadow-2xl shadow-amber-500/10 text-left transform md:-translate-y-2">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-xs font-extrabold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg">
+                ★ Mais Contratado
+              </div>
+
+              <div>
+                <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full mb-4 mt-2">
+                  Gestão &amp; Indicadores
+                </span>
+                <h3 className="text-2xl font-extrabold text-white mb-2">Plano Gestão</h3>
+                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+                  Para empresas que exigem previsibilidade, DRE gerencial e acompanhamento estratégico.
+                </p>
+
+                <div className="border-t border-slate-800 pt-6 mb-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-3">Tudo do Essencial, mais:</p>
+                  <ul className="space-y-2.5 text-xs text-slate-200">
+                    {['Fluxo de caixa projetado', 'Indicadores gerenciais', 'DRE Gerencial', 'Reuniões periódicas', 'Organização documental', 'Integração com a contabilidade', 'Acompanhamento financeiro'].map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 font-medium">
+                        <CheckCircle2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div>
+                <div className="border-t border-slate-800 pt-6 mb-6">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">A partir de</p>
+                  <p className="text-4xl font-black text-amber-400">R$ 1.190<span className="text-xs font-normal text-slate-400">/mês</span></p>
+                </div>
+
+                <a
+                  href={WA_PLANO_GESTAO}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-4 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/25 text-xs flex items-center justify-center gap-2 hover:scale-[1.02]"
+                >
+                  Quero organizar minha empresa
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+
+            {/* Card 3: Plano Estratégico */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col justify-between hover:border-amber-500/30 transition-all duration-300 text-left">
+              <div>
+                <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-800 px-3 py-1 rounded-full mb-4">
+                  Suporte Decisório Avançado
+                </span>
+                <h3 className="text-2xl font-extrabold text-white mb-2">Plano Estratégico</h3>
+                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+                  Para empresas consolidadas que necessitam de planejamento, simulações e orçamento empresarial.
+                </p>
+
+                <div className="border-t border-slate-800 pt-6 mb-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Tudo do Plano Gestão, mais:</p>
+                  <ul className="space-y-2.5 text-xs text-slate-300">
+                    {['Planejamento financeiro', 'Orçamento empresarial', 'Simulações de cenários', 'Apoio à tomada de decisão', 'Indicadores personalizados', 'Atendimento prioritário'].map((item, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div>
+                <div className="border-t border-slate-800 pt-6 mb-6">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Investimento</p>
+                  <p className="text-2xl font-extrabold text-white">Sob consulta</p>
+                </div>
+
+                <a
+                  href={WA_PLANO_ESTRATEGICO}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-slate-800 hover:bg-slate-750 text-white font-bold py-3.5 px-4 rounded-xl transition-all text-xs flex items-center justify-center gap-2 group"
+                >
+                  Agendar Diagnóstico Gratuito
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+            </div>
+
+          </div>
+
+          {/* CARD DIFERENCIADO: PLANO INTELIGÊNCIA FINANCEIRA (PROGRAMA BETA) */}
+          <div className="bg-gradient-to-r from-slate-900 via-emerald-950/30 to-slate-900 border border-emerald-500/40 rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-2xl text-left">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="grid lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-8 space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full">
+                    <Sparkles className="w-3.5 h-3.5" /> Programa Beta · Vagas Limitadas
+                  </span>
+                </div>
+
+                <h3 className="text-2xl sm:text-4xl font-extrabold text-white">
+                  Plano Inteligência Financeira
+                </h3>
+
+                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                  Nosso laboratório está desenvolvendo uma nova geração de gestão financeira baseada em inteligência artificial, indicadores inteligentes, simulações de cenários e apoio à tomada de decisão. Durante esta fase, o acesso será disponibilizado apenas para empresas selecionadas que desejam participar da evolução da plataforma. A participação é limitada e sujeita à disponibilidade.
+                </p>
+
+                <p className="text-[11px] text-slate-400 italic">
+                  * Em desenvolvimento contínuo. Recursos disponibilizados gradualmente conforme evolução da plataforma.
+                </p>
+              </div>
+
+              <div className="lg:col-span-4 flex flex-col justify-center">
+                <a
+                  href={WA_ANALISAI_BETA}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-4 px-6 rounded-2xl transition-all shadow-xl shadow-emerald-500/25 text-xs sm:text-sm flex items-center justify-center gap-2 hover:scale-[1.02]"
+                >
+                  <Sparkles className="w-4 h-4 fill-slate-950 stroke-none" />
+                  Quero participar do Programa Beta
+                </a>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── DESTAQUE DE PRIVACIDADE E SEGURANÇA ── */}
+      <section id="seguranca" className="py-20 bg-slate-900/60 border-b border-slate-800/80 relative overflow-hidden">
         <div ref={semAcessoRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${semAcessoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-amber-500/30 rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -227,7 +416,7 @@ export default function BpoLandingMain() {
 
               <div className="md:col-span-9 space-y-4 text-left">
                 <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
-                  Segurança & Confidencialidade Contratual
+                  Segurança &amp; Confidencialidade Contratual
                 </span>
                 <h2 className="text-2xl sm:text-4xl font-extrabold text-white">
                   Acesso Restrito, Zero Movimentação
@@ -297,13 +486,13 @@ export default function BpoLandingMain() {
           {/* CTA WHATSAPP INTERMEDIÁRIO */}
           <div className="mt-12 text-center">
             <a
-              href={WA_BPO_PROPOSTA}
+              href={WA_DIAGNOSTICO_DIRETO}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-8 py-4 rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-amber-500/20 text-sm"
             >
-              <MessageCircle className="w-4 h-4 fill-slate-950" />
-              Solicitar Proposta Sob Medida no WhatsApp
+              <Calendar className="w-4 h-4 stroke-[2.5]" />
+              Agendar Diagnóstico Financeiro Gratuito
             </a>
           </div>
         </div>
@@ -332,53 +521,6 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── CATÁLOGO / MANIFESTO DE INTERESSE: ANALISAI.ME EM BREVE ── */}
-      <section id="em-breve" className="py-24 bg-slate-900/50 border-b border-slate-800/80 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(16,185,129,0.08),transparent)] pointer-events-none" />
-
-        <div ref={emBreveRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${emBreveInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/30 rounded-3xl p-8 sm:p-14 text-center relative overflow-hidden shadow-2xl">
-
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-6">
-              <Sparkles className="w-4 h-4" />
-              Em Breve · Catálogo de Inovação
-            </span>
-
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-4">
-              AnalisAI.me — Motor de IA Preditiva
-            </h2>
-
-            <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
-              Estamos finalizando nossa plataforma de simulação de cenários financeiros com inteligência artificial. Projeções de caixa com total privacidade e sem integração bancária.
-            </p>
-
-            <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto mb-10 text-left">
-              {[
-                { title: 'Simulação Preditiva', desc: 'Simule o impacto de contratações e compras antes de investir.' },
-                { title: 'Detecção de Gargalos', desc: 'Alertas automáticos de risco de inadimplência.' },
-                { title: 'Prioridade aos Clientes BPO', desc: 'Acesso antecipado garantido para nossos clientes de BPO.' },
-              ].map(({ title, desc }, i) => (
-                <div key={i} className="bg-slate-950/80 border border-slate-800 rounded-xl p-4">
-                  <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">{title}</p>
-                  <p className="text-xs text-slate-400">{desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <a
-              href={WA_ANALISAI_LISTA}
-              target="_blank"
-              rel="noopener noreferrer"
-              id="btn-manifestar-interesse"
-              className="inline-flex items-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-8 py-4 rounded-2xl transition-all hover:scale-[1.03] shadow-xl shadow-emerald-500/25 text-sm"
-            >
-              <MessageCircle className="w-5 h-5 fill-slate-950 stroke-none" />
-              Manifestar Interesse na IA (Lista de Espera)
-            </a>
-          </div>
-        </div>
-      </section>
-
       {/* ── FAQ ── */}
       <section id="faq" className="py-24 bg-slate-900/30 border-t border-slate-800/60">
         <div ref={faqRef} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
@@ -398,26 +540,26 @@ export default function BpoLandingMain() {
           <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/40 rounded-3xl p-8 sm:p-14 shadow-2xl relative overflow-hidden">
 
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto mb-6">
-              <MessageCircle className="w-8 h-8 text-emerald-400 fill-emerald-400" />
+              <Calendar className="w-8 h-8 text-emerald-400" />
             </div>
 
             <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-4">
-              Atendimento Direto no WhatsApp
+              Agende seu Diagnóstico Financeiro Gratuito
             </h2>
 
             <p className="text-slate-300 text-base sm:text-lg max-w-xl mx-auto mb-8 leading-relaxed">
-              Eliminamos formulários, cadastros longos e espera por e-mail. Converse diretamente com nosso especialista agora.
+              Uma reunião consultiva de 30 a 45 minutos para mapear as necessidades reais da sua empresa e apresentar a estrutura ideal.
             </p>
 
             <a
-              href={WA_BPO_HERO}
+              href={WA_DIAGNOSTICO_DIRETO}
               target="_blank"
               rel="noopener noreferrer"
               id="btn-whatsapp-final"
               className="inline-flex items-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-10 py-5 rounded-2xl transition-all hover:scale-[1.03] shadow-2xl shadow-emerald-500/30 text-base"
             >
-              <MessageCircle className="w-6 h-6 fill-slate-950 stroke-none" />
-              Iniciar Conversa no WhatsApp
+              <Calendar className="w-6 h-6 stroke-[2.5]" />
+              Agendar Diagnóstico Gratuito no WhatsApp
               <ArrowRight className="w-5 h-5" />
             </a>
 
@@ -428,7 +570,7 @@ export default function BpoLandingMain() {
         </div>
       </section>
 
-      {/* ── FOOTER CORPORATIVO (CDC & LEI DO E-COMMERCE COMPLIANT) ── */}
+      {/* ── FOOTER CORPORATIVO ── */}
       <footer className="border-t border-slate-800/80 bg-slate-950 py-12 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -436,7 +578,7 @@ export default function BpoLandingMain() {
               <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={360} height={100} className="h-10 w-auto object-contain" />
             </div>
             <div className="flex flex-wrap justify-center gap-6 text-slate-400 font-medium">
-              <a href={WA_BPO_HERO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">Atendimento WhatsApp</a>
+              <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">Agendar Diagnóstico</a>
               <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors">🤝 Para Contadores</Link>
               <Link href="/contrato" className="hover:text-amber-400 transition-colors">Modelo de Contrato</Link>
               <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Política de Privacidade</Link>

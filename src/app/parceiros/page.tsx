@@ -62,16 +62,16 @@ export default function ParceirosPage() {
   }, []);
 
   const [heroRef, heroInView] = useInView(0.05);
+  const [crescemosRef, crescemosInView] = useInView();
   const [doresRef, doresInView] = useInView();
   const [transicaoRef, transicaoInView] = useInView();
   const [comoFuncionaRef, comoFuncionaInView] = useInView();
   const [beneficiosRef, beneficiosInView] = useInView();
-  const [oqueExecutamosRef, oqueExecutamosInView] = useInView();
-  const [experienciaRef, experienciaInView] = useInView();
   const [porQueRef, porQueInView] = useInView();
+  const [experienciaRef, experienciaInView] = useInView();
+  const [oqueExecutamosRef, oqueExecutamosInView] = useInView();
+  const [inovacaoRef, inovacaoInView] = useInView();
   const [compromissoRef, compromissoInView] = useInView();
-  const [programaRef, programaInView] = useInView();
-  const [diferencialRef, diferencialInView] = useInView();
   const [faqRef, faqInView] = useInView();
 
   const doresContador = [
@@ -87,16 +87,19 @@ export default function ParceirosPage() {
     { num: '1', title: 'Identificação', desc: 'Você identifica um cliente com necessidade urgente de organização financeira.' },
     { num: '2', title: 'Apresentação', desc: 'Você nos apresenta ao cliente de forma simples e direta.' },
     { num: '3', title: 'Operação BPO', desc: 'Nossa equipe assume toda a operação financeira diária do seu cliente.' },
-    { num: '4', title: 'Acompanhamento & Benefício', desc: 'Você acompanha a evolução e recebe remuneração por indicação.' },
+    { num: '4', title: 'Acompanhamento & Benefício', desc: 'Você acompanha a evolução e conta com modelo transparente de participação financeira.' },
   ];
 
-  const beneficios = [
-    { title: 'Mais produtividade', desc: 'Reduza o tempo gasto com atividades administrativas que não fazem parte do escopo contábil.', icon: <TrendingUp className="w-6 h-6 text-amber-400" /> },
-    { title: 'Clientes mais organizados', desc: 'Receba documentos e informações muito mais consistentes, no prazo certo e sem erros.', icon: <CheckCircle2 className="w-6 h-6 text-amber-400" /> },
-    { title: 'Mais valor percebido', desc: 'Seu escritório passa a entregar uma solução completa de inteligência de gestão para o cliente.', icon: <Award className="w-6 h-6 text-amber-400" /> },
-    { title: 'Remuneração por Indicação', desc: 'Receba benefício financeiro contínuo e participação comercial por cada cliente indicado e ativo.', icon: <DollarSign className="w-6 h-6 text-amber-400" /> },
-    { title: 'Sem aumentar equipe', desc: 'Você amplia o portfólio de serviços do seu escritório sem precisar contratar novos funcionários.', icon: <Users className="w-6 h-6 text-amber-400" /> },
-    { title: 'Atendimento especializado', desc: 'Toda operação financeira fica sob responsabilidade de profissionais experientes.', icon: <ShieldCheck className="w-6 h-6 text-amber-400" /> },
+  const beneficiosParceiro = [
+    'Participação financeira recorrente pelas indicações elegíveis',
+    'Sem investimento inicial',
+    'Sem mensalidade',
+    'Sem metas obrigatórias',
+    'Atendimento prioritário',
+    'Relacionamento de longo prazo',
+    'Equipe dedicada',
+    'Comunicação transparente',
+    'Integração com a contabilidade',
   ];
 
   const oqueExecutamos = [
@@ -121,31 +124,26 @@ export default function ParceirosPage() {
     { title: 'Compromisso com ética e conformidade legal', desc: 'Contratos formais de confidencialidade (NDA), conformidade com a LGPD e regras do CFC.' },
   ];
 
-  const programaCards = [
-    'Remuneração por indicação',
-    'Sem investimento inicial',
-    'Sem mensalidade',
-    'Acompanhamento dedicado',
-    'Relacionamento de longo prazo',
-    'Modelo transparente',
-  ];
-
   const faqs = [
+    {
+      question: 'Como funciona a parceria?',
+      answer: 'Após uma conversa inicial, apresentamos o funcionamento do programa e definimos o modelo mais adequado para o perfil do seu escritório.'
+    },
+    {
+      question: 'Existe contrato?',
+      answer: 'Sim. Todas as parcerias são formalizadas para garantir transparência e segurança para ambas as partes.'
+    },
+    {
+      question: 'Como funciona a participação financeira?',
+      answer: 'Os detalhes são apresentados durante nossa reunião comercial, considerando o perfil do escritório parceiro e o potencial de crescimento conjunto.'
+    },
+    {
+      question: 'Posso indicar apenas um cliente?',
+      answer: 'Sim! Nosso programa foi desenvolvido para atender desde pequenos escritórios até operações de maior porte.'
+    },
     {
       question: 'O cliente continua sendo meu?',
       answer: 'Sim! Absolutamente. Nosso relacionamento com o cliente é exclusivamente operacional e focado na gestão financeira. O relacionamento contábil, fiscal e tributário continua 100% sob a responsabilidade do seu escritório.'
-    },
-    {
-      question: 'Posso acompanhar o atendimento?',
-      answer: 'Sim. Você terá visibilidade total dos processos e relatórios produzidos para o seu cliente, facilitando inclusive o fechamento contábil mensal da sua equipe.'
-    },
-    {
-      question: 'Existe exclusividade ou permanência mínima?',
-      answer: 'Não. A parceria é livre de multas ou amarras. Nosso objetivo é construir um relacionamento sólido e vantajoso para ambas as partes por meio da excelência do serviço entregue.'
-    },
-    {
-      question: 'Como funciona a remuneração por indicação?',
-      answer: 'Apresentamos a estrutura de participação comercial e os detalhes do benefício financeiro durante nossa reunião de alinhamento pelo WhatsApp ou vídeo.'
     },
     {
       question: 'Vocês realizam serviços contábeis?',
@@ -181,10 +179,12 @@ export default function ParceirosPage() {
           </div>
 
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
-            <a href="#como-funciona" className="hover:text-amber-400 transition-colors">Como Funciona</a>
+            <a href="#programa" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">O Programa</a>
             <a href="#beneficios" className="hover:text-amber-400 transition-colors">Benefícios</a>
             <a href="#por-que-escolhem" className="hover:text-amber-400 transition-colors">Por Que Nós</a>
-            <a href="#experiencia" className="hover:text-amber-400 transition-colors">Experiência</a>
+            <a href="#inovacao" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> Inovação
+            </a>
             <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
           </nav>
 
@@ -224,7 +224,7 @@ export default function ParceirosPage() {
               </h1>
 
               <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-                Seus clientes precisam de organização financeira. Nós executamos o trabalho. Você fortalece seu relacionamento com o cliente, reduz retrabalho e ainda recebe remuneração por indicação.
+                Seus clientes precisam de organização financeira. Nós executamos o trabalho. Você fortalece seu relacionamento com o cliente, reduz retrabalho e ainda conta com participação financeira pelas indicações.
               </p>
 
               {/* Botões de Ação */}
@@ -285,7 +285,7 @@ export default function ParceirosPage() {
                       <Building2 className="w-5 h-5 text-amber-400" />
                       <span className="text-xs font-semibold text-white">Escritório Contábil</span>
                     </div>
-                    <span className="text-xs text-amber-400 font-bold">+ Remuneração por Indicação</span>
+                    <span className="text-xs text-amber-400 font-bold">+ Participação Financeira</span>
                   </div>
 
                   <div className="flex justify-center my-1">
@@ -314,7 +314,7 @@ export default function ParceirosPage() {
                 </div>
 
                 <div className="border-t border-slate-800/80 pt-4 flex items-center justify-between text-xs text-slate-400">
-                  <span className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-amber-400" /> DRE & Fluxo</span>
+                  <span className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-amber-400" /> DRE &amp; Fluxo</span>
                   <span className="flex items-center gap-1.5"><Receipt className="w-4 h-4 text-emerald-400" /> Notas Organizadas</span>
                 </div>
               </div>
@@ -324,8 +324,47 @@ export default function ParceirosPage() {
         </div>
       </section>
 
+      {/* ── SEÇÃO NOVA: PROGRAMA DE PARCERIAS (CRESCEMOS JUNTOS) ── */}
+      <section id="programa" className="py-24 bg-slate-900/60 border-y border-slate-800/80 relative overflow-hidden">
+        <div ref={crescemosRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${crescemosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-amber-500/30 rounded-3xl p-8 sm:p-14 shadow-2xl text-left relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-72 h-72 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="max-w-3xl space-y-5">
+              <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
+                Parceria Comercial Estratégica
+              </span>
+
+              <h2 className="text-3xl sm:text-5xl font-extrabold text-white">
+                Crescemos juntos.
+              </h2>
+
+              <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
+                Nosso Programa de Parcerias foi desenvolvido para escritórios contábeis que desejam ampliar o valor entregue aos seus clientes, reduzir retrabalho e construir uma relação comercial de longo prazo.
+              </p>
+
+              <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
+                Além de fortalecer o relacionamento com seus clientes, nossos parceiros contam com um modelo transparente de participação financeira pelas indicações realizadas. Cada parceria é estruturada de acordo com o perfil do escritório e o potencial de crescimento conjunto.
+              </p>
+
+              <div className="pt-4">
+                <a
+                  href={WA_PARCEIRO_HERO}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-8 py-4 rounded-2xl transition-all hover:scale-[1.02] shadow-xl shadow-amber-500/20 text-sm"
+                >
+                  <Handshake className="w-5 h-5" />
+                  Conhecer o Programa de Parcerias
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── SEÇÃO: DORES DO CONTADOR ── */}
-      <section className="py-20 bg-slate-900/40 border-y border-slate-800/80 relative overflow-hidden">
+      <section className="py-20">
         <div ref={doresRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${doresInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Realidade dos Escritórios</span>
@@ -355,7 +394,7 @@ export default function ParceirosPage() {
       </section>
 
       {/* ── BLOCO DE TRANSIÇÃO ── */}
-      <section className="py-24 relative overflow-hidden">
+      <section className="py-24 bg-slate-900/30 border-y border-slate-800/80 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(16,185,129,0.08),transparent)] pointer-events-none" />
 
         <div ref={transicaoRef} className={`max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 transition-all duration-700 ${transicaoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
@@ -383,7 +422,7 @@ export default function ParceirosPage() {
       </section>
 
       {/* ── COMO FUNCIONA (TIMELINE EM 4 ETAPAS) ── */}
-      <section id="como-funciona" className="py-24 bg-slate-900/40 border-y border-slate-800/80">
+      <section id="como-funciona" className="py-24">
         <div ref={comoFuncionaRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${comoFuncionaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Passo a Passo</span>
@@ -412,33 +451,30 @@ export default function ParceirosPage() {
         </div>
       </section>
 
-      {/* ── BENEFÍCIOS PARA O CONTADOR ── */}
-      <section id="beneficios" className="py-28">
+      {/* ── BENEFÍCIOS DO PARCEIRO (CARDS EXCLUSIVOS) ── */}
+      <section id="beneficios" className="py-24 bg-slate-900/40 border-y border-slate-800/80">
         <div ref={beneficiosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${beneficiosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Vantagens Exclusivas</span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-white">Benefícios para o seu Escritório</h2>
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Vantagens do Programa</span>
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white">Benefícios do Parceiro</h2>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {beneficios.map(({ title, desc, icon }, i) => (
-              <div key={i} className="card-glow-amber bg-slate-900 border border-slate-800 hover:border-amber-500/40 p-8 rounded-3xl transition-all duration-300 text-left">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-5">
-                  {icon}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
+            {beneficiosParceiro.map((item, i) => (
+              <div key={i} className="card-glow-amber bg-slate-900 border border-slate-800 hover:border-amber-500/40 p-6 rounded-2xl flex items-center gap-4 transition-all">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
+                  <Check className="w-5 h-5" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{desc}</p>
+                <span className="text-sm font-bold text-slate-200">{item}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── SEÇÃO NOVA: POR QUE OS ESCRITÓRIOS ESCOLHEM TRABALHAR CONOSCO? (PROVA INSTITUCIONAL) ── */}
-      <section id="por-que-escolhem" className="py-28 bg-slate-900/50 border-y border-slate-800/80 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_50%,rgba(16,185,129,0.06),transparent)] pointer-events-none" />
-
-        <div ref={porQueRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${porQueInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+      {/* ── POR QUE OS ESCRITÓRIOS ESCOLHEM TRABALHAR CONOSCO? (PROVA INSTITUCIONAL) ── */}
+      <section id="por-que-escolhem" className="py-28">
+        <div ref={porQueRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${porQueInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-emerald-400 mb-3">Prova Institucional</span>
             <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-5">
@@ -457,6 +493,33 @@ export default function ParceirosPage() {
                 <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── BLOCO INSTITUCIONAL: INOVAÇÃO CONTÍNUA ── */}
+      <section id="inovacao" className="py-24 bg-slate-900/60 border-y border-slate-800/80 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(16,185,129,0.08),transparent)] pointer-events-none" />
+
+        <div ref={inovacaoRef} className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${inovacaoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-emerald-500/30 rounded-3xl p-8 sm:p-14 text-left relative overflow-hidden shadow-2xl">
+            <div className="max-w-3xl space-y-4">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full">
+                <Sparkles className="w-3.5 h-3.5" /> Futuro da Gestão Financeira
+              </span>
+
+              <h2 className="text-3xl sm:text-5xl font-extrabold text-white">
+                Inovação Contínua
+              </h2>
+
+              <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
+                Estamos investindo continuamente em tecnologia para ampliar os serviços oferecidos aos nossos parceiros. Entre nossos projetos está uma plataforma inteligente de apoio à gestão financeira, atualmente em fase de desenvolvimento e validação.
+              </p>
+
+              <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
+                Os escritórios parceiros poderão participar dessa evolução e terão acesso antecipado às novidades, conforme disponibilidade e cronograma do projeto.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -500,7 +563,7 @@ export default function ParceirosPage() {
               { val: '+40 Anos', label: 'Experiência Acumulada' },
               { val: '100%', label: 'Conformidade LGPD & Ética' },
               { val: 'Zero', label: 'Concorrência com Contador' },
-              { val: 'Recorrente', label: 'Remuneração por Indicação' },
+              { val: 'Recorrente', label: 'Participação por Indicação' },
             ].map(({ val, label }, i) => (
               <div key={i}>
                 <p className="text-2xl sm:text-4xl font-extrabold text-amber-400 mb-1">{val}</p>
@@ -528,19 +591,6 @@ export default function ParceirosPage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ── DIFERENCIAL: MAIS DO QUE BPO FINANCEIRO ── */}
-      <section className="py-20">
-        <div ref={diferencialRef} className={`max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-700 ${diferencialInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Nosso Propósito</span>
-          <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-6">
-            Mais do que BPO Financeiro.
-          </h2>
-          <p className="text-slate-300 text-base sm:text-lg max-w-3xl mx-auto leading-relaxed">
-            Nosso objetivo não é apenas pagar contas. Organizamos processos. Estruturamos informações. Produzimos indicadores. Criamos uma base financeira confiável para que empresários tomem decisões melhores e para que o contador trabalhe com informações mais consistentes.
-          </p>
         </div>
       </section>
 
@@ -582,29 +632,8 @@ export default function ParceirosPage() {
         </div>
       </section>
 
-      {/* ── PROGRAMA DE PARCEIROS ── */}
-      <section className="py-24 bg-slate-900/30 border-y border-slate-800/80">
-        <div ref={programaRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${programaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-emerald-400 mb-3">Modelo Transparente</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white">Programa de Parceiros Contábeis</h2>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {programaCards.map((item, i) => (
-              <div key={i} className="bg-slate-900 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-6 text-left flex items-center gap-4 transition-colors">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                  <Check className="w-5 h-5" />
-                </div>
-                <span className="text-sm font-bold text-white">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── FAQ DO CONTADOR ── */}
-      <section id="faq" className="py-24">
+      <section id="faq" className="py-24 bg-slate-900/30 border-t border-slate-800/80">
         <div ref={faqRef} className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center mb-14">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Tire Suas Dúvidas</span>
