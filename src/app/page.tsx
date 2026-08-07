@@ -132,10 +132,13 @@ export default function BpoLandingMain() {
             <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-14 sm:h-18 w-auto object-contain" priority />
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
             <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
             <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços BPO</a>
             <a href="#casos" className="hover:text-amber-400 transition-colors">Perfis Atendidos</a>
+            <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors flex items-center gap-1">
+              🤝 Para Contadores
+            </Link>
             <a href="#em-breve" className="hover:text-emerald-400 transition-colors flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> AnalisAI (Em Breve)
             </a>
@@ -434,6 +437,7 @@ export default function BpoLandingMain() {
             </div>
             <div className="flex flex-wrap justify-center gap-6 text-slate-400 font-medium">
               <a href={WA_BPO_HERO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">Atendimento WhatsApp</a>
+              <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors">🤝 Para Contadores</Link>
               <Link href="/contrato" className="hover:text-amber-400 transition-colors">Modelo de Contrato</Link>
               <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Política de Privacidade</Link>
               <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos de Uso</Link>
