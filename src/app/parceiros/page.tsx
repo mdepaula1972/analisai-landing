@@ -178,13 +178,13 @@ export default function ParceirosPage() {
             <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-12 sm:h-16 w-auto object-contain" priority />
           </div>
 
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+          <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">
             <a href="#programa" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">O Programa</a>
             <a href="#beneficios" className="hover:text-amber-400 transition-colors">Benefícios</a>
             <a href="#por-que-escolhem" className="hover:text-amber-400 transition-colors">Por Que Nós</a>
-            <a href="#inovacao" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> Inovação
-            </a>
+            <Link href="/contrato" className="hover:text-amber-400 transition-colors">Contrato</Link>
+            <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Privacidade</Link>
+            <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos</Link>
             <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
           </nav>
 

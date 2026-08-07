@@ -135,14 +135,16 @@ export default function BpoLandingMain() {
             <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-14 sm:h-18 w-auto object-contain" priority />
           </div>
 
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+          <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">
             <a href="#planos" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">Planos</a>
             <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
-            <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços BPO</a>
-            <a href="#casos" className="hover:text-amber-400 transition-colors">Perfis Atendidos</a>
-            <Link href="/parceiros" className="hover:text-amber-400 transition-colors flex items-center gap-1">
+            <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços</a>
+            <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors flex items-center gap-1">
               🤝 Para Contadores
             </Link>
+            <Link href="/contrato" className="hover:text-amber-400 transition-colors">Contrato</Link>
+            <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Privacidade</Link>
+            <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos</Link>
             <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
           </nav>
 
