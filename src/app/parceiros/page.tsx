@@ -15,8 +15,8 @@ import {
 /* ── CONFIGURAÇÃO DO WHATSAPP DE PARCERIA ── */
 const PHONE_NUMBER = '5514930855878';
 
-const WA_PARCEIRO_HERO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Sou contador / proprietário de escritório contábil e gostaria de ser um parceiro do AnalisAI.me.')}`;
-const WA_PARCEIRO_REUNIAO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de agendar uma conversa para entender o Programa de Parceiros para Escritórios Contábeis.')}`;
+const WA_PARCEIRO_HERO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Sou contador / proprietário de escritório contábil e gostaria de conhecer o Programa de Parcerias do AnalisAI.me.')}`;
+const WA_PARCEIRO_REUNIAO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de agendar uma conversa para entender o Programa de Parcerias para Escritórios Contábeis.')}`;
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -68,6 +68,7 @@ export default function ParceirosPage() {
   const [beneficiosRef, beneficiosInView] = useInView();
   const [oqueExecutamosRef, oqueExecutamosInView] = useInView();
   const [experienciaRef, experienciaInView] = useInView();
+  const [porQueRef, porQueInView] = useInView();
   const [compromissoRef, compromissoInView] = useInView();
   const [programaRef, programaInView] = useInView();
   const [diferencialRef, diferencialInView] = useInView();
@@ -86,14 +87,14 @@ export default function ParceirosPage() {
     { num: '1', title: 'Identificação', desc: 'Você identifica um cliente com necessidade urgente de organização financeira.' },
     { num: '2', title: 'Apresentação', desc: 'Você nos apresenta ao cliente de forma simples e direta.' },
     { num: '3', title: 'Operação BPO', desc: 'Nossa equipe assume toda a operação financeira diária do seu cliente.' },
-    { num: '4', title: 'Acompanhamento & Receita', desc: 'Você acompanha a evolução e recebe participação recorrente pelas indicações.' },
+    { num: '4', title: 'Acompanhamento & Benefício', desc: 'Você acompanha a evolução e recebe remuneração por indicação.' },
   ];
 
   const beneficios = [
     { title: 'Mais produtividade', desc: 'Reduza o tempo gasto com atividades administrativas que não fazem parte do escopo contábil.', icon: <TrendingUp className="w-6 h-6 text-amber-400" /> },
     { title: 'Clientes mais organizados', desc: 'Receba documentos e informações muito mais consistentes, no prazo certo e sem erros.', icon: <CheckCircle2 className="w-6 h-6 text-amber-400" /> },
     { title: 'Mais valor percebido', desc: 'Seu escritório passa a entregar uma solução completa de inteligência de gestão para o cliente.', icon: <Award className="w-6 h-6 text-amber-400" /> },
-    { title: 'Receita recorrente', desc: 'Receba participação financeira contínua por cada cliente indicado e ativo.', icon: <DollarSign className="w-6 h-6 text-amber-400" /> },
+    { title: 'Remuneração por Indicação', desc: 'Receba benefício financeiro contínuo e participação comercial por cada cliente indicado e ativo.', icon: <DollarSign className="w-6 h-6 text-amber-400" /> },
     { title: 'Sem aumentar equipe', desc: 'Você amplia o portfólio de serviços do seu escritório sem precisar contratar novos funcionários.', icon: <Users className="w-6 h-6 text-amber-400" /> },
     { title: 'Atendimento especializado', desc: 'Toda operação financeira fica sob responsabilidade de profissionais experientes.', icon: <ShieldCheck className="w-6 h-6 text-amber-400" /> },
   ];
@@ -110,8 +111,18 @@ export default function ParceirosPage() {
     'Suporte administrativo financeiro',
   ];
 
+  const provaInstitucional = [
+    { title: 'Não prestamos serviços contábeis', desc: 'Respeito absoluto à sua carteira: não concorremos com o contador em nenhuma hipótese.' },
+    { title: 'Atuação exclusiva na rotina financeira', desc: 'Foco total no BPO operacional (contas, conciliação e caixa) para facilitar o trabalho contábil.' },
+    { title: 'Comunicação transparente', desc: 'Canal aberto e constante com o escritório parceiro sobre o status de cada cliente.' },
+    { title: 'Processos documentados e padronizados', desc: 'Metodologia testada e controle rigoroso de entregas para evitar qualquer imprevisto.' },
+    { title: 'Equipe experiente e multidisciplinar', desc: 'Profissionais com mais de 40 anos de bagagem acumulada em administração e finanças.' },
+    { title: 'Atendimento humanizado e personalizado', desc: 'Suporte próximo e dedicado tanto para o empresário quanto para a equipe do contador.' },
+    { title: 'Compromisso com ética e conformidade legal', desc: 'Contratos formais de confidencialidade (NDA), conformidade com a LGPD e regras do CFC.' },
+  ];
+
   const programaCards = [
-    'Participação financeira por indicação',
+    'Remuneração por indicação',
     'Sem investimento inicial',
     'Sem mensalidade',
     'Acompanhamento dedicado',
@@ -134,7 +145,7 @@ export default function ParceirosPage() {
     },
     {
       question: 'Como funciona a remuneração por indicação?',
-      answer: 'Apresentamos a tabela e a estrutura de participação financeira detalhadamente durante nossa reunião de alinhamento pelo WhatsApp ou vídeo.'
+      answer: 'Apresentamos a estrutura de participação comercial e os detalhes do benefício financeiro durante nossa reunião de alinhamento pelo WhatsApp ou vídeo.'
     },
     {
       question: 'Vocês realizam serviços contábeis?',
@@ -172,8 +183,8 @@ export default function ParceirosPage() {
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
             <a href="#como-funciona" className="hover:text-amber-400 transition-colors">Como Funciona</a>
             <a href="#beneficios" className="hover:text-amber-400 transition-colors">Benefícios</a>
-            <a href="#experiencia" className="hover:text-amber-400 transition-colors">Nossa Experiência</a>
-            <a href="#compromisso" className="hover:text-amber-400 transition-colors">Compromisso</a>
+            <a href="#por-que-escolhem" className="hover:text-amber-400 transition-colors">Por Que Nós</a>
+            <a href="#experiencia" className="hover:text-amber-400 transition-colors">Experiência</a>
             <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
           </nav>
 
@@ -213,7 +224,7 @@ export default function ParceirosPage() {
               </h1>
 
               <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-                Seus clientes precisam de organização financeira. Nós executamos o trabalho. Você fortalece seu relacionamento com o cliente, reduz retrabalho e ainda recebe participação pelas indicações.
+                Seus clientes precisam de organização financeira. Nós executamos o trabalho. Você fortalece seu relacionamento com o cliente, reduz retrabalho e ainda recebe remuneração por indicação.
               </p>
 
               {/* Botões de Ação */}
@@ -274,7 +285,7 @@ export default function ParceirosPage() {
                       <Building2 className="w-5 h-5 text-amber-400" />
                       <span className="text-xs font-semibold text-white">Escritório Contábil</span>
                     </div>
-                    <span className="text-xs text-amber-400 font-bold">+ Participação Recorrente</span>
+                    <span className="text-xs text-amber-400 font-bold">+ Remuneração por Indicação</span>
                   </div>
 
                   <div className="flex justify-center my-1">
@@ -423,11 +434,36 @@ export default function ParceirosPage() {
         </div>
       </section>
 
-      {/* ── NOSSA EXPERIÊNCIA INSTITUCIONAL (MAIS DE 40 ANOS) ── */}
-      <section id="experiencia" className="py-28 bg-slate-900/60 border-y border-slate-800/80 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_50%,rgba(245,158,11,0.06),transparent)] pointer-events-none" />
+      {/* ── SEÇÃO NOVA: POR QUE OS ESCRITÓRIOS ESCOLHEM TRABALHAR CONOSCO? (PROVA INSTITUCIONAL) ── */}
+      <section id="por-que-escolhem" className="py-28 bg-slate-900/50 border-y border-slate-800/80 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_50%,rgba(16,185,129,0.06),transparent)] pointer-events-none" />
 
-        <div ref={experienciaRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${experienciaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div ref={porQueRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 transition-all duration-700 ${porQueInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-emerald-400 mb-3">Prova Institucional</span>
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-5">
+              Por que os escritórios escolhem trabalhar conosco?
+            </h2>
+            <p className="text-slate-400 text-base sm:text-lg">Diferenciais objetivos que transmitem confiança sólida para o contador parceiro.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
+            {provaInstitucional.map(({ title, desc }, i) => (
+              <div key={i} className="card-glow bg-slate-900 border border-slate-800 hover:border-emerald-500/40 p-7 rounded-3xl transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">{title}</h3>
+                <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── NOSSA EXPERIÊNCIA INSTITUCIONAL (MAIS DE 40 ANOS) ── */}
+      <section id="experiencia" className="py-28">
+        <div ref={experienciaRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${experienciaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Tradição &amp; Solidez</span>
             <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-5">
@@ -464,7 +500,7 @@ export default function ParceirosPage() {
               { val: '+40 Anos', label: 'Experiência Acumulada' },
               { val: '100%', label: 'Conformidade LGPD & Ética' },
               { val: 'Zero', label: 'Concorrência com Contador' },
-              { val: 'Recorrente', label: 'Programa de Participação' },
+              { val: 'Recorrente', label: 'Remuneração por Indicação' },
             ].map(({ val, label }, i) => (
               <div key={i}>
                 <p className="text-2xl sm:text-4xl font-extrabold text-amber-400 mb-1">{val}</p>
@@ -476,7 +512,7 @@ export default function ParceirosPage() {
       </section>
 
       {/* ── O QUE EXECUTAMOS PARA SEUS CLIENTES ── */}
-      <section className="py-24">
+      <section className="py-24 bg-slate-900/40 border-y border-slate-800/80">
         <div ref={oqueExecutamosRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${oqueExecutamosInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Escopo de Atuação</span>
@@ -496,7 +532,7 @@ export default function ParceirosPage() {
       </section>
 
       {/* ── DIFERENCIAL: MAIS DO QUE BPO FINANCEIRO ── */}
-      <section className="py-20 bg-slate-900/40 border-y border-slate-800/80">
+      <section className="py-20">
         <div ref={diferencialRef} className={`max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-700 ${diferencialInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <span className="inline-block text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">Nosso Propósito</span>
           <h2 className="text-3xl sm:text-5xl font-extrabold text-white mb-6">
@@ -627,7 +663,7 @@ export default function ParceirosPage() {
           {/* Seção Compliance */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-2">
             <p className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-              <Shield className="w-4 h-4" /> Segurança, Ética e Conformidade
+              <Shield className="w-4 h-4" /> Segurança e Conformidade
             </p>
             <p className="text-slate-400 text-xs leading-relaxed">
               Tratamos todas as informações financeiras com rigor técnico e confidencialidade. Adotamos boas práticas de governança, segurança da informação e privacidade de dados, em conformidade com a Lei Geral de Proteção de Dados (LGPD). Todas as parcerias são conduzidas com transparência, ética profissional e respeito à legislação aplicável.
