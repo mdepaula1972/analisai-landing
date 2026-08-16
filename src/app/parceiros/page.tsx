@@ -175,7 +175,12 @@ export default function ParceirosPage() {
               <ArrowLeft className="w-4 h-4" /> Início
             </Link>
             <span className="text-slate-700">|</span>
-            <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-12 sm:h-16 w-auto object-contain" priority />
+            <div className="flex flex-col items-start justify-center">
+              <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-10 sm:h-12 w-auto object-contain" priority />
+              <span className="text-[9px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded-md -mt-0.5">
+                v2.5.0 · BPO Multi-tenant
+              </span>
+            </div>
           </div>
 
           <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">

@@ -131,8 +131,16 @@ export default function BpoLandingMain() {
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-14 sm:h-18 w-auto object-contain" priority />
+          <div className="flex flex-col items-start justify-center">
+            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-12 sm:h-14 w-auto object-contain" priority />
+            <div className="flex items-center gap-1.5 -mt-1">
+              <span className="text-[10px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md shadow-sm">
+                v2.5.0 · BPO Multi-tenant
+              </span>
+              <Link href="/login" className="text-[10px] font-extrabold tracking-wider uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-md transition-colors">
+                Portal Login →
+              </Link>
+            </div>
           </div>
 
           <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">

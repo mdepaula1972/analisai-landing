@@ -70,7 +70,10 @@ function PortalSidebar({
             <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
               <TrendingUp className="w-4 h-4 text-amber-400" />
             </div>
-            <span className="text-white font-bold text-sm truncate">AnalisAI.me</span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-white font-bold text-sm truncate leading-tight">AnalisAI.me</span>
+              <span className="text-[9px] font-extrabold text-amber-400 uppercase tracking-widest leading-none">v2.5.0 BPO</span>
+            </div>
           </div>
         )}
         <button
