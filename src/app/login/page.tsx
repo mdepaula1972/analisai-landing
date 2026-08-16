@@ -56,8 +56,8 @@ function LoginForm() {
 
       {/* Card de login */}
       <div className="w-full max-w-md relative z-10">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
+        {/* Logo + Tag Versão */}
+        <div className="flex flex-col items-center mb-6">
           <Link href="/">
             <Image
               src="/logo.png"
@@ -67,12 +67,32 @@ function LoginForm() {
               className="h-12 w-auto object-contain"
             />
           </Link>
+          <span className="text-[10px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md mt-1">
+            v2.5.0 · BPO Multi-tenant
+          </span>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl shadow-black/50">
+          
+          {/* Abas Login / Registro */}
+          <div className="flex bg-slate-950 p-1 rounded-2xl mb-8 border border-slate-800">
+            <button
+              type="button"
+              className="flex-1 text-center py-2.5 text-xs font-extrabold text-amber-400 bg-amber-500/15 border border-amber-500/30 rounded-xl shadow-sm transition-all"
+            >
+              Já tenho conta (Login)
+            </button>
+            <Link
+              href="/registro"
+              className="flex-1 text-center py-2.5 text-xs font-extrabold text-slate-400 hover:text-white rounded-xl transition-all"
+            >
+              Cadastrar Empresa
+            </Link>
+          </div>
+
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
               <Lock className="w-6 h-6 text-amber-400" />
             </div>
             <h1 className="text-2xl font-extrabold text-white mb-1">Acesso ao Portal</h1>
@@ -164,10 +184,10 @@ function LoginForm() {
         </div>
 
         {/* Não tem conta */}
-        <p className="text-center mt-6 text-xs text-slate-600">
-          Não tem acesso?{' '}
-          <Link href="/#planos" className="text-amber-400 hover:text-amber-300 font-medium transition-colors">
-            Conheça os planos BPO
+        <p className="text-center mt-6 text-xs text-slate-500">
+          Não tem uma conta ainda?{' '}
+          <Link href="/registro" className="text-amber-400 hover:text-amber-300 font-bold transition-colors">
+            Cadastre sua empresa aqui
           </Link>
         </p>
       </div>
