@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { WHATSAPP, CONTACT_EMAIL } from '@/lib/contact';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -12,11 +13,8 @@ import {
   Scale, Layers, Handshake, UserCheck, Check, HelpCircle
 } from 'lucide-react';
 
-/* ── CONFIGURAÇÃO DO WHATSAPP DE PARCERIA ── */
-const PHONE_NUMBER = '5514930855878';
-
-const WA_PARCEIRO_HERO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Sou contador / proprietário de escritório contábil e gostaria de conhecer o Programa de Parcerias do AnalisAI.me.')}`;
-const WA_PARCEIRO_REUNIAO = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Gostaria de agendar uma conversa para entender o Programa de Parcerias para Escritórios Contábeis.')}`;
+const WA_PARCEIRO_HERO = WHATSAPP.parceria;
+const WA_PARCEIRO_REUNIAO = WHATSAPP.parceria;
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -91,15 +89,15 @@ export default function ParceirosPage() {
   ];
 
   const beneficiosParceiro = [
-    'Participação financeira recorrente pelas indicações elegíveis',
-    'Sem investimento inicial',
-    'Sem mensalidade',
-    'Sem metas obrigatórias',
-    'Atendimento prioritário',
-    'Relacionamento de longo prazo',
-    'Equipe dedicada',
-    'Comunicação transparente',
-    'Integração com a contabilidade',
+    'Programa Fundador: somente 10 primeiros escritórios elegíveis',
+    'Comissão escalonada acima do padrão, conforme volume e qualidade das indicações',
+    'Condição vitalícia enquanto o contrato e os critérios de elegibilidade permanecerem ativos',
+    'Modelo de repasse transparente, com o parceiro recebendo do próprio cliente e repassando a parcela acordada à Lizaimi',
+    'Sem investimento inicial e sem mensalidade para entrar',
+    'Atendimento prioritário e canal direto com a equipe',
+    'Equipe BPO dedicada para a operação financeira do cliente',
+    'Comunicação transparente e prestação de contas',
+    'Integração respeitosa com a contabilidade, sem concorrência pelo cliente',
   ];
 
   const oqueExecutamos = [
@@ -134,8 +132,8 @@ export default function ParceirosPage() {
       answer: 'Sim. Todas as parcerias são formalizadas para garantir transparência e segurança para ambas as partes.'
     },
     {
-      question: 'Como funciona a participação financeira?',
-      answer: 'Os detalhes são apresentados durante nossa reunião comercial, considerando o perfil do escritório parceiro e o potencial de crescimento conjunto.'
+      question: 'Como funciona a condição Fundador?',
+      answer: 'As 10 primeiras parcerias elegíveis entram em uma faixa especial de comissão escalonada, com possibilidade de condição vitalícia enquanto os critérios definidos em contrato forem mantidos. O modelo de repasse, a documentação fiscal, a conciliação e as regras de elegibilidade são apresentados na reunião comercial e validados antes da adesão.'
     },
     {
       question: 'Posso indicar apenas um cliente?',
@@ -229,7 +227,7 @@ export default function ParceirosPage() {
               </h1>
 
               <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-                Seus clientes precisam de organização financeira. Nós executamos o trabalho. Você fortalece seu relacionamento com o cliente, reduz retrabalho e ainda conta com participação financeira pelas indicações.
+                Seus clientes precisam de organização financeira. Nós executamos o trabalho. Você fortalece seu relacionamento, reduz retrabalho e entra na condição Fundador: as 10 primeiras parcerias elegíveis podem ter comissão escalonada acima do padrão, com condição vitalícia prevista em contrato.
               </p>
 
               {/* Botões de Ação */}
@@ -349,7 +347,7 @@ export default function ParceirosPage() {
               </p>
 
               <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-                Além de fortalecer o relacionamento com seus clientes, nossos parceiros contam com um modelo transparente de participação financeira pelas indicações realizadas. Cada parceria é estruturada de acordo com o perfil do escritório e o potencial de crescimento conjunto.
+                Além de fortalecer o relacionamento com seus clientes, nossos parceiros fundadores contam com uma proposta de comissão escalonada e um modelo operacional de repasse. A ideia é que o escritório receba do próprio cliente e repasse a parcela da Lizaimi, com conciliação, critérios claros e formalização contratual. A estrutura final deve ser aprovada juridicamente, fiscalmente e financeiramente antes da publicação definitiva.
               </p>
 
               <div className="pt-4">
@@ -719,7 +717,7 @@ export default function ParceirosPage() {
           <div className="border-t border-slate-800/60 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left">
             <div>
               <p className="text-slate-300 font-semibold mb-1">Solucione Assessoria Virtual</p>
-              <p className="text-slate-500">CNPJ: 57.740.336/0001-08 · Programa de Parcerias Contábeis</p>
+              <p className="text-slate-500">CNPJ: 57.740.336/0001-08 · Programa de Parcerias Contábeis · {CONTACT_EMAIL}</p>
             </div>
             <p className="text-slate-600 max-w-md text-[11px] leading-relaxed">
               O BPO Financeiro é um serviço consultivo de gestão operacional de apoio à contabilidade. Não realizamos serviços contábeis ou apuração fiscal.
