@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #020617;
+  --foreground: #f1f5f9;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Animações ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pulse-glow-emerald {
+  0%, 100% { box-shadow: 0 0 20px rgba(16,185,129,0.2); }
+  50%       { box-shadow: 0 0 40px rgba(16,185,129,0.5); }
+}
+@keyframes pulse-glow-amber {
+  0%, 100% { box-shadow: 0 0 20px rgba(245,158,11,0.2); }
+  50%       { box-shadow: 0 0 40px rgba(245,158,11,0.5); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes shimmer-emerald {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes shimmer-amber {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes typing {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0; }
+}
+
+.animate-fadeInUp  { animation: fadeInUp  0.7s ease both; }
+.animate-fadeIn    { animation: fadeIn    0.5s ease both; }
+.animate-pulse-glow        { animation: pulse-glow-emerald 3s ease-in-out infinite; }
+.animate-pulse-glow-amber  { animation: pulse-glow-amber   3s ease-in-out infinite; }
+.animate-float     { animation: float 6s ease-in-out infinite; }
+.animate-spin-slow { animation: spin-slow 8s linear infinite; }
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+
+/* ── Grids ── */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(16,185,129,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16,185,129,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.bg-grid-amber {
+  background-image:
+    linear-gradient(rgba(245,158,11,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,158,11,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Card glows ── */
+.card-glow:hover {
+  box-shadow: 0 0 30px rgba(16,185,129,0.12), 0 20px 60px rgba(0,0,0,0.4);
+}
+.card-glow-amber:hover {
+  box-shadow: 0 0 30px rgba(245,158,11,0.12), 0 20px 60px rgba(0,0,0,0.4);
+}
+
+/* ── Shimmer textos ── */
+.text-shimmer {
+  background: linear-gradient(90deg, #34d399 0%, #a7f3d0 50%, #34d399 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer-emerald 3s linear infinite;
+}
+.text-shimmer-amber {
+  background: linear-gradient(90deg, #f59e0b 0%, #fde68a 50%, #f59e0b 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer-amber 3s linear infinite;
+}
+
+/* ── Typing cursor ── */
+.typing-cursor::after {
+  content: '▋';
+  animation: typing 0.8s infinite;
+  color: #10b981;
+}
