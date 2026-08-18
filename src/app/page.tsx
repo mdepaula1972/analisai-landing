@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  ArrowRight, CheckCircle2, ChevronDown,
+  ArrowRight, CheckCircle2, ChevronDown, Menu, X,
   DollarSign, RefreshCw, TrendingUp, FileText, Receipt,
   PieChart, Zap, Shield, Users, Target, BarChart3,
   MessageCircle, Lock, Sparkles, AlertTriangle, ShieldCheck, Clock,
@@ -56,6 +56,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 
 export default function BpoLandingMain() {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
@@ -129,43 +130,60 @@ export default function BpoLandingMain() {
       </a>
 
       {/* ── NAVBAR ── */}
-      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
-          <div className="flex flex-col items-start justify-center">
-            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-12 sm:h-14 w-auto object-contain" priority />
-            <div className="flex items-center gap-1.5 -mt-1">
-              <span className="text-[10px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md shadow-sm">
-                v2.5.0 · BPO Multi-tenant
-              </span>
-              <Link href="/login" className="text-[10px] font-extrabold tracking-wider uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-md transition-colors">
-                Portal Login →
+      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled || mobileMenuOpen ? 'bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-slate-950/55 backdrop-blur-md'}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="min-h-[76px] flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <Link href="/" aria-label="AnalisAI.me — página inicial" className="shrink-0">
+                <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-10 sm:h-11 w-[148px] sm:w-[170px] object-cover object-center rounded-lg" priority />
               </Link>
+              <div className="hidden sm:flex items-center gap-2 border-l border-slate-800 pl-3">
+                <span className="text-[9px] font-extrabold tracking-[0.12em] uppercase text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-md whitespace-nowrap">
+                  v2.5.0 · BPO Multi-tenant
+                </span>
+                <Link href="/login" className="text-[9px] font-extrabold tracking-[0.12em] uppercase text-emerald-300 hover:text-emerald-200 transition-colors whitespace-nowrap">
+                  Portal Login <span aria-hidden="true">→</span>
+                </Link>
+              </div>
+            </div>
+
+            <nav className="hidden lg:flex items-center justify-center gap-x-4 xl:gap-x-5 text-[12px] xl:text-[13px] font-semibold text-slate-300 whitespace-nowrap">
+              <a href="#planos" className="text-amber-400 hover:text-amber-300 transition-colors">Planos</a>
+              <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
+              <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços</a>
+              <Link href="/parceiros" className="text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1">
+                <Users className="w-3.5 h-3.5" /> Para Contadores
+              </Link>
+              <Link href="/contrato" className="hover:text-amber-400 transition-colors">Contrato</Link>
+              <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Privacidade</Link>
+              <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos</Link>
+              <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
+            </nav>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" id="nav-cta-whatsapp" className="hidden lg:flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-4 xl:px-5 py-2.5 rounded-xl transition-all hover:-translate-y-0.5 shadow-lg shadow-emerald-500/20 text-xs xl:text-sm leading-tight text-center max-w-[185px]">
+                <Calendar className="w-4 h-4 shrink-0" />
+                <span>Agendar diagnóstico gratuito</span>
+              </a>
+              <button type="button" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden rounded-lg border border-slate-700 bg-slate-900/80 p-2 text-slate-200 hover:border-amber-400 hover:text-amber-400 transition-colors" aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'} aria-expanded={mobileMenuOpen}>
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">
-            <a href="#planos" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">Planos</a>
-            <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
-            <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços</a>
-            <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors flex items-center gap-1">
-              🤝 Para Contadores
-            </Link>
-            <Link href="/contrato" className="hover:text-amber-400 transition-colors">Contrato</Link>
-            <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Privacidade</Link>
-            <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos</Link>
-            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
-          </nav>
+          <div className="sm:hidden flex items-center gap-2 pb-3">
+            <span className="text-[9px] font-extrabold tracking-[0.12em] uppercase text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-md">v2.5.0 · BPO Multi-tenant</span>
+            <Link href="/login" className="text-[9px] font-extrabold tracking-[0.12em] uppercase text-emerald-300">Portal Login →</Link>
+          </div>
 
-          <a
-            href={WA_DIAGNOSTICO_DIRETO}
-            target="_blank"
-            rel="noopener noreferrer"
-            id="nav-cta-whatsapp"
-            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-3 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-emerald-500/25 text-sm flex items-center gap-2"
-          >
-            <Calendar className="w-4 h-4" />
-            Agendar Diagnóstico Gratuito
-          </a>
+          {mobileMenuOpen && (
+            <nav className="lg:hidden border-t border-slate-800 py-4 grid gap-1 text-sm font-semibold text-slate-200">
+              {[
+                ['#planos', 'Planos'], ['#seguranca', 'Segurança'], ['#servicos', 'Serviços'], ['/parceiros', 'Para Contadores'], ['/contrato', 'Contrato'], ['/privacidade', 'Privacidade'], ['/termos', 'Termos'], ['#faq', 'FAQ']
+              ].map(([href, label]) => href.startsWith('#') ? <a key={href} href={href} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2 hover:bg-slate-900 hover:text-amber-400">{label}</a> : <Link key={href} href={href} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2 hover:bg-slate-900 hover:text-amber-400">{label}</Link>)}
+              <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-center font-extrabold text-slate-950"><Calendar className="w-4 h-4" /> Agendar diagnóstico gratuito</a>
+            </nav>
+          )}
         </div>
       </header>
 
