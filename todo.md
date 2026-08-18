@@ -1,7 +1,7 @@
-# Correção do deploy Vercel
+# Correção do logo no deploy externo
 
-- [x] Ajustar a configuração do projeto para o framework/build real (Vite + React), evitando detecção incorreta de Next.js.
-- [x] Validar `pnpm build` localmente e confirmar a saída de produção.
-- [x] Revisar a configuração de raiz do projeto no repositório.
-- [ ] Salvar checkpoint da correção e sincronizar o branch `main` no GitHub.
-- [ ] Orientar o novo deploy no Vercel.
+- [x] Publicar uma cópia pública do símbolo da marca compatível com o Vercel.
+- [x] Substituir o caminho interno `/manus-storage` usado pelo logo.
+- [x] Revisar Login, Painel Contador e Conheça para que tenham destinos funcionais ou claramente configurados.
+- [x] Validar a renderização do logo no preview e no build de produção.
+- [ ] Salvar checkpoint e sincronizar o branch `main` no GitHub.

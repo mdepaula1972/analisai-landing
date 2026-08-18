@@ -5,7 +5,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, Mail, Menu, Sparkles } from "luc
 const heroImage = "/manus-storage/analisai-hero-aurora_947786f4.png";
 const proofTexture = "/manus-storage/analisai-proof-texture_b4a25c84.png";
 const contactGlow = "/manus-storage/analisai-contact-glow_08e85c6f.png";
-const markImage = "/manus-storage/analisai-mark_faf1e76b.png";
+const markImage = "/analisai-mark.png";
 
 function Logo() {
   return (
@@ -77,8 +77,8 @@ export default function Home() {
           <Logo />
           <button className="mobile-menu" type="button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-label="Abrir menu"><Menu size={20} /></button>
           <nav className={menuOpen ? "nav-links open" : "nav-links"} aria-label="Navegação principal">
-            <a href="mailto:contato@analisai.me?subject=Login%20AnalisaAI.me">Login</a>
-            <a href="#painel">Painel Contador</a>
+            <a href="mailto:contato@analisai.me?subject=Acesso%20ao%20Login%20AnalisaAI.me">Login</a>
+            <a href="mailto:contato@analisai.me?subject=Acesso%20ao%20Painel%20Contador">Painel Contador</a>
             <a className="nav-cta" href="#conheca">Conheça <ArrowRight size={15} /></a>
           </nav>
         </div>
