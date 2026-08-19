@@ -1,7 +1,8 @@
-# Correção do output do Vercel
+# Ajuste visual do cabeçalho
 
-- [ ] Revisar `vercel.json` e identificar a referência incorreta a `public`.
-- [ ] Remover `outputDirectory` incompatível com Next.js ou alinhar à saída correta do framework.
-- [ ] Validar o build de produção do Next.
-- [ ] Enviar a correção ao branch `main`.
-- [ ] Orientar um novo deploy no Vercel.
+- [x] Reorganizar o bloco do logo e da identificação da marca.
+- [x] Reduzir a densidade e corrigir o espaçamento da navegação desktop.
+- [x] Manter “Parceria para Contadores” em uma única linha quando houver espaço.
+- [x] Dimensionar o CTA sem sobreposição e criar comportamento adequado para telas menores.
+- [x] Validar a landing em desktop no navegador e confirmar o build de produção.
+- [ ] Salvar checkpoint da melhoria.

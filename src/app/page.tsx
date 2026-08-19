@@ -127,40 +127,29 @@ export default function BpoLandingMain() {
       </a>
 
       {/* ── NAVBAR ── */}
-      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
-          <div className="flex flex-col items-start justify-center">
-            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-12 sm:h-14 w-auto object-contain" priority />
-            <div className="flex items-center gap-1.5 -mt-1">
-              <span className="text-[10px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md shadow-sm">
-                v2.5.0 · BPO Multi-tenant
-              </span>
-            </div>
-          </div>
+      <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'pt-2' : ''}`}>
+        <div className={`mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'border-slate-700/80 bg-slate-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl' : 'border-white/10 bg-slate-950/70 shadow-xl shadow-black/20 backdrop-blur-xl'}`}>
+          <Link href="#top" className="flex min-w-0 shrink-0 items-center gap-3" aria-label="AnalisAI.me — início">
+            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-10 w-auto object-contain sm:h-12" priority />
+            <span className="hidden whitespace-nowrap rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-amber-300 md:inline-flex">BPO Financeiro</span>
+          </Link>
 
-          <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">
-            <a href="#planos" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">Planos</a>
-            <a href="#seguranca" className="hover:text-amber-400 transition-colors">Segurança</a>
-            <a href="#servicos" className="hover:text-amber-400 transition-colors">Serviços</a>
-            <Link href="/parceiros" className="hover:text-amber-400 text-amber-400 font-semibold transition-colors flex items-center gap-1">
-              🤝 Parceria para Contadores
-            </Link>
-            <Link href="/contrato" className="hover:text-amber-400 transition-colors">Contrato</Link>
-            <Link href="/privacidade" className="hover:text-emerald-400 transition-colors">Privacidade</Link>
-            <Link href="/termos" className="hover:text-amber-400 transition-colors">Termos</Link>
-            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
+          <nav className="hidden items-center gap-5 text-sm font-semibold text-slate-300 lg:flex xl:gap-7" aria-label="Navegação principal">
+            <a href="#planos" className="whitespace-nowrap text-amber-300 transition-colors hover:text-amber-200">Planos</a>
+            <a href="#seguranca" className="whitespace-nowrap transition-colors hover:text-amber-300">Segurança</a>
+            <a href="#servicos" className="whitespace-nowrap transition-colors hover:text-amber-300">Serviços</a>
+            <Link href="/parceiros" className="whitespace-nowrap text-amber-300 transition-colors hover:text-amber-200">Parceria para Contadores</Link>
+            <a href="#faq" className="whitespace-nowrap transition-colors hover:text-amber-300">FAQ</a>
           </nav>
 
-          <a
-            href={WA_DIAGNOSTICO_DIRETO}
-            target="_blank"
-            rel="noopener noreferrer"
-            id="nav-cta-whatsapp"
-            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-3 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-emerald-500/25 text-sm flex items-center gap-2"
-          >
-            <Calendar className="w-4 h-4" />
-            Agendar Diagnóstico Gratuito
-          </a>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/parceiros" className="hidden rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-bold text-amber-300 transition hover:border-amber-300/60 hover:bg-amber-400/10 sm:inline-flex lg:hidden">Parceria</Link>
+            <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" id="nav-cta-whatsapp" className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-3.5 py-2.5 text-xs font-extrabold text-slate-950 shadow-lg shadow-emerald-400/20 transition hover:-translate-y-0.5 hover:bg-emerald-300 sm:px-4 sm:text-sm">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Agendar diagnóstico</span>
+              <span className="sm:hidden">Agendar</span>
+            </a>
+          </div>
         </div>
       </header>
 
