@@ -1,7 +1,7 @@
-# Mobile, CTA e hero
+# Logo e contato visível
 
-- [x] Verificar o cabeçalho em viewport mobile e identificar riscos de corte ou sobreposição.
-- [x] Ajustar o CTA mobile para a copy final e validar o link centralizado do WhatsApp.
-- [x] Reformular a hierarquia, mensagem e CTA da seção hero.
-- [x] Validar build e visualização no navegador; as classes mobile mantêm “Parceria” acessível e o CTA compacto.
-- [ ] Salvar checkpoint da melhoria.
+- [x] Aumentar o logotipo no cabeçalho em desktop e mobile.
+- [x] Adicionar o e-mail visível próximo ao CTA e manter o rodapé disponível.
+- [x] Manter `contato@analisai.me` centralizado no módulo de contato.
+- [x] Validar build e visualizar a landing no navegador.
+- [ ] Salvar checkpoint e enviar ao GitHub.

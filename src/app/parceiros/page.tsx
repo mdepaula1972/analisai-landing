@@ -174,7 +174,7 @@ export default function ParceirosPage() {
             </Link>
             <span className="text-slate-700">|</span>
             <div className="flex flex-col items-start justify-center">
-              <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-10 sm:h-12 w-auto object-contain" priority />
+              <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-10 sm:h-14 w-auto object-contain" priority />
               <span className="text-[9px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded-md -mt-0.5">
                 v2.5.0 · BPO Multi-tenant
               </span>

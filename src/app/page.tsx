@@ -130,7 +130,7 @@ export default function BpoLandingMain() {
       <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'pt-2' : ''}`}>
         <div className={`mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'border-slate-700/80 bg-slate-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl' : 'border-white/10 bg-slate-950/70 shadow-xl shadow-black/20 backdrop-blur-xl'}`}>
           <Link href="#top" className="flex min-w-0 shrink-0 items-center gap-3" aria-label="AnalisAI.me — início">
-            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-8 w-auto object-contain sm:h-12" priority />
+            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-10 w-auto object-contain sm:h-14" priority />
             <span className="hidden whitespace-nowrap rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-amber-300 md:inline-flex">BPO Financeiro</span>
           </Link>
 
@@ -172,6 +172,7 @@ export default function BpoLandingMain() {
               <a href="#planos" className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-6 py-4 font-bold text-slate-200 transition hover:border-amber-300/50 hover:text-amber-200">Ver como funciona</a>
             </div>
             <p className="mt-4 flex items-center gap-2 text-xs text-slate-500"><Clock className="h-3.5 w-3.5 text-slate-400" /> Diagnóstico de 30 a 45 minutos · Sem compromisso</p>
+            <a href={`mailto:${CONTACT_EMAIL}`} className="mt-3 inline-flex text-sm font-semibold text-slate-400 transition hover:text-emerald-300">Prefere e-mail? {CONTACT_EMAIL}</a>
           </div>
 
           <aside className="relative overflow-hidden rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
