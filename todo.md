@@ -1,7 +1,7 @@
-# Logo e contato visível
+# Logo, contato e plano MEI/Autônomo
 
-- [x] Aumentar o logotipo no cabeçalho em desktop e mobile.
-- [x] Adicionar o e-mail visível próximo ao CTA e manter o rodapé disponível.
-- [x] Manter `contato@analisai.me` centralizado no módulo de contato.
-- [x] Validar build e visualizar a landing no navegador.
+- [x] Tornar o logo visualmente maior usando asset horizontal recortado.
+- [x] Exibir `contato@analisai.me` em área de contato claramente identificada na landing principal.
+- [x] Criar o Plano MEI/Autônomo com proposta acolhedora, escopo inicial e CTA próprio.
+- [x] Validar a seção em desktop e mobile por classes responsivas e executar o build.
 - [ ] Salvar checkpoint e enviar ao GitHub.

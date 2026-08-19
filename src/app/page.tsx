@@ -9,7 +9,7 @@ import {
   DollarSign, RefreshCw, TrendingUp, FileText, Receipt,
   PieChart, Zap, Shield, Users, Target, BarChart3,
   MessageCircle, Lock, Sparkles, AlertTriangle, ShieldCheck, Clock,
-  Building2, Stethoscope, Briefcase, Star, Check, Calendar
+  Building2, Stethoscope, Briefcase, Star, Check, Calendar, HeartHandshake
 } from 'lucide-react';
 
 const WA_DIAGNOSTICO_DIRETO = WHATSAPP.diagnostico;
@@ -17,6 +17,7 @@ const WA_PLANO_ESSENCIAL = WHATSAPP.planoEssencial;
 const WA_PLANO_GESTAO = WHATSAPP.planoGestao;
 const WA_PLANO_ESTRATEGICO = WHATSAPP.planoEstrategico;
 const WA_ANALISAI_BETA = WHATSAPP.beta;
+const WA_PLANO_MEI = WHATSAPP.mei;
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -130,7 +131,7 @@ export default function BpoLandingMain() {
       <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'pt-2' : ''}`}>
         <div className={`mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'border-slate-700/80 bg-slate-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl' : 'border-white/10 bg-slate-950/70 shadow-xl shadow-black/20 backdrop-blur-xl'}`}>
           <Link href="#top" className="flex min-w-0 shrink-0 items-center gap-3" aria-label="AnalisAI.me — início">
-            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-10 w-auto object-contain sm:h-14" priority />
+            <Image src="/logo-horizontal.jpg" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-10 w-auto object-contain sm:h-14" priority />
             <span className="hidden whitespace-nowrap rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-amber-300 md:inline-flex">BPO Financeiro</span>
           </Link>
 
@@ -330,6 +331,23 @@ export default function BpoLandingMain() {
               </div>
             </div>
 
+          </div>
+
+          {/* PLANO MEI / AUTÔNOMO — COMEÇAR CERTO */}
+          <div className="mb-8 overflow-hidden rounded-3xl border border-amber-400/40 bg-gradient-to-br from-amber-950/60 via-slate-900 to-slate-950 p-7 text-left shadow-2xl shadow-amber-950/20 sm:p-10">
+            <div className="grid gap-8 lg:grid-cols-[1.15fr_.85fr] lg:items-center">
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[.14em] text-amber-300"><HeartHandshake className="h-3.5 w-3.5" /> Para quem está começando</span>
+                <h3 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">Plano MEI / Autônomo</h3>
+                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">Começar um negócio já exige coragem. Você não precisa carregar a organização financeira sozinho — nem esperar crescer para começar do jeito certo.</p>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Criamos uma estrutura simples e humana para quem está dando os primeiros passos, inclusive quem ainda está validando uma ideia ou trabalhando de forma informal.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+                <p className="text-xs font-bold uppercase tracking-[.14em] text-emerald-300">O essencial para respirar</p>
+                <ul className="mt-4 space-y-3 text-sm text-slate-300"><li className="flex gap-3"><Check className="h-4 w-4 shrink-0 text-emerald-300" /> Contas pessoais e do negócio mais claras</li><li className="flex gap-3"><Check className="h-4 w-4 shrink-0 text-emerald-300" /> Rotina simples de entradas e saídas</li><li className="flex gap-3"><Check className="h-4 w-4 shrink-0 text-emerald-300" /> Orientação para começar com responsabilidade</li></ul>
+                <a href={WA_PLANO_MEI} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 text-sm font-extrabold text-slate-950 transition hover:bg-amber-200">Conhecer o plano de início <ArrowRight className="h-4 w-4" /></a>
+              </div>
+            </div>
           </div>
 
           {/* CARD DIFERENCIADO: PLANO INTELIGÊNCIA FINANCEIRA (PROGRAMA BETA) */}
@@ -548,7 +566,7 @@ export default function BpoLandingMain() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-4">
-              <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={360} height={100} className="h-10 w-auto object-contain" />
+              <Image src="/logo-horizontal.jpg" alt="AnalisAI.me — Solucione Assessoria Virtual" width={360} height={100} className="h-10 w-auto object-contain" />
             </div>
             <div className="flex flex-wrap justify-center gap-6 text-slate-400 font-medium">
               <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">Agendar Diagnóstico</a>

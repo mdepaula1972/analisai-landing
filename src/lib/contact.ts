@@ -10,6 +10,7 @@ export const WHATSAPP = {
   planoGestao: createWhatsAppLink('Olá! Tenho interesse no Plano Gestão e quero agendar o Diagnóstico Financeiro Gratuito.'),
   planoEstrategico: createWhatsAppLink('Olá! Tenho interesse no Plano Estratégico e gostaria de agendar uma reunião de diagnóstico sob medida.'),
   beta: createWhatsAppLink('Olá! Gostaria de conhecer o Programa Beta do Plano Inteligência Financeira AnalisAI.me.'),
+  mei: createWhatsAppLink('Olá! Estou começando como MEI ou autônomo e gostaria de conhecer o plano para começar minha organização financeira do jeito certo.'),
   parceria: createWhatsAppLink('Olá! Sou contador ou proprietário de escritório contábil e gostaria de conhecer o Programa de Parcerias do AnalisAI.me.'),
 };
 

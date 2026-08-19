@@ -239,3 +239,22 @@
 [2026-08-19T00:18:40.206Z] at runPnpmCli (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:252538:5)
 [2026-08-19T00:18:40.206Z] at runDepsStatusCheck (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:254302:7)
 [2026-08-19T00:18:40.224Z] Dev server exited with code 1
+[2026-08-19T00:25:41.178Z] Starting dev server with command: pnpm run dev
+[2026-08-19T00:25:42.276Z] ✓ Lockfile passes supply-chain policies (verified 30m ago)
+[2026-08-19T00:25:42.281Z] Lockfile is up to date, resolution step is skipped
+[2026-08-19T00:25:42.354Z] Already up to date
+[2026-08-19T00:25:42.825Z] [ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: unrs-resolver@1.12.2
+[2026-08-19T00:25:42.825Z] Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+[2026-08-19T00:25:42.875Z] [ERROR] Command failed with exit code 1: pnpm install
+[2026-08-19T00:25:42.875Z] pnpm: Command failed with exit code 1: pnpm install
+[2026-08-19T00:25:42.875Z] at getFinalError (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:89001:14)
+[2026-08-19T00:25:42.875Z] at makeError (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:91308:21)
+[2026-08-19T00:25:42.875Z] at getSyncResult (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:93152:10)
+[2026-08-19T00:25:42.875Z] at spawnSubprocessSync (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:93112:14)
+[2026-08-19T00:25:42.875Z] at execaCoreSync (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:93042:23)
+[2026-08-19T00:25:42.876Z] at callBoundExeca (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:95570:23)
+[2026-08-19T00:25:42.876Z] at boundExeca (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:95547:49)
+[2026-08-19T00:25:42.876Z] at sync2 (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:95702:14)
+[2026-08-19T00:25:42.876Z] at runPnpmCli (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:252538:5)
+[2026-08-19T00:25:42.876Z] at runDepsStatusCheck (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:254302:7)
+[2026-08-19T00:25:42.895Z] Dev server exited with code 1
