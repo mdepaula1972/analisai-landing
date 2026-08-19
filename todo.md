@@ -1,10 +1,7 @@
-# Restauração e parceria para contadores
+# Correção do output do Vercel
 
-- [x] Identificar o commit `d5a569a`, anterior às alterações de hoje.
-- [x] Restaurar a base Next/React estável sem reset destrutivo.
-- [x] Retirar Login, portal, admin e APIs privadas do build público.
-- [x] Transformar a navegação de contadores em “Parceria para Contadores”.
-- [x] Centralizar número e mensagens de WhatsApp em `src/lib/contact.ts`.
-- [x] Estruturar a oferta Fundador para os 10 primeiros parceiros, com ressalva de contrato e validação profissional.
-- [x] Validar o build público com `NODE_ENV=production`.
-- [ ] Salvar checkpoint e sincronizar o branch principal.
+- [ ] Revisar `vercel.json` e identificar a referência incorreta a `public`.
+- [ ] Remover `outputDirectory` incompatível com Next.js ou alinhar à saída correta do framework.
+- [ ] Validar o build de produção do Next.
+- [ ] Enviar a correção ao branch `main`.
+- [ ] Orientar um novo deploy no Vercel.

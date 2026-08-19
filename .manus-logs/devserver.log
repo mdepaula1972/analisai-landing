@@ -136,3 +136,49 @@
 [2026-08-18T23:55:23.981Z] at runPnpmCli (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:252538:5)
 [2026-08-18T23:55:23.981Z] at runDepsStatusCheck (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:254302:7)
 [2026-08-18T23:55:24.000Z] Dev server exited with code 1
+[2026-08-19T00:00:02.711Z] Starting dev server with command: pnpm run dev
+[2026-08-19T00:00:03.810Z] ✓ Lockfile passes supply-chain policies (verified 4m ago)
+[2026-08-19T00:00:03.815Z] Lockfile is up to date, resolution step is skipped
+[2026-08-19T00:00:03.865Z] Progress: resolved 1, reused 0, downloaded 0, added 0
+[2026-08-19T00:00:03.911Z] Packages: +413
+[2026-08-19T00:00:03.911Z] ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+[2026-08-19T00:00:04.226Z] Packages are hard linked from the content-addressable store to the virtual store.
+[2026-08-19T00:00:04.226Z] Content-addressable store is at: /home/ubuntu/.local/share/pnpm/store/v11
+[2026-08-19T00:00:04.226Z] Virtual store is at:             node_modules/.pnpm
+[2026-08-19T00:00:04.504Z] Progress: resolved 413, reused 413, downloaded 0, added 413, done
+[2026-08-19T00:00:04.786Z] dependencies:
+[2026-08-19T00:00:04.786Z] + @google/generative-ai 0.24.1
+[2026-08-19T00:00:04.786Z] + @supabase/ssr 0.12.4
+[2026-08-19T00:00:04.786Z] + @supabase/supabase-js 2.112.3
+[2026-08-19T00:00:04.786Z] + @types/papaparse 5.5.2
+[2026-08-19T00:00:04.786Z] + date-fns 4.4.0
+[2026-08-19T00:00:04.786Z] + lucide-react 1.31.0
+[2026-08-19T00:00:04.786Z] + next 16.3.0
+[2026-08-19T00:00:04.786Z] + papaparse 5.6.0
+[2026-08-19T00:00:04.786Z] + react 19.2.8
+[2026-08-19T00:00:04.786Z] + react-dom 19.2.8
+[2026-08-19T00:00:04.786Z] + recharts 3.10.1
+[2026-08-19T00:00:04.786Z] devDependencies:
+[2026-08-19T00:00:04.786Z] + @tailwindcss/postcss 4.3.3
+[2026-08-19T00:00:04.786Z] + @types/node 20.19.43
+[2026-08-19T00:00:04.786Z] + @types/react 19.2.1
+[2026-08-19T00:00:04.786Z] + @types/react-dom 19.2.1
+[2026-08-19T00:00:04.786Z] + eslint 9.39.5
+[2026-08-19T00:00:04.786Z] + eslint-config-next 16.3.0
+[2026-08-19T00:00:04.786Z] + tailwindcss 4.3.3
+[2026-08-19T00:00:04.786Z] + typescript 5.6.3
+[2026-08-19T00:00:04.970Z] [ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: unrs-resolver@1.12.2
+[2026-08-19T00:00:04.970Z] Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+[2026-08-19T00:00:05.025Z] [ERROR] Command failed with exit code 1: pnpm install
+[2026-08-19T00:00:05.025Z] pnpm: Command failed with exit code 1: pnpm install
+[2026-08-19T00:00:05.025Z] at getFinalError (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:89001:14)
+[2026-08-19T00:00:05.025Z] at makeError (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:91308:21)
+[2026-08-19T00:00:05.025Z] at getSyncResult (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:93152:10)
+[2026-08-19T00:00:05.025Z] at spawnSubprocessSync (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:93112:14)
+[2026-08-19T00:00:05.025Z] at execaCoreSync (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:93042:23)
+[2026-08-19T00:00:05.025Z] at callBoundExeca (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:95570:23)
+[2026-08-19T00:00:05.025Z] at boundExeca (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:95547:49)
+[2026-08-19T00:00:05.025Z] at sync2 (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:95702:14)
+[2026-08-19T00:00:05.025Z] at runPnpmCli (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:252538:5)
+[2026-08-19T00:00:05.025Z] at runDepsStatusCheck (file:///home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/pnpm/dist/pnpm.mjs:254302:7)
+[2026-08-19T00:00:05.043Z] Dev server exited with code 1
