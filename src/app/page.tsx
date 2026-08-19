@@ -130,7 +130,7 @@ export default function BpoLandingMain() {
       <header className={`fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'pt-2' : ''}`}>
         <div className={`mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-2xl border px-4 py-3 sm:px-5 lg:px-6 transition-all duration-300 ${scrolled ? 'border-slate-700/80 bg-slate-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl' : 'border-white/10 bg-slate-950/70 shadow-xl shadow-black/20 backdrop-blur-xl'}`}>
           <Link href="#top" className="flex min-w-0 shrink-0 items-center gap-3" aria-label="AnalisAI.me — início">
-            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-10 w-auto object-contain sm:h-12" priority />
+            <Image src="/logo.png" alt="AnalisAI.me — Solucione Assessoria Virtual" width={480} height={132} className="h-8 w-auto object-contain sm:h-12" priority />
             <span className="hidden whitespace-nowrap rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.12em] text-amber-300 md:inline-flex">BPO Financeiro</span>
           </Link>
 
@@ -143,67 +143,45 @@ export default function BpoLandingMain() {
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
-            <Link href="/parceiros" className="hidden rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-bold text-amber-300 transition hover:border-amber-300/60 hover:bg-amber-400/10 sm:inline-flex lg:hidden">Parceria</Link>
+            <Link href="/parceiros" className="inline-flex rounded-xl border border-amber-400/30 px-2.5 py-2 text-[11px] font-bold text-amber-300 transition hover:border-amber-300/60 hover:bg-amber-400/10 lg:hidden sm:px-3 sm:text-xs">Parceria</Link>
             <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" id="nav-cta-whatsapp" className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-3.5 py-2.5 text-xs font-extrabold text-slate-950 shadow-lg shadow-emerald-400/20 transition hover:-translate-y-0.5 hover:bg-emerald-300 sm:px-4 sm:text-sm">
               <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">Agendar diagnóstico</span>
-              <span className="sm:hidden">Agendar</span>
+              <span className="hidden sm:inline">Agendar pelo WhatsApp</span>
+              <span className="sm:hidden">WhatsApp</span>
             </a>
           </div>
         </div>
       </header>
 
       {/* ── HERO SECTION ── */}
-      <section className="relative pt-40 pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(245,158,11,0.15),transparent)] pointer-events-none" />
-        <div className="absolute inset-0 bg-grid-amber opacity-30 pointer-events-none" />
-        <div className="absolute top-1/4 -left-40 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl animate-float pointer-events-none" />
+      <section id="top" className="relative overflow-hidden pb-20 pt-36 sm:pb-28 sm:pt-44">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_20%_-10%,rgba(245,158,11,0.18),transparent),radial-gradient(circle_at_90%_40%,rgba(16,185,129,0.10),transparent_32%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-grid-amber opacity-25" />
+        <div className="pointer-events-none absolute -left-40 top-1/3 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl animate-float" />
 
-        <div ref={heroRef} className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center transition-all duration-700 ${heroInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-
-          {/* Badge BPO */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider mb-8">
-            <Zap className="w-4 h-4" />
-            BPO Financeiro — Solucione Assessoria Virtual
-          </div>
-
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 max-w-5xl mx-auto leading-[1.06]">
-            Seu financeiro sob controle,{' '}
-            <span className="text-shimmer-amber">sem contratar ninguém</span>.
-          </h1>
-
-          <p className="text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto mb-8 leading-relaxed">
-            Terceirize contas a pagar, contas a receber, conciliação bancária e DRE gerencial com especialistas dedicados. Atendimento rápido e sem burocracia.
-          </p>
-
-          {/* DESTAQUE DE SEGURANÇA EM DESTAQUE NO HERO */}
-          <div className="max-w-2xl mx-auto mb-10 bg-slate-900/90 border border-emerald-500/40 rounded-2xl p-4 sm:p-5 flex items-center justify-center gap-3 shadow-xl text-left">
-            <ShieldCheck className="w-8 h-8 text-emerald-400 flex-shrink-0" />
-            <div>
-              <p className="text-xs sm:text-sm font-bold text-white">Acesso Restrito, Zero Movimentação</p>
-              <p className="text-xs text-slate-400">Leitura de extratos para conciliação · Zero pagamentos ou transferências · Protegido por contrato formal de confidencialidade.</p>
+        <div ref={heroRef} className={`relative z-10 mx-auto grid max-w-7xl gap-12 px-4 transition-all duration-700 sm:px-6 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-20 lg:px-8 ${heroInView ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+          <div className="max-w-3xl">
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[.14em] text-amber-300">
+              <Zap className="h-4 w-4" />
+              BPO financeiro para empresas em movimento
             </div>
+            <h1 className="text-5xl font-black leading-[.98] tracking-[-.055em] text-white sm:text-6xl lg:text-7xl">Seu financeiro em ordem. <span className="text-shimmer-amber">Sua empresa livre para crescer.</span></h1>
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">A Solucione cuida da rotina financeira — contas a pagar, receber, conciliação e visão gerencial — para você tomar decisões com mais clareza e menos sobrecarga.</p>
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" id="hero-cta-whatsapp-main" className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-400 px-7 py-4 text-base font-extrabold text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300 sm:w-auto"><Calendar className="h-5 w-5" /> Falar com um especialista no WhatsApp <ArrowRight className="h-5 w-5" /></a>
+              <a href="#planos" className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-6 py-4 font-bold text-slate-200 transition hover:border-amber-300/50 hover:text-amber-200">Ver como funciona</a>
+            </div>
+            <p className="mt-4 flex items-center gap-2 text-xs text-slate-500"><Clock className="h-3.5 w-3.5 text-slate-400" /> Diagnóstico de 30 a 45 minutos · Sem compromisso</p>
           </div>
 
-          {/* CTAs WHATSAPP DERRUBANDO BARREIRAS */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
-            <a
-              href={WA_DIAGNOSTICO_DIRETO}
-              target="_blank"
-              rel="noopener noreferrer"
-              id="hero-cta-whatsapp-main"
-              className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-8 py-4 rounded-2xl transition-all shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-3 text-base hover:scale-[1.03]"
-            >
-              <Calendar className="w-5 h-5 stroke-[2.5]" />
-              Agendar Diagnóstico Financeiro Gratuito
-              <ArrowRight className="w-5 h-5" />
-            </a>
-          </div>
-
-          <p className="text-xs text-slate-500 mt-4 flex items-center justify-center gap-2">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
-            Sessão de 30 a 45 minutos · Sem compromisso · Atendimento via WhatsApp
-          </p>
+          <aside className="relative overflow-hidden rounded-3xl border border-white/10 bg-slate-900/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
+            <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
+            <div className="relative">
+              <div className="mb-6 flex items-center gap-3"><div className="rounded-2xl bg-emerald-400/10 p-3 text-emerald-300"><ShieldCheck className="h-6 w-6" /></div><div><p className="text-sm font-extrabold text-white">Controle sem abrir mão da segurança</p><p className="text-xs text-slate-500">Processo claro desde o primeiro contato</p></div></div>
+              <div className="space-y-4 border-t border-white/10 pt-5 text-sm text-slate-300"><p className="flex gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> Você aprova e realiza os pagamentos finais.</p><p className="flex gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> Nossa equipe organiza, confere e sinaliza prioridades.</p><p className="flex gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> Seus dados são tratados sob confidencialidade contratual.</p></div>
+              <div className="mt-7 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4"><p className="text-xs font-bold uppercase tracking-[.12em] text-amber-300">Primeiro passo</p><p className="mt-2 text-sm leading-6 text-slate-300">Conte o que hoje trava sua rotina financeira. A gente mostra onde começar.</p></div>
+            </div>
+          </aside>
         </div>
       </section>
 

@@ -1,8 +1,7 @@
-# Ajuste visual do cabeçalho
+# Mobile, CTA e hero
 
-- [x] Reorganizar o bloco do logo e da identificação da marca.
-- [x] Reduzir a densidade e corrigir o espaçamento da navegação desktop.
-- [x] Manter “Parceria para Contadores” em uma única linha quando houver espaço.
-- [x] Dimensionar o CTA sem sobreposição e criar comportamento adequado para telas menores.
-- [x] Validar a landing em desktop no navegador e confirmar o build de produção.
+- [x] Verificar o cabeçalho em viewport mobile e identificar riscos de corte ou sobreposição.
+- [x] Ajustar o CTA mobile para a copy final e validar o link centralizado do WhatsApp.
+- [x] Reformular a hierarquia, mensagem e CTA da seção hero.
+- [x] Validar build e visualização no navegador; as classes mobile mantêm “Parceria” acessível e o CTA compacto.
 - [ ] Salvar checkpoint da melhoria.
