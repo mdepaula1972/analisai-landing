@@ -21,12 +21,14 @@ interface ResumoFinanceiro {
   faturamento_mensal_estimado?: number;
   custos_fixos_estimados?: number;
   custos_variaveis_estimados?: number;
+  pro_labore_estimado?: number;
+  mistura_contas_pf_pj?: string;
   principais_gargalos?: string[];
   cenarios_solicitados?: string[];
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.8 · 22/08/2026 - 18:25';
+const VERSION = 'v1.9 · 22/08/2026 - 18:35';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -360,24 +362,36 @@ function ColetaVoiceContent() {
             </div>
 
             {/* Raio-X dos Dados Coletados em Tempo Real */}
-            {(resumo.faturamento_mensal_estimado || resumo.custos_fixos_estimados || resumo.ramo_atividade) && (
-              <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/50 p-4 text-left grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+            {(resumo.faturamento_mensal_estimado || resumo.custos_fixos_estimados || resumo.ramo_atividade || resumo.pro_labore_estimado) && (
+              <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/50 p-4 text-left grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                 {resumo.ramo_atividade && (
-                  <div className="p-2 rounded-lg bg-slate-950/60">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Ramo:</span>
-                    <span className="text-slate-200 font-semibold">{resumo.ramo_atividade}</span>
+                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Ramo & Modelo:</span>
+                    <span className="text-slate-200 font-semibold line-clamp-1">{resumo.ramo_atividade}</span>
                   </div>
                 )}
                 {resumo.faturamento_mensal_estimado ? (
-                  <div className="p-2 rounded-lg bg-slate-950/60">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Faturamento Estimado:</span>
+                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Faturamento Médio:</span>
                     <span className="text-emerald-400 font-bold">R$ {resumo.faturamento_mensal_estimado.toLocaleString('pt-BR')}</span>
                   </div>
                 ) : null}
                 {resumo.custos_fixos_estimados ? (
-                  <div className="p-2 rounded-lg bg-slate-950/60">
+                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Custos Fixos:</span>
                     <span className="text-amber-400 font-bold">R$ {resumo.custos_fixos_estimados.toLocaleString('pt-BR')}</span>
+                  </div>
+                ) : null}
+                {resumo.pro_labore_estimado ? (
+                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Pró-labore Sócios:</span>
+                    <span className="text-cyan-400 font-bold">R$ {resumo.pro_labore_estimado.toLocaleString('pt-BR')}</span>
+                  </div>
+                ) : null}
+                {resumo.mistura_contas_pf_pj ? (
+                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Mistura PF/PJ:</span>
+                    <span className="text-rose-400 font-bold">{resumo.mistura_contas_pf_pj}</span>
                   </div>
                 ) : null}
               </div>
