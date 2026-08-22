@@ -32,9 +32,29 @@ export async function POST(req: NextRequest) {
       metadata: session.metadata,
     });
 
-    // TODO: adicionar aqui lógica extra quando necessário:
-    // - Gravar pedido no Supabase
-    // - Enviar e-mail/WhatsApp com link do formulário
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        await supabase.from('diagnostico_pedidos').insert([
+          {
+            nome_pagador: session.customer_details?.name || 'Cliente Stripe',
+            email: session.customer_details?.email || '',
+            whatsapp: session.customer_details?.phone || '',
+            metodo_pagamento: 'stripe_cartao',
+            valor: (session.amount_total || 19700) / 100,
+            status: 'confirmado',
+            session_id: session.id,
+            observacoes: 'Aprovado via Stripe Checkout',
+          },
+        ]);
+      }
+    } catch (dbErr) {
+      console.error('[stripe/webhook] Erro ao gravar no Supabase:', dbErr);
+    }
   }
 
   return NextResponse.json({ received: true });

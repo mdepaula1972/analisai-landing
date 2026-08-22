@@ -9,10 +9,14 @@ import {
   AlertTriangle, TrendingDown, HelpCircle,
   ClipboardList, BarChart3, Mail, Lock,
   ChevronRight, Sparkles, Users, DollarSign,
+  Copy, Check, QrCode, CreditCard, Send,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.0 · 22/08/2026';
+const VERSION = 'v1.1 · 22/08/2026';
+const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
+const RAZAO_SOCIAL = 'Solucione Assessoria Virtual';
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -51,55 +55,21 @@ function FaqItem({ question, answer }: { question: string; answer: React.ReactNo
   );
 }
 
-function CtaButton({ id, className }: { id: string; className?: string }) {
-  const [loading, setLoading] = useState(false);
-
-  async function handleClick() {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const res = await fetch('/api/stripe/checkout', { method: 'POST' });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        alert('Erro ao iniciar pagamento. Tente novamente.');
-        setLoading(false);
-      }
-    } catch {
-      alert('Erro de conexão. Tente novamente.');
-      setLoading(false);
-    }
-  }
-
-  return (
-    <button
-      onClick={handleClick}
-      disabled={loading}
-      id={id}
-      className={`inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 disabled:opacity-70 disabled:cursor-wait text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-amber-500/50 text-base sm:text-lg group ${className ?? ''}`}
-    >
-      {loading ? (
-        <>
-          <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-          </svg>
-          Redirecionando...
-        </>
-      ) : (
-        <>
-          <Sparkles className="w-5 h-5 flex-shrink-0" />
-          Quero meu diagnóstico — R$ 197
-          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-        </>
-      )}
-    </button>
-  );
-}
-
 export default function DiagnosticoPage() {
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [metodoPagamento, setMetodoPagamento] = useState<'pix' | 'cartao'>('pix');
+
+  // Formulário Pix
+  const [pixNome, setPixNome] = useState('');
+  const [pixEmail, setPixEmail] = useState('');
+  const [pixWhatsapp, setPixWhatsapp] = useState('');
+  const [pixLoading, setPixLoading] = useState(false);
+  const [pixError, setPixError] = useState('');
+
+  // Cartão Stripe
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
@@ -114,6 +84,69 @@ export default function DiagnosticoPage() {
   const [autorRef, autorInView] = useInView();
   const [precoRef, precoInView] = useInView();
   const [faqRef, faqInView] = useInView();
+
+  function handleCopiarPix() {
+    navigator.clipboard.writeText(CHAVE_PIX_CNPJ.replace(/[^\d]/g, '') || CHAVE_PIX_CNPJ);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  }
+
+  async function handleConfirmarPix(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pixNome.trim() || !pixEmail.trim() || !pixWhatsapp.trim()) {
+      setPixError('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    setPixLoading(true);
+    setPixError('');
+
+    try {
+      const res = await fetch('/api/diagnostico/pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: pixNome,
+          email: pixEmail,
+          whatsapp: pixWhatsapp,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        router.push('/diagnostico/sucesso');
+      } else {
+        setPixError(data.error || 'Erro ao registrar pedido.');
+        setPixLoading(false);
+      }
+    } catch {
+      setPixError('Erro de conexão. Tente novamente.');
+      setPixLoading(false);
+    }
+  }
+
+  async function handleStripeCheckout() {
+    if (stripeLoading) return;
+    setStripeLoading(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Erro ao iniciar pagamento no Stripe. Tente novamente.');
+        setStripeLoading(false);
+      }
+    } catch {
+      alert('Erro de conexão. Tente novamente.');
+      setStripeLoading(false);
+    }
+  }
+
+  function scrollToPagamento() {
+    const el = document.getElementById('secao-pagamento');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }
 
   const problemas = [
     {
@@ -194,10 +227,10 @@ export default function DiagnosticoPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 relative">
 
-      {/* ── BADGE DE VERSÃO (debug/confirmação de deploy) ── */}
+      {/* ── BADGE DE VERSÃO ── */}
       <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-500/40 bg-slate-950/90 backdrop-blur-sm text-amber-400 text-[10px] font-bold font-mono shadow-lg">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-        Diagnóstico Financeiro {VERSION}
+        Diagnóstico {VERSION}
       </div>
 
       {/* ── NAVBAR ── */}
@@ -217,20 +250,14 @@ export default function DiagnosticoPage() {
             </span>
           </Link>
 
-          <a
-            onClick={async (e) => {
-              e.preventDefault();
-              const res = await fetch('/api/stripe/checkout', { method: 'POST' });
-              const data = await res.json();
-              if (data.url) window.location.href = data.url;
-            }}
-            href="#"
+          <button
+            onClick={scrollToPagamento}
             id="nav-cta-diagnostico"
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/25 text-sm flex items-center gap-2 cursor-pointer"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-5 py-2.5 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/25 text-sm flex items-center gap-2 cursor-pointer"
           >
             <Zap className="w-4 h-4" />
             Quero por R$ 197
-          </a>
+          </button>
         </div>
       </header>
 
@@ -238,7 +265,6 @@ export default function DiagnosticoPage() {
       {/* SEÇÃO 1 — HERÓI */}
       {/* ══════════════════════════════════════════════════════════ */}
       <section className="relative pt-36 pb-28 overflow-hidden" aria-label="Apresentação">
-        {/* Backgrounds decorativos */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(245,158,11,0.18),transparent)] pointer-events-none" />
         <div className="absolute inset-0 bg-grid-amber opacity-20 pointer-events-none" />
         <div className="absolute top-1/3 -left-48 w-96 h-96 bg-amber-500/8 rounded-full blur-3xl animate-float pointer-events-none" />
@@ -271,7 +297,15 @@ export default function DiagnosticoPage() {
 
           {/* CTA principal */}
           <div className="flex flex-col items-center gap-4">
-            <CtaButton id="hero-cta" />
+            <button
+              onClick={scrollToPagamento}
+              id="hero-cta"
+              className="inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-amber-500/50 text-base sm:text-lg group cursor-pointer"
+            >
+              <Sparkles className="w-5 h-5 flex-shrink-0" />
+              Quero meu diagnóstico — R$ 197
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
 
             <p className="text-slate-400 text-sm max-w-md">
               Feito para donos de pequenos negócios do{' '}
@@ -345,7 +379,7 @@ export default function DiagnosticoPage() {
           <div className="text-center mb-14">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider mb-4">
               <Zap className="w-3.5 h-3.5" />
-              Zero fricção
+              Zero fricção humana
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white mb-3">
               Como funciona
@@ -356,7 +390,6 @@ export default function DiagnosticoPage() {
           </div>
 
           <div className="grid sm:grid-cols-3 gap-6 relative">
-            {/* Linha conectora desktop */}
             <div className="hidden sm:block absolute top-16 left-[calc(16.66%+2rem)] right-[calc(16.66%+2rem)] h-px bg-gradient-to-r from-amber-500/40 via-amber-500/20 to-amber-500/40 pointer-events-none" />
 
             {passos.map((p, i) => (
@@ -364,7 +397,6 @@ export default function DiagnosticoPage() {
                 key={i}
                 className="relative flex flex-col items-center text-center p-8 rounded-3xl border border-slate-800 bg-slate-900/60 hover:border-amber-500/30 hover:bg-slate-900/80 transition-all duration-300 card-glow-amber group"
               >
-                {/* Número */}
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-amber-500 text-slate-950 font-extrabold text-sm flex items-center justify-center shadow-lg shadow-amber-500/40">
                   {p.num}
                 </div>
@@ -378,7 +410,6 @@ export default function DiagnosticoPage() {
             ))}
           </div>
 
-          {/* Destaque "sem call" */}
           <div className="mt-10 text-center">
             <div className="inline-flex flex-wrap items-center justify-center gap-3 sm:gap-6 px-6 py-4 rounded-2xl border border-slate-800 bg-slate-900/40">
               {['Sem call', 'Sem agenda', 'Sem enrolação'].map((tag, i) => (
@@ -412,9 +443,7 @@ export default function DiagnosticoPage() {
             </h2>
           </div>
 
-          {/* Card do relatório */}
           <div className="relative rounded-3xl border border-amber-500/25 bg-slate-900/80 overflow-hidden shadow-2xl shadow-amber-500/10">
-            {/* Header do card */}
             <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-800/80 bg-amber-500/5">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-red-500/60" />
@@ -425,7 +454,6 @@ export default function DiagnosticoPage() {
               <FileText className="w-4 h-4 text-amber-400 ml-auto" />
             </div>
 
-            {/* Itens */}
             <div className="p-6 sm:p-8 space-y-4">
               {itensRelatorio.map((item, i) => (
                 <div key={i} className="flex items-start gap-3 group">
@@ -437,7 +465,6 @@ export default function DiagnosticoPage() {
               ))}
             </div>
 
-            {/* Footer do card */}
             <div className="px-6 sm:px-8 py-4 border-t border-slate-800/80 bg-slate-900/60 flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-amber-400" />
               <p className="text-slate-400 text-xs font-medium">
@@ -458,7 +485,6 @@ export default function DiagnosticoPage() {
           ref={autorRef}
           className={`max-w-4xl mx-auto px-4 sm:px-6 relative z-10 transition-all duration-700 ${autorInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
         >
-          {/* Bloco de autoridade */}
           <div className="rounded-3xl border border-amber-500/20 bg-gradient-to-br from-slate-900 to-slate-900/60 p-8 sm:p-12 text-center mb-10">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 mb-6">
               <Star className="w-8 h-8 text-amber-400" />
@@ -471,7 +497,6 @@ export default function DiagnosticoPage() {
             </p>
           </div>
 
-          {/* Espaço reservado para depoimentos */}
           <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
             <p className="text-slate-500 text-sm font-medium">
               🗣️ Espaço reservado para depoimentos de clientes-piloto
@@ -484,45 +509,218 @@ export default function DiagnosticoPage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════ */}
-      {/* SEÇÃO 6 — PREÇO E GARANTIA */}
+      {/* SEÇÃO 6 — PREÇO E CAIXA DE PAGAMENTO PIX / CARTÃO */}
       {/* ══════════════════════════════════════════════════════════ */}
-      <section className="py-20 relative" aria-label="Preço e garantia">
+      <section id="secao-pagamento" className="py-20 relative scroll-mt-24" aria-label="Preço e pagamento">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(245,158,11,0.08),transparent)] pointer-events-none" />
 
         <div
           ref={precoRef}
           className={`max-w-2xl mx-auto px-4 sm:px-6 relative z-10 transition-all duration-700 ${precoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
         >
-          <div className="rounded-3xl border border-amber-500/30 bg-slate-900/90 overflow-hidden shadow-2xl shadow-amber-500/10 animate-pulse-glow-amber">
-            {/* Header preço */}
+          <div className="rounded-3xl border border-amber-500/30 bg-slate-900/90 overflow-hidden shadow-2xl shadow-amber-500/10">
+            
+            {/* Cabeçalho do Preço */}
             <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/5 border-b border-amber-500/20 px-8 py-8 text-center">
-              <p className="text-slate-400 text-sm font-medium uppercase tracking-widest mb-2">Diagnóstico Financeiro</p>
+              <p className="text-slate-400 text-xs sm:text-sm font-bold uppercase tracking-widest mb-2">Diagnóstico Financeiro Completo</p>
               <div className="flex items-baseline justify-center gap-2 mb-1">
-                <span className="text-slate-500 text-lg font-medium">R$</span>
+                <span className="text-slate-400 text-lg font-bold">R$</span>
                 <span className="text-6xl font-extrabold text-white tracking-tight">197</span>
               </div>
-              <p className="text-amber-400 text-sm font-semibold">Pagamento único · Sem assinatura</p>
+              <p className="text-amber-400 text-sm font-semibold">Pagamento único · Sem assinatura ou mensalidade</p>
             </div>
 
-            {/* Detalhes */}
-            <div className="px-8 py-8 space-y-4">
-              {[
-                { icon: <Clock className="w-5 h-5 text-amber-400" />, text: 'Entrega garantida em até 72h após pagamento e formulário' },
-                { icon: <Shield className="w-5 h-5 text-emerald-400" />, text: 'Pagamento antecipado via link seguro (Asaas)' },
-                { icon: <Lock className="w-5 h-5 text-emerald-400" />, text: 'Sem acesso à sua conta bancária — nunca' },
-                { icon: <FileText className="w-5 h-5 text-amber-400" />, text: 'Relatório PDF em linguagem simples, pronto para usar' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-lg bg-slate-800/80 flex-shrink-0">{item.icon}</div>
-                  <p className="text-slate-300 text-sm">{item.text}</p>
+            {/* Alternador de Método de Pagamento */}
+            <div className="p-4 sm:p-6 bg-slate-950/60 border-b border-slate-800">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 text-center">Escolha como prefere pagar:</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setMetodoPagamento('pix')}
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+                    metodoPagamento === 'pix'
+                      ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 scale-[1.02]'
+                      : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
+                  }`}
+                >
+                  <Zap className="w-4 h-4 fill-current" />
+                  PIX Instantâneo
+                </button>
+
+                <button
+                  onClick={() => setMetodoPagamento('cartao')}
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+                    metodoPagamento === 'cartao'
+                      ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 scale-[1.02]'
+                      : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Cartão (Stripe)
+                </button>
+              </div>
+            </div>
+
+            {/* CONTEÚDO: OPÇÃO PIX */}
+            {metodoPagamento === 'pix' && (
+              <div className="p-6 sm:p-8 space-y-6">
+                
+                {/* Box Chave Pix com Credibilidade */}
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4" /> Chave PIX Oficial (CNPJ)
+                    </span>
+                    <span className="text-[11px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md">
+                      Aprovação Imediata
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 mb-3">
+                    <span className="font-mono text-sm sm:text-base font-extrabold text-white tracking-wide break-all">
+                      {CHAVE_PIX_CNPJ}
+                    </span>
+                    <button
+                      onClick={handleCopiarPix}
+                      className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        copied
+                          ? 'bg-emerald-500 text-slate-950'
+                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                      }`}
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? 'Copiado!' : 'Copiar CNPJ'}
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-slate-400 space-y-1">
+                    <p><span className="text-slate-300 font-semibold">Favorecido:</span> {RAZAO_SOCIAL}</p>
+                    <p><span className="text-slate-300 font-semibold">Valor:</span> R$ 197,00</p>
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            {/* CTA */}
-            <div className="px-8 pb-8 text-center">
-              <CtaButton id="preco-cta" className="w-full justify-center" />
-            </div>
+                {/* Formulário de Identificação do Pagamento */}
+                <form onSubmit={handleConfirmarPix} className="space-y-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">
+                      Identificação do seu Diagnóstico
+                    </p>
+                    <p className="text-xs text-slate-400 mb-3">
+                      Informe seus dados para identificarmos o pagamento no banco e enviarmos o seu formulário/relatório:
+                    </p>
+                  </div>
+
+                  {pixError && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                      {pixError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Nome completo do pagador *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: João da Silva / Minha Empresa Ltda"
+                      value={pixNome}
+                      onChange={(e) => setPixNome(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">WhatsApp *</label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="(00) 00000-0000"
+                        value={pixWhatsapp}
+                        onChange={(e) => setPixWhatsapp(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">E-mail para receber relatório *</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="seu@email.com"
+                        value={pixEmail}
+                        onChange={(e) => setPixEmail(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={pixLoading}
+                    className="w-full mt-2 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-70 text-slate-950 font-extrabold py-4 px-6 rounded-2xl shadow-xl shadow-emerald-500/20 text-base transition-all hover:scale-[1.02] cursor-pointer"
+                  >
+                    {pixLoading ? (
+                      <>
+                        <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                        Registrando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Já fiz o PIX — Confirmar meus dados
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[11px] text-center text-slate-500">
+                    Você não precisa enviar comprovante se não quiser. Confirmamos pelo nome do pagador no extrato.
+                  </p>
+                </form>
+
+              </div>
+            )}
+
+            {/* CONTEÚDO: OPÇÃO CARTÃO (STRIPE) */}
+            {metodoPagamento === 'cartao' && (
+              <div className="p-6 sm:p-8 space-y-6">
+                <div className="space-y-4">
+                  {[
+                    { icon: <Clock className="w-5 h-5 text-amber-400" />, text: 'Entrega garantida em até 72h após pagamento e formulário' },
+                    { icon: <Shield className="w-5 h-5 text-emerald-400" />, text: 'Checkout seguro com criptografia de ponta a ponta (Stripe)' },
+                    { icon: <Lock className="w-5 h-5 text-emerald-400" />, text: 'Sem acesso à sua conta bancária — nunca' },
+                    { icon: <FileText className="w-5 h-5 text-amber-400" />, text: 'Relatório PDF em linguagem simples, pronto para usar' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="p-1.5 rounded-lg bg-slate-800/80 flex-shrink-0">{item.icon}</div>
+                      <p className="text-slate-300 text-sm">{item.text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleStripeCheckout}
+                  disabled={stripeLoading}
+                  className="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 disabled:opacity-70 text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.02] text-base sm:text-lg group cursor-pointer"
+                >
+                  {stripeLoading ? (
+                    <>
+                      <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                      Redirecionando para Stripe...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5 flex-shrink-0" />
+                      Pagar com Cartão no Stripe — R$ 197
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
           </div>
 
           {/* Nota sobre o AnalisAí */}
@@ -571,7 +769,6 @@ export default function DiagnosticoPage() {
       {/* AVISO LGPD + RODAPÉ */}
       {/* ══════════════════════════════════════════════════════════ */}
       <footer className="border-t border-slate-800/60 bg-slate-950/80">
-        {/* Aviso LGPD */}
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex items-start gap-4 p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
             <Shield className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -587,7 +784,6 @@ export default function DiagnosticoPage() {
           </div>
         </div>
 
-        {/* Rodapé principal */}
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 border-t border-slate-800/40">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 text-xs">
             <div className="flex items-center gap-2">
