@@ -7,7 +7,7 @@ import { CheckCircle2, Clock, Mail, ArrowRight, Shield, MessageCircle } from 'lu
 import { useSearchParams } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.3 · 22/08/2026 - 17:35';
+const VERSION = 'v1.5 · 22/08/2026 - 17:55';
 const PHONE_NUMBER = '5514930855878';
 const WA_SUCESSO_LINK = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Acabei de contratar o Diagnóstico Financeiro (R$ 197) e gostaria de confirmar meus dados e receber o formulário.')}`;
 

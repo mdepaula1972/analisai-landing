@@ -26,7 +26,7 @@ interface ResumoFinanceiro {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.3 · 22/08/2026 - 17:35';
+const VERSION = 'v1.5 · 22/08/2026 - 17:55';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
