@@ -26,7 +26,7 @@ interface ResumoFinanceiro {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.5 · 22/08/2026 - 17:55';
+const VERSION = 'v1.6 · 22/08/2026 - 18:05';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -39,7 +39,7 @@ function ColetaVoiceContent() {
   const [coletaId, setColetaId] = useState<string | null>(null);
   const [historico, setHistorico] = useState<Mensagem[]>([]);
   const [assistenteFala, setAssistenteFala] = useState(
-    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou a Especialista Financeira da AnalisAí. Estou aqui para entender os números do seu negócio sem burocracia. Para começarmos: me conte um pouco sobre sua empresa — qual é o seu ramo de atuação e se você trabalha sozinho ou tem equipe?`
+    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAí. Estou aqui para entender o seu negócio de verdade, sem jargões e sem formulários chatos. Para a gente começar: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`
   );
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [finalizado, setFinalizado] = useState(false);
@@ -56,22 +56,6 @@ function ColetaVoiceContent() {
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
-
-  // Exemplos rápidos para o usuário testar a IA
-  const exemplosTeste = [
-    {
-      titulo: 'Restaurante / Comércio',
-      texto: 'Tenho um restaurante com 4 funcionários. Faturamos em média 45 mil por mês. Nossos custos fixos são aluguel de 4 mil e folha de 10 mil. O custo de comida e bebidas é cerca de 18 mil. Sinto que o dinheiro nunca sobra no fim do mês.',
-    },
-    {
-      titulo: 'Clínica de Saúde',
-      texto: 'Sou dentista e tenho uma clínica com 2 secretárias e 1 sócio. Faturamento de 60 mil por mês. Pró-labore total de 20 mil, aluguel 7 mil, materiais 8 mil e impostos. Quero saber se posso contratar mais uma pessoa.',
-    },
-    {
-      titulo: 'Serviços / Tecnologia',
-      texto: 'Tenho uma agência de tecnologia com 3 sócios e 2 estagiários. Faturamos 35 mil por mês. Folha e pró-labore somam 18 mil, ferramentas 3 mil. Nosso maior problema é atraso de pagamento de clientes.',
-    },
-  ];
 
   // Inicializa síntese de voz (TTS) e Reconhecimento de fala (STT)
   useEffect(() => {
@@ -226,11 +210,11 @@ function ColetaVoiceContent() {
   }
 
   const etapas = [
-    { num: 1, label: 'Modelo de Negócio' },
+    { num: 1, label: 'Modelo & Operação' },
     { num: 2, label: 'Faturamento' },
     { num: 3, label: 'Custos & Gastos' },
-    { num: 4, label: 'Gargalos & Dores' },
-    { num: 5, label: 'Confirmação dos Dados' },
+    { num: 4, label: 'Gargalos & Objetivos' },
+    { num: 5, label: 'Confirmação do Diagnóstico' },
   ];
 
   return (
@@ -265,7 +249,7 @@ function ColetaVoiceContent() {
             <div className="hidden sm:flex flex-col">
               <span className="text-xs font-black tracking-wider text-white">AnalisAI.me</span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
-                Sala de Voz · Inteligência Financeira
+                Sala de Voz · Consultoria Financeira
               </span>
             </div>
           </Link>
@@ -297,32 +281,6 @@ function ColetaVoiceContent() {
       <div className="relative z-10 bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
         <span><strong>Garantia AnalisAí:</strong> Você tem direito a <strong>2 reanálises gratuitas</strong> após a entrega do relatório para refinar dados ou novos cenários.</span>
-      </div>
-
-      {/* ── PAINEL DE TESTE RÁPIDO DA IA (SEMPRE VISÍVEL PARA VOCÊ TESTAR) ── */}
-      <div className="relative z-20 max-w-3xl mx-auto w-full px-4 pt-4">
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-amber-500/40 shadow-xl space-y-2 text-xs">
-          <div className="flex items-center gap-1.5 text-amber-400 font-extrabold uppercase tracking-wider">
-            <FlaskConical className="w-4 h-4" />
-            <span>Painel de Teste Rápido da IA (Clique para testar uma resposta instantânea):</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {exemplosTeste.map((ex, i) => (
-              <button
-                key={i}
-                onClick={() => enviarResposta(ex.texto)}
-                disabled={carregandoIA}
-                className="p-2.5 text-left rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/60 hover:bg-slate-900 transition-all cursor-pointer group disabled:opacity-50"
-              >
-                <p className="font-extrabold text-white group-hover:text-amber-300 mb-1 flex items-center justify-between">
-                  <span>{ex.titulo}</span>
-                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                </p>
-                <p className="text-[10px] text-slate-400 line-clamp-2">{ex.texto}</p>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
