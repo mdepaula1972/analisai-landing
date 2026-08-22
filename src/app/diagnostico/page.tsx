@@ -14,9 +14,10 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.1 · 22/08/2026';
+const VERSION = 'v1.2 · 22/08/2026';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
-const RAZAO_SOCIAL = 'Solucione Assessoria Virtual';
+const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
+const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAí)';
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -592,8 +593,9 @@ export default function DiagnosticoPage() {
                     </button>
                   </div>
 
-                  <div className="text-xs text-slate-400 space-y-1">
-                    <p><span className="text-slate-300 font-semibold">Favorecido:</span> {RAZAO_SOCIAL}</p>
+                  <div className="text-xs text-slate-400 space-y-1.5 pt-1 border-t border-emerald-500/20">
+                    <p><span className="text-slate-300 font-semibold">Razão Social:</span> {RAZAO_SOCIAL}</p>
+                    <p><span className="text-slate-300 font-semibold">Nome Fantasia:</span> {NOME_FANTASIA}</p>
                     <p><span className="text-slate-300 font-semibold">Valor:</span> R$ 197,00</p>
                   </div>
                 </div>
