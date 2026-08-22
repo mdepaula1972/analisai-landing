@@ -65,13 +65,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Monta o histórico de mensagens para a API Gemini
-    const contents = [
-      {
+    // Monta o histórico estritamente com alternância user/model
+    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+    // Mensagem de boas-vindas inicial como contexto se não houver histórico
+    if (!Array.isArray(historico) || historico.length === 0) {
+      contents.push({
         role: 'user',
-        parts: [{ text: `${SYSTEM_PROMPT}\n\nINFORMAÇÕES INICIAIS DO CLIENTE: ${JSON.stringify(cliente_info || {})}` }],
-      },
-      {
+        parts: [{ text: `Olá, sou ${cliente_info?.nome || 'o dono da empresa'}. Vamos iniciar a coleta do meu diagnóstico.` }],
+      });
+      contents.push({
         role: 'model',
         parts: [{ text: JSON.stringify({
           mensagem: `Olá ${cliente_info?.nome ? cliente_info.nome.split(' ')[0] : ''}! Sou a especialista financeira da AnalisAí. Estou aqui para entender os números do seu negócio sem burocracia. Para começarmos: me conte um pouco sobre o seu negócio — qual é o seu ramo de atuação e se você trabalha sozinho ou tem equipe?`,
@@ -80,11 +83,9 @@ export async function POST(req: NextRequest) {
           aguardando_confirmacao: false,
           resumo_extracao: {}
         }) }],
-      },
-    ];
-
-    if (Array.isArray(historico)) {
-      for (const msg of historico.slice(-8)) { // Mantém os últimos 8 turnos de contexto
+      });
+    } else {
+      for (const msg of historico.slice(-8)) {
         contents.push({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }],
@@ -99,13 +100,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Chama a API do Gemini
+    // Chama a API do Gemini 1.5 Flash
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: `${SYSTEM_PROMPT}\n\nDADOS DO CLIENTE: ${JSON.stringify(cliente_info || {})}` }],
+          },
           contents,
           generationConfig: {
             responseMimeType: 'application/json',
@@ -116,9 +120,13 @@ export async function POST(req: NextRequest) {
     );
 
     if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error('[api/diagnostico/assistente] Erro Gemini:', errText);
-      return NextResponse.json({ error: 'Erro ao processar fala com IA.' }, { status: 500 });
+      const errJson = await geminiRes.json().catch(() => null);
+      const errMessage = errJson?.error?.message || 'Chave API do Gemini inválida ou sem permissão.';
+      console.error('[api/diagnostico/assistente] Erro Gemini API:', errJson || errMessage);
+      return NextResponse.json(
+        { error: `Erro na IA: ${errMessage}` },
+        { status: 400 }
+      );
     }
 
     const geminiData = await geminiRes.json();
