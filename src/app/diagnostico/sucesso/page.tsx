@@ -14,6 +14,20 @@ function SucessoContent() {
   const sessionId = searchParams.get('session_id');
   const [visible, setVisible] = useState(false);
 
+  const pedidoId = searchParams.get('pedido_id') || '';
+  const nome = searchParams.get('nome') || '';
+  const email = searchParams.get('email') || '';
+  const whatsapp = searchParams.get('whatsapp') || '';
+
+  const voiceParams = new URLSearchParams({
+    pedido_id: pedidoId,
+    nome,
+    email,
+    whatsapp,
+  });
+
+  const LINK_COLETA_VOZ = `/diagnostico/coleta?${voiceParams.toString()}`;
+
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
     return () => clearTimeout(t);
@@ -38,30 +52,36 @@ function SucessoContent() {
         </Link>
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-4">
-          Pedido Registrado com Sucesso
+          Pagamento Registrado com Sucesso
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-3">
-          Tudo pronto! 🎉
+          Tudo pronto{nome ? `, ${nome.split(' ')[0]}` : ''}! 🎉
         </h1>
         <p className="text-slate-300 text-base sm:text-lg leading-relaxed mb-8">
-          Recebemos as informações do seu <span className="text-amber-400 font-semibold">Diagnóstico Financeiro</span>.
+          Sem formulários burocráticos. Você só precisa <span className="text-amber-400 font-semibold">falar por 3 minutos</span> com nossa especialista por voz.
         </p>
 
-        {/* Botão de Ação Rápida: WhatsApp */}
-        <div className="mb-8">
+        {/* CTA PRINCIPAL: SALA DE VOZ */}
+        <div className="mb-6 space-y-3">
+          <Link
+            href={LINK_COLETA_VOZ}
+            className="w-full inline-flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-4 px-6 rounded-2xl shadow-2xl shadow-amber-500/30 text-base sm:text-lg transition-all hover:scale-[1.03] animate-pulse-glow-amber"
+          >
+            <Sparkles className="w-5 h-5" />
+            Iniciar Entrevista por Voz Agora (3 min)
+            <ArrowRight className="w-5 h-5" />
+          </Link>
+
           <a
             href={WA_SUCESSO_LINK}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full inline-flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-4 px-6 rounded-2xl shadow-xl shadow-emerald-500/25 text-base transition-all hover:scale-[1.02]"
+            className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-white font-semibold py-3 px-4 rounded-xl text-xs transition-all"
           >
-            <MessageCircle className="w-5 h-5 fill-slate-950 stroke-none" />
-            Falar agora no WhatsApp para agilizar o início
+            <MessageCircle className="w-4 h-4 text-emerald-400" />
+            Prefere responder pelo WhatsApp? Clique aqui
           </a>
-          <p className="text-xs text-slate-500 mt-2">
-            Nossa equipe já está de prontidão para enviar o seu formulário.
-          </p>
         </div>
 
         {/* Próximos passos */}

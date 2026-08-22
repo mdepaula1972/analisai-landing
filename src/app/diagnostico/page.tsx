@@ -115,7 +115,13 @@ export default function DiagnosticoPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        router.push('/diagnostico/sucesso');
+        const queryParams = new URLSearchParams({
+          pedido_id: data.pedido_id || '',
+          nome: pixNome,
+          email: pixEmail,
+          whatsapp: pixWhatsapp,
+        });
+        router.push(`/diagnostico/sucesso?${queryParams.toString()}`);
       } else {
         setPixError(data.error || 'Erro ao registrar pedido.');
         setPixLoading(false);
