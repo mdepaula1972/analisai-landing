@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.2 · 22/08/2026';
+const VERSION = 'v1.3 · 22/08/2026 - 17:35';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
 const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAí)';
@@ -178,14 +178,14 @@ export default function DiagnosticoPage() {
     {
       num: '1',
       icon: <ClipboardList className="w-8 h-8 text-amber-400" />,
-      titulo: 'Você preenche',
-      desc: 'Um formulário simples — sem jargão contábil — com os números do seu negócio: faturamento, custos, despesas fixas dos últimos meses.',
+      titulo: 'Você fala (ou digita)',
+      desc: 'Sem formulários chatos. Você só responde 4 perguntas rápidas por voz para a nossa IA sobre seu negócio.',
     },
     {
       num: '2',
       icon: <BarChart3 className="w-8 h-8 text-amber-400" />,
       titulo: 'A gente analisa',
-      desc: 'Rodamos seus dados no nosso motor de análise financeira e simulamos cenários reais para o seu negócio.',
+      desc: 'Rodamos seus dados no nosso motor de inteligência financeira e simulamos cenários reais para o seu negócio.',
     },
     {
       num: '3',
@@ -211,7 +211,7 @@ export default function DiagnosticoPage() {
     },
     {
       question: 'É uma consultoria com reunião?',
-      answer: 'Não. Todo o processo é assíncrono — formulário, pagamento, entrega. Se tiver dúvida sobre o relatório, pode perguntar por mensagem.',
+      answer: 'Não. Todo o processo é assíncrono por voz ou mensagem — entrevista rápida, pagamento, entrega. Se tiver dúvida sobre o relatório, pode perguntar por WhatsApp.',
     },
     {
       question: 'Meus dados ficam seguros?',
@@ -234,35 +234,42 @@ export default function DiagnosticoPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 relative">
 
-      {/* ── BADGE DE VERSÃO ── */}
-      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-500/40 bg-slate-950/90 backdrop-blur-sm text-amber-400 text-[10px] font-bold font-mono shadow-lg">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+      {/* ── BADGE DE VERSÃO FIXO ── */}
+      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[11px] font-bold font-mono shadow-2xl">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         Diagnóstico {VERSION}
       </div>
 
-      {/* ── NAVBAR ── */}
-      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-          <Link href="/" className="flex flex-col items-start justify-center gap-0.5">
-            <Image
-              src="/logo.png"
-              alt="AnalisAI.me — Inteligência Financeira"
-              width={200}
-              height={55}
-              className="h-10 w-auto object-contain"
-              priority
-            />
-            <span className="text-[10px] font-bold tracking-widest uppercase text-amber-400/80">
-              Diagnóstico Financeiro
-            </span>
+      {/* ── NAVBAR COM LOGO EM DESTAQUE ── */}
+      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl shadow-black/40' : 'bg-slate-950/60 backdrop-blur-sm'}`}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
+          
+          {/* Logo Principal com Presença Forte */}
+          <Link href="/" className="flex items-center gap-3.5 group">
+            <div className="p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 group-hover:border-amber-500/50 shadow-xl shadow-black/30 transition-all">
+              <Image
+                src="/logo.png"
+                alt="AnalisAI.me — Inteligência Financeira"
+                width={220}
+                height={60}
+                className="h-11 sm:h-13 w-auto object-contain"
+                priority
+              />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="text-sm font-black tracking-wide text-white">AnalisAI.me</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">
+                Diagnóstico Financeiro
+              </span>
+            </div>
           </Link>
 
           <button
             onClick={scrollToPagamento}
             id="nav-cta-diagnostico"
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-5 py-2.5 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/25 text-sm flex items-center gap-2 cursor-pointer"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-3 rounded-xl transition-all hover:scale-[1.03] shadow-xl shadow-amber-500/25 text-sm sm:text-base flex items-center gap-2 cursor-pointer"
           >
-            <Zap className="w-4 h-4" />
+            <Zap className="w-4 h-4 fill-slate-950" />
             Quero por R$ 197
           </button>
         </div>

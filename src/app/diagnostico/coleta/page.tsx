@@ -25,6 +25,9 @@ interface ResumoFinanceiro {
   cenarios_solicitados?: string[];
 }
 
+/* ── CONFIGURAÇÃO ── */
+const VERSION = 'v1.3 · 22/08/2026 - 17:35';
+
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
   const pedidoId = searchParams.get('pedido_id');
@@ -50,7 +53,6 @@ function ColetaVoiceContent() {
   const [carregandoIA, setCarregandoIA] = useState(false);
   const [audioAtivado, setAudioAtivado] = useState(true);
   const [modoTexto, setModoTexto] = useState(false);
-  const [modoTesteAberto, setModoTesteAberto] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
@@ -58,16 +60,16 @@ function ColetaVoiceContent() {
   // Exemplos rápidos para o usuário testar a IA
   const exemplosTeste = [
     {
-      titulo: 'Comércio / Restaurante',
+      titulo: 'Restaurante / Comércio',
       texto: 'Tenho um restaurante com 4 funcionários. Faturamos em média 45 mil por mês. Nossos custos fixos são aluguel de 4 mil e folha de 10 mil. O custo de comida e bebidas é cerca de 18 mil. Sinto que o dinheiro nunca sobra no fim do mês.',
     },
     {
-      titulo: 'Clínica / Saúde',
-      texto: 'Sou dentista e tenho uma clínica com 2 secretárias e 1 sócio. Faturamento de 60 mil por mês. Pró-labore total de 20 mil, aluguel e despesas da sala 7 mil, materiais 8 mil e impostos do Simples. Quero saber se vale a pena contratar mais um dentista.',
+      titulo: 'Clínica de Saúde',
+      texto: 'Sou dentista e tenho uma clínica com 2 secretárias e 1 sócio. Faturamento de 60 mil por mês. Pró-labore total de 20 mil, aluguel 7 mil, materiais 8 mil e impostos. Quero saber se posso contratar mais uma pessoa.',
     },
     {
-      titulo: 'Prestador de Serviços / TI',
-      texto: 'Tenho uma agência de tecnologia e marketing com 3 sócios e 2 estagiários. Faturamos 35 mil recorrentes. Folha e pró-labore somam 18 mil, ferramentas e sistemas 3 mil. Nosso maior problema é atraso de pagamento de clientes e mistura de contas.',
+      titulo: 'Serviços / Tecnologia',
+      texto: 'Tenho uma agência de tecnologia com 3 sócios e 2 estagiários. Faturamos 35 mil por mês. Folha e pró-labore somam 18 mil, ferramentas 3 mil. Nosso maior problema é atraso de pagamento de clientes.',
     },
   ];
 
@@ -234,39 +236,48 @@ function ColetaVoiceContent() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 relative overflow-hidden">
       
+      {/* ── BADGE DE VERSÃO FIXO ── */}
+      <div className="fixed bottom-3 left-3 z-50 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[10px] font-bold font-mono shadow-xl">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        Sala de Voz {VERSION}
+      </div>
+
       {/* Backgrounds */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_20%,rgba(245,158,11,0.12),transparent)] pointer-events-none" />
       <div className="absolute inset-0 bg-grid-amber opacity-20 pointer-events-none" />
 
-      {/* ── HEADER ── */}
-      <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl px-4 sm:px-8 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="AnalisAI.me" width={140} height={38} className="h-8 w-auto object-contain" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md hidden sm:inline-block">
-              Sala de Voz · IA
-            </span>
+      {/* ── HEADER COM LOGO DESTACADO ── */}
+      <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl px-4 sm:px-8 py-3.5 shadow-lg shadow-black/20">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+          
+          {/* Logo com presença e destaque */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="p-1 rounded-xl bg-slate-900 border border-slate-800 group-hover:border-amber-500/40 transition-colors shadow-md">
+              <Image
+                src="/logo.png"
+                alt="AnalisAI.me — Inteligência Financeira"
+                width={180}
+                height={48}
+                className="h-10 sm:h-12 w-auto object-contain"
+                priority
+              />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="text-xs font-black tracking-wider text-white">AnalisAI.me</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+                Sala de Voz · Inteligência Financeira
+              </span>
+            </div>
           </Link>
 
-          {/* Ferramentas de Teste e Controle */}
+          {/* Controles do Header */}
           <div className="flex items-center gap-2 sm:gap-3">
-            
-            {/* Botão de Teste Rápido da IA */}
-            <button
-              onClick={() => setModoTesteAberto(!modoTesteAberto)}
-              className="flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer"
-            >
-              <FlaskConical className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Testar com Exemplo</span>
-              <span className="md:hidden">Teste</span>
-            </button>
-
             <button
               onClick={() => {
                 if (audioAtivado && synthRef.current) synthRef.current.cancel();
                 setAudioAtivado(!audioAtivado);
               }}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/60 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/80 transition-colors cursor-pointer"
             >
               {audioAtivado ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
               <span className="hidden sm:inline">{audioAtivado ? 'Voz Ativa' : 'Mudo'}</span>
@@ -274,7 +285,7 @@ function ColetaVoiceContent() {
 
             <Link
               href="/"
-              className="text-xs text-slate-400 hover:text-slate-200"
+              className="text-xs font-semibold text-slate-400 hover:text-white px-2.5 py-1.5"
             >
               Sair
             </Link>
@@ -282,40 +293,37 @@ function ColetaVoiceContent() {
         </div>
       </header>
 
-      {/* ── BANNER DE PROVA DE CREDIBILIDADE: 2 REANÁLISES ── */}
+      {/* ── BANNER DE GARANTIA E REANÁLISES ── */}
       <div className="relative z-10 bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-        <span><strong>Garantia AnalisAí:</strong> Você tem direito a <strong>2 reanálises gratuitas</strong> após a entrega do relatório para ajustar dados ou novos cenários.</span>
+        <span><strong>Garantia AnalisAí:</strong> Você tem direito a <strong>2 reanálises gratuitas</strong> após a entrega do relatório para refinar dados ou novos cenários.</span>
       </div>
 
-      {/* ── PAINEL DROPDOWN DE TESTES RÁPIDOS (ADMIN) ── */}
-      {modoTesteAberto && (
-        <div className="relative z-20 max-w-2xl mx-auto w-full px-4 pt-3 animate-fadeIn">
-          <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/40 shadow-2xl space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-amber-400 flex items-center gap-1.5">
-                <FlaskConical className="w-4 h-4" /> Escolha um cenário para testar a IA instantaneamente:
-              </span>
-              <button onClick={() => setModoTesteAberto(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <div className="grid sm:grid-cols-3 gap-2 pt-1">
-              {exemplosTeste.map((ex, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    setModoTesteAberto(false);
-                    enviarResposta(ex.texto);
-                  }}
-                  className="p-2.5 text-left rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-900 transition-all cursor-pointer group"
-                >
-                  <p className="font-bold text-white group-hover:text-amber-300 mb-1">{ex.titulo}</p>
-                  <p className="text-[10px] text-slate-400 line-clamp-3">{ex.texto}</p>
-                </button>
-              ))}
-            </div>
+      {/* ── PAINEL DE TESTE RÁPIDO DA IA (SEMPRE VISÍVEL PARA VOCÊ TESTAR) ── */}
+      <div className="relative z-20 max-w-3xl mx-auto w-full px-4 pt-4">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-amber-500/40 shadow-xl space-y-2 text-xs">
+          <div className="flex items-center gap-1.5 text-amber-400 font-extrabold uppercase tracking-wider">
+            <FlaskConical className="w-4 h-4" />
+            <span>Painel de Teste Rápido da IA (Clique para testar uma resposta instantânea):</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {exemplosTeste.map((ex, i) => (
+              <button
+                key={i}
+                onClick={() => enviarResposta(ex.texto)}
+                disabled={carregandoIA}
+                className="p-2.5 text-left rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/60 hover:bg-slate-900 transition-all cursor-pointer group disabled:opacity-50"
+              >
+                <p className="font-extrabold text-white group-hover:text-amber-300 mb-1 flex items-center justify-between">
+                  <span>{ex.titulo}</span>
+                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </p>
+                <p className="text-[10px] text-slate-400 line-clamp-2">{ex.texto}</p>
+              </button>
+            ))}
           </div>
         </div>
-      )}
+      </div>
 
       {/* ── CORPO PRINCIPAL ── */}
       <main className="relative z-10 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col justify-center items-center">

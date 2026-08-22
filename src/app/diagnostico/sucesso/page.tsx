@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { CheckCircle2, Clock, Mail, ArrowRight, Shield, MessageCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
+/* ── CONFIGURAÇÃO ── */
+const VERSION = 'v1.3 · 22/08/2026 - 17:35';
 const PHONE_NUMBER = '5514930855878';
 const WA_SUCESSO_LINK = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Acabei de contratar o Diagnóstico Financeiro (R$ 197) e gostaria de confirmar meus dados e receber o formulário.')}`;
 
@@ -34,11 +36,17 @@ function SucessoContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col items-center justify-center px-4 py-16">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col items-center justify-center px-4 py-16 relative">
+
+      {/* ── BADGE DE VERSÃO FIXO ── */}
+      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[11px] font-bold font-mono shadow-2xl">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        Sucesso {VERSION}
+      </div>
 
       {/* Círculo de sucesso animado */}
       <div className={`transition-all duration-700 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}>
-        <div className="relative mb-8">
+        <div className="relative mb-6">
           <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/30">
             <CheckCircle2 className="w-12 h-12 text-emerald-400" />
           </div>
@@ -47,8 +55,14 @@ function SucessoContent() {
       </div>
 
       <div className={`max-w-lg w-full text-center transition-all duration-700 delay-200 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-        <Link href="/" className="inline-block mb-8 opacity-70 hover:opacity-100 transition-opacity">
-          <Image src="/logo.png" alt="AnalisAI.me" width={140} height={40} className="h-8 w-auto mx-auto" />
+        
+        {/* Logo de Destaque */}
+        <Link href="/" className="inline-flex items-center gap-3 p-2 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/50 shadow-xl mb-6 transition-all group">
+          <Image src="/logo.png" alt="AnalisAI.me" width={180} height={50} className="h-10 sm:h-12 w-auto mx-auto object-contain" />
+          <div className="text-left hidden sm:block pr-2">
+            <span className="text-xs font-black text-white block">AnalisAI.me</span>
+            <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">Inteligência Financeira</span>
+          </div>
         </Link>
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-4">
