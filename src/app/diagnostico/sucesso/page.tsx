@@ -1,18 +1,17 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { CheckCircle2, Clock, Mail, ArrowRight, Shield } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
-export default function DiagnosticoSucesso() {
+function SucessoContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Pequeno delay para a animação de entrada
     const t = setTimeout(() => setVisible(true), 100);
     return () => clearTimeout(t);
   }, []);
@@ -91,5 +90,13 @@ export default function DiagnosticoSucesso() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function DiagnosticoSucesso() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Carregando...</div>}>
+      <SucessoContent />
+    </Suspense>
   );
 }
