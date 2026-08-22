@@ -14,9 +14,6 @@ import {
 /* ── CONFIGURAÇÃO ── */
 const VERSION = 'v1.0 · 22/08/2026';
 
-// Substitua pela URL real do link de pagamento Asaas quando disponível
-const LINK_PAGAMENTO = 'https://wa.me/5514930855878?text=' + encodeURIComponent('Olá! Quero contratar o Diagnóstico Financeiro por R$ 197. Como prossigo?');
-
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -55,18 +52,49 @@ function FaqItem({ question, answer }: { question: string; answer: React.ReactNo
 }
 
 function CtaButton({ id, className }: { id: string; className?: string }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', { method: 'POST' });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Erro ao iniciar pagamento. Tente novamente.');
+        setLoading(false);
+      }
+    } catch {
+      alert('Erro de conexão. Tente novamente.');
+      setLoading(false);
+    }
+  }
+
   return (
-    <a
-      href={LINK_PAGAMENTO}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      onClick={handleClick}
+      disabled={loading}
       id={id}
-      className={`inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-amber-500/50 text-base sm:text-lg group ${className ?? ''}`}
+      className={`inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 disabled:opacity-70 disabled:cursor-wait text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-amber-500/50 text-base sm:text-lg group ${className ?? ''}`}
     >
-      <Sparkles className="w-5 h-5 flex-shrink-0" />
-      Quero meu diagnóstico — R$ 197
-      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-    </a>
+      {loading ? (
+        <>
+          <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+          </svg>
+          Redirecionando...
+        </>
+      ) : (
+        <>
+          <Sparkles className="w-5 h-5 flex-shrink-0" />
+          Quero meu diagnóstico — R$ 197
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+        </>
+      )}
+    </button>
   );
 }
 
@@ -190,11 +218,15 @@ export default function DiagnosticoPage() {
           </Link>
 
           <a
-            href={LINK_PAGAMENTO}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={async (e) => {
+              e.preventDefault();
+              const res = await fetch('/api/stripe/checkout', { method: 'POST' });
+              const data = await res.json();
+              if (data.url) window.location.href = data.url;
+            }}
+            href="#"
             id="nav-cta-diagnostico"
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/25 text-sm flex items-center gap-2"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/25 text-sm flex items-center gap-2 cursor-pointer"
           >
             <Zap className="w-4 h-4" />
             Quero por R$ 197
