@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.5 · 22/08/2026 - 17:55';
+const VERSION = 'v1.8 · 22/08/2026 - 18:25';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
 const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAí)';
@@ -243,7 +243,7 @@ export default function DiagnosticoPage() {
       {/* ── NAVBAR COM LOGO EM DESTAQUE ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl shadow-black/40' : 'bg-slate-950/60 backdrop-blur-sm'}`}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
-          
+
           {/* Logo Principal com Presença Forte */}
           <Link href="/" className="flex items-center gap-3.5 group">
             <div className="p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 group-hover:border-amber-500/50 shadow-xl shadow-black/30 transition-all">
@@ -533,7 +533,7 @@ export default function DiagnosticoPage() {
           className={`max-w-2xl mx-auto px-4 sm:px-6 relative z-10 transition-all duration-700 ${precoInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
         >
           <div className="rounded-3xl border border-amber-500/30 bg-slate-900/90 overflow-hidden shadow-2xl shadow-amber-500/10">
-            
+
             {/* Cabeçalho do Preço */}
             <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/5 border-b border-amber-500/20 px-8 py-8 text-center">
               <p className="text-slate-400 text-xs sm:text-sm font-bold uppercase tracking-widest mb-2">Diagnóstico Financeiro Completo</p>
@@ -550,11 +550,10 @@ export default function DiagnosticoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setMetodoPagamento('pix')}
-                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-                    metodoPagamento === 'pix'
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${metodoPagamento === 'pix'
                       ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 scale-[1.02]'
                       : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <Zap className="w-4 h-4 fill-current" />
                   PIX Instantâneo
@@ -562,11 +561,10 @@ export default function DiagnosticoPage() {
 
                 <button
                   onClick={() => setMetodoPagamento('cartao')}
-                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-                    metodoPagamento === 'cartao'
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${metodoPagamento === 'cartao'
                       ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 scale-[1.02]'
                       : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <CreditCard className="w-4 h-4" />
                   Cartão (Stripe)
@@ -577,7 +575,7 @@ export default function DiagnosticoPage() {
             {/* CONTEÚDO: OPÇÃO PIX */}
             {metodoPagamento === 'pix' && (
               <div className="p-6 sm:p-8 space-y-6">
-                
+
                 {/* Box Chave Pix com Credibilidade */}
                 <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
                   <div className="flex items-center justify-between gap-2 mb-3">
@@ -595,11 +593,10 @@ export default function DiagnosticoPage() {
                     </span>
                     <button
                       onClick={handleCopiarPix}
-                      className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                        copied
+                      className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${copied
                           ? 'bg-emerald-500 text-slate-950'
                           : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
-                      }`}
+                        }`}
                     >
                       {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       {copied ? 'Copiado!' : 'Copiar CNPJ'}

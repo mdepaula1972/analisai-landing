@@ -26,7 +26,7 @@ interface ResumoFinanceiro {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.6 · 22/08/2026 - 18:05';
+const VERSION = 'v1.8 · 22/08/2026 - 18:25';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -39,7 +39,7 @@ function ColetaVoiceContent() {
   const [coletaId, setColetaId] = useState<string | null>(null);
   const [historico, setHistorico] = useState<Mensagem[]>([]);
   const [assistenteFala, setAssistenteFala] = useState(
-    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAí. Estou aqui para entender o seu negócio de verdade, sem jargões e sem formulários chatos. Para a gente começar: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`
+    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAí. Nossa conversa é estruturada em 5 passos rápidos: 1º Seu Modelo de Negócio, 2º Faturamento, 3º Custos e Despesas, 4º Gargalos e Dores, e 5º Confirmação do Raio-X. Para começarmos a Etapa 1: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`
   );
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [finalizado, setFinalizado] = useState(false);
@@ -188,7 +188,14 @@ function ColetaVoiceContent() {
           falarTexto(data.mensagem);
         }
         if (data.etapa_atual) setEtapaAtual(data.etapa_atual);
-        if (data.resumo_extracao) setResumo(data.resumo_extracao);
+        if (data.resumo_extracao) {
+          setResumo(prev => ({
+            ...prev,
+            ...Object.fromEntries(
+              Object.entries(data.resumo_extracao).filter(([_, v]) => v !== 0 && v !== '' && v !== null && v !== undefined)
+            )
+          }));
+        }
         if (data.aguardando_confirmacao) setAguardandoConfirmacao(true);
         if (data.finalizado) {
           setFinalizado(true);
@@ -210,16 +217,16 @@ function ColetaVoiceContent() {
   }
 
   const etapas = [
-    { num: 1, label: 'Modelo & Operação' },
-    { num: 2, label: 'Faturamento' },
-    { num: 3, label: 'Custos & Gastos' },
-    { num: 4, label: 'Gargalos & Objetivos' },
-    { num: 5, label: 'Confirmação do Diagnóstico' },
+    { num: 1, label: '1. Modelo', sub: 'Como você opera' },
+    { num: 2, label: '2. Vendas', sub: 'Faturamento médio' },
+    { num: 3, label: '3. Custos', sub: 'Insumos e fixos' },
+    { num: 4, label: '4. Gargalos', sub: 'Dores e objetivos' },
+    { num: 5, label: '5. Raio-X', sub: 'Confirmação final' },
   ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 relative overflow-hidden">
-      
+
       {/* ── BADGE DE VERSÃO FIXO ── */}
       <div className="fixed bottom-3 left-3 z-50 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[10px] font-bold font-mono shadow-xl">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -233,7 +240,7 @@ function ColetaVoiceContent() {
       {/* ── HEADER COM LOGO DESTACADO ── */}
       <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl px-4 sm:px-8 py-3.5 shadow-lg shadow-black/20">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-          
+
           {/* Logo com presença e destaque */}
           <Link href="/" className="flex items-center gap-3 group">
             <div className="p-1 rounded-xl bg-slate-900 border border-slate-800 group-hover:border-amber-500/40 transition-colors shadow-md">
@@ -289,19 +296,42 @@ function ColetaVoiceContent() {
         {!finalizado ? (
           <div className="w-full flex flex-col items-center text-center space-y-5">
 
-            {/* Barra de Progresso das Etapas */}
-            <div className="w-full max-w-md">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                <span className="font-bold text-amber-400 flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5" /> Etapa {etapaAtual} de 5
+            {/* ── MAPA VISUAL DAS 5 ETAPAS (STEPPER) ── */}
+            <div className="w-full max-w-2xl bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-lg">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-2 px-1">
+                <span className="text-amber-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" /> Entrevista em 5 Passos Rápidos
                 </span>
-                <span>{etapas[Math.min(etapaAtual - 1, 4)]?.label}</span>
+                <span>Passo {etapaAtual} de 5</span>
               </div>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-500 rounded-full"
-                  style={{ width: `${Math.min(etapaAtual * 20, 100)}%` }}
-                />
+
+              <div className="grid grid-cols-5 gap-1 sm:gap-2">
+                {etapas.map((et) => {
+                  const isConcluida = etapaAtual > et.num;
+                  const isAtual = etapaAtual === et.num;
+
+                  return (
+                    <div
+                      key={et.num}
+                      className={`p-2 rounded-xl text-left transition-all ${
+                        isAtual
+                          ? 'bg-amber-500/15 border border-amber-500/60 shadow-md shadow-amber-500/10'
+                          : isConcluida
+                          ? 'bg-emerald-500/10 border border-emerald-500/30'
+                          : 'bg-slate-950/40 border border-slate-800/60 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className={`text-[11px] font-black ${isAtual ? 'text-amber-300' : isConcluida ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {et.label}
+                        </span>
+                        {isConcluida && <Check className="w-3 h-3 text-emerald-400" />}
+                        {isAtual && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />}
+                      </div>
+                      <p className="text-[9px] text-slate-400 hidden sm:block truncate">{et.sub}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -383,7 +413,7 @@ function ColetaVoiceContent() {
 
             {/* ── CONTROLE CENTRAL DE VOZ (MICROFONE) ── */}
             <div className="flex flex-col items-center gap-3 pt-2">
-              
+
               {/* Botão Microfone com Ondas */}
               <div className="relative">
                 {gravando && (
@@ -396,13 +426,12 @@ function ColetaVoiceContent() {
                 <button
                   onClick={toggleGravacao}
                   disabled={carregandoIA}
-                  className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-2xl cursor-pointer ${
-                    gravando
+                  className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full flex flex-col items-center justify-center transition-all duration-300 shadow-2xl cursor-pointer ${gravando
                       ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/50 scale-110'
                       : carregandoIA
-                      ? 'bg-slate-800 text-slate-500 cursor-wait'
-                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/40 hover:scale-105 animate-pulse-glow-amber'
-                  }`}
+                        ? 'bg-slate-800 text-slate-500 cursor-wait'
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/40 hover:scale-105 animate-pulse-glow-amber'
+                    }`}
                   aria-label={gravando ? 'Parar e Enviar' : 'Tocar para Falar'}
                 >
                   {carregandoIA ? (
@@ -426,8 +455,8 @@ function ColetaVoiceContent() {
                 {carregandoIA
                   ? 'Processando com inteligência financeira...'
                   : gravando
-                  ? '🔴 Ouvindo você... Toque novamente quando terminar de falar.'
-                  : '👉 Toque no microfone e responda falando naturalmente.'}
+                    ? '🔴 Ouvindo você... Toque novamente quando terminar de falar.'
+                    : '👉 Toque no microfone e responda falando naturalmente.'}
               </p>
 
               {/* Alternar para modo texto / digitação */}

@@ -3,11 +3,11 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { CheckCircle2, Clock, Mail, ArrowRight, Shield, MessageCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Mail, ArrowRight, Shield, MessageCircle, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.5 · 22/08/2026 - 17:55';
+const VERSION = 'v1.8 · 22/08/2026 - 18:25';
 const PHONE_NUMBER = '5514930855878';
 const WA_SUCESSO_LINK = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Acabei de contratar o Diagnóstico Financeiro (R$ 197) e gostaria de confirmar meus dados e receber o formulário.')}`;
 
@@ -55,7 +55,7 @@ function SucessoContent() {
       </div>
 
       <div className={`max-w-lg w-full text-center transition-all duration-700 delay-200 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-        
+
         {/* Logo de Destaque */}
         <Link href="/" className="inline-flex items-center gap-3 p-2 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/50 shadow-xl mb-6 transition-all group">
           <Image src="/logo.png" alt="AnalisAI.me" width={180} height={50} className="h-10 sm:h-12 w-auto mx-auto object-contain" />

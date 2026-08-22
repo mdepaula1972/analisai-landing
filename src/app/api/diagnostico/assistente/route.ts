@@ -21,25 +21,36 @@ POSTURA E COMPORTAMENTO DE CONSULTOR EXPERIENTE:
 FLUXO DA CONVERSA:
 - PASSO 1: Acolhida e Ramo/Modelo Operacional (investigar como a empresa opera no dia a dia).
 - PASSO 2: Faturamento Médio Mensal (quanto costuma entrar no caixa por mês, em média).
-- PASSO 3: Custos Fixos (aluguel, funcionários, pró-labore dos sócios, sistemas) e Custos Variáveis (mercadorias/ingredientes, impostos, comissões).
-- PASSO 4: Gargalos, Dores e Objetivos (onde ele sente que o dinheiro 'some', se mistura pessoa física com jurídica, se quer contratar ou cortar algo).
-- PASSO 5: Raio-X e Confirmação dos Dados Mapeados (resumir os dados em voz alta e pedir confirmação).
+Seu papel é conduzir uma entrevista por voz estruturada em 5 ETAPAS CLARAS, acolhedora, transparente e sem jargões contábeis.
 
-GUARDRAILS:
-- Permaneça estritamente no universo de finanças e gestão da empresa.
-- Se o cliente desviar de assunto, traga com empatia de volta aos negócios.
+AS 5 ETAPAS DO DIAGNÓSTICO (ANUNCIE COM CLAREZA AO EMPRESÁRIO):
+- ETAPA 1 (Modelo & Operação): Investigar a fundo como a empresa opera no dia a dia (se tem salão, delivery, loja física, fábrica, se cobra mensalidade ou projeto, equipe).
+- ETAPA 2 (Faturamento): Mapear o faturamento bruto médio mensal (quanto costuma entrar no caixa por mês).
+- ETAPA 3 (Custos & Despesas): Mapear os custos variáveis (compra de mercadorias/ingredientes/produtos) e custos fixos (aluguel, funcionários, pró-labore, sistemas).
+- ETAPA 4 (Gargalos & Objetivos): Mapear onde o dinheiro mais vaza, misturas de contas e cenários que deseja simular no relatório.
+- ETAPA 5 (Confirmação do Raio-X): Apresentar o resumo completo dos números mapeados e pedir a confirmação formal do empresário para gerar o relatório final.
+
+TRANSIÇÕES CLARAS ENTRE ETAPAS:
+- Ao passar de uma etapa para outra, mencione a transição de forma acolhedora:
+  Exemplo: "Excelente! Mapeamos seu modelo de negócio (Etapa 1). Agora vamos para a Etapa 2: qual é o seu faturamento médio mensal aproximado?"
+- Se o usuário já tiver antecipado o dado da etapa seguinte, NÃO repita a pergunta. Diga: "Como você já me adiantou que fatura cerca de R$ X na Etapa 2, vamos avançar direto para a Etapa 3 (Custos e Despesas)..."
+
+REGRA DE OURO DA MEMÓRIA:
+- NUNCA PERGUNTE NOVAMENTE O QUE O USUÁRIO JÁ DISSE.
+- Mantenha sempre o objeto "resumo_extracao" CUMULATIVO com todos os dados coletados até o momento.
+- Mantenha respostas curtas (2 a 3 frases) e tom de conversa acolhedora de balcão.
 
 FORMATO DE RESPOSTA (SEMPRE JSON VÁLIDO):
 {
-  "mensagem": "Sua fala amigável e investigativa para o empresário (em português do Brasil)",
-  "etapa_atual": 1, // 1: Modelo/Ramo, 2: Faturamento, 3: Custos, 4: Gargalos, 5: Confirmação dos Dados, 6: Concluído
-  "finalizado": false, // true APENAS após o cliente confirmar explicitamente o resumo na etapa 5
-  "aguardando_confirmacao": false, // true quando você apresentar o resumo dos dados para o cliente aprovar
+  "mensagem": "Sua fala de consultor para o empresário, reconhecendo o que ele disse, anunciando a etapa e fazendo a próxima pergunta",
+  "etapa_atual": 1, // 1: Modelo, 2: Faturamento, 3: Custos, 4: Gargalos, 5: Confirmação, 6: Concluído
+  "finalizado": false, // true APENAS após o cliente confirmar o resumo na etapa 5
+  "aguardando_confirmacao": false, // true na etapa 5 quando apresentar o resumo
   "resumo_extracao": {
-    "ramo_atividade": "descrição detalhada do modelo apurada na conversa",
-    "faturamento_mensal_estimado": 0, // só preencha quando o cliente informar
-    "custos_fixos_estimados": 0, // só preencha quando o cliente informar
-    "custos_variaveis_estimados": 0, // só preencha quando o cliente informar
+    "ramo_atividade": "descrição detalhada do modelo",
+    "faturamento_mensal_estimado": 0,
+    "custos_fixos_estimados": 0,
+    "custos_variaveis_estimados": 0,
     "principais_gargalos": ["..."],
     "cenarios_solicitados": ["..."]
   }
@@ -87,13 +98,15 @@ export async function POST(req: NextRequest) {
       });
       contents.push({
         role: 'model',
-        parts: [{ text: JSON.stringify({
-          mensagem: `Olá ${cliente_info?.nome ? cliente_info.nome.split(' ')[0] : ''}! Sou a especialista financeira da AnalisAí. Estou aqui para entender os números do seu negócio sem burocracia. Para começarmos: me conte um pouco sobre o seu negócio — qual é o seu ramo de atuação e se você trabalha sozinho ou tem equipe?`,
-          etapa_atual: 1,
-          finalizado: false,
-          aguardando_confirmacao: false,
-          resumo_extracao: {}
-        }) }],
+        parts: [{
+          text: JSON.stringify({
+            mensagem: `Olá ${cliente_info?.nome ? cliente_info.nome.split(' ')[0] : ''}! Sou a especialista financeira da AnalisAí. Estou aqui para entender os números do seu negócio sem burocracia. Para começarmos: me conte um pouco sobre o seu negócio — qual é o seu ramo de atuação e se você trabalha sozinho ou tem equipe?`,
+            etapa_atual: 1,
+            finalizado: false,
+            aguardando_confirmacao: false,
+            resumo_extracao: {}
+          })
+        }],
       });
     } else {
       for (const msg of historico.slice(-8)) {
@@ -160,7 +173,7 @@ export async function POST(req: NextRequest) {
     if (supabaseUrl && supabaseServiceKey) {
       try {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        
+
         let targetColetaId = coleta_id;
         let tenantId = null;
 
