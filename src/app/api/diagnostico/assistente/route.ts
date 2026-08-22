@@ -127,36 +127,57 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Chama a API do Gemini (usando o modelo oficial gemini-3.6-flash)
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: `${SYSTEM_PROMPT}\n\nDADOS DO CLIENTE: ${JSON.stringify(cliente_info || {})}` }],
-          },
-          contents,
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.4,
-          },
-        }),
-      }
-    );
+    // Lista de modelos resilientes para fallback em caso de alta demanda no Google
+    const MODELS_TO_TRY = [
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-flash-latest',
+      'gemini-2.5-flash-lite'
+    ];
 
-    if (!geminiRes.ok) {
-      const errJson = await geminiRes.json().catch(() => null);
-      const errMessage = errJson?.error?.message || 'Chave API do Gemini inválida ou sem permissão.';
-      console.error('[api/diagnostico/assistente] Erro Gemini API:', errJson || errMessage);
-      return NextResponse.json(
-        { error: `Erro na IA: ${errMessage}` },
-        { status: 400 }
-      );
+    let geminiData: any = null;
+    let lastErrorMessage = '';
+
+    for (const modelName of MODELS_TO_TRY) {
+      try {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: `${SYSTEM_PROMPT}\n\nDADOS DO CLIENTE: ${JSON.stringify(cliente_info || {})}` }],
+              },
+              contents,
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.3,
+              },
+            }),
+          }
+        );
+
+        if (geminiRes.ok) {
+          geminiData = await geminiRes.json();
+          break; // Sucesso, encerra o loop de fallback
+        } else {
+          const errJson = await geminiRes.json().catch(() => null);
+          lastErrorMessage = errJson?.error?.message || `Erro ${geminiRes.status}`;
+          console.warn(`[api/diagnostico/assistente] Modelo ${modelName} falhou (${geminiRes.status}): ${lastErrorMessage}. Tentando próximo modelo...`);
+        }
+      } catch (err: any) {
+        lastErrorMessage = err.message;
+        console.warn(`[api/diagnostico/assistente] Falha de conexão com ${modelName}:`, err.message);
+      }
     }
 
-    const geminiData = await geminiRes.json();
+    if (!geminiData) {
+      return NextResponse.json(
+        { error: `Erro na IA: ${lastErrorMessage || 'Alta demanda nos servidores. Por favor, tente novamente em alguns segundos.'}` },
+        { status: 503 }
+      );
+    }
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     let parsedResponse = {

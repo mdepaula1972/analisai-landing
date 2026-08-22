@@ -28,7 +28,7 @@ interface ResumoFinanceiro {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v1.9 · 22/08/2026 - 18:35';
+const VERSION = 'v2.0 · 22/08/2026 - 18:40';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -446,14 +446,16 @@ function ColetaVoiceContent() {
                         ? 'bg-slate-800 text-slate-500 cursor-wait'
                         : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/40 hover:scale-105 animate-pulse-glow-amber'
                     }`}
-                  aria-label={gravando ? 'Parar e Enviar' : 'Tocar para Falar'}
+                  aria-label={gravando ? 'Terminei de falar' : 'Tocar para Falar'}
                 >
                   {carregandoIA ? (
                     <RefreshCw className="w-10 h-10 animate-spin text-amber-400" />
                   ) : gravando ? (
                     <>
-                      <MicOff className="w-10 h-10 animate-bounce" />
-                      <span className="text-[10px] font-extrabold uppercase mt-1">Parar</span>
+                      <MicOff className="w-8 h-8 animate-pulse" />
+                      <span className="text-[9px] font-extrabold uppercase mt-1 leading-tight text-center px-1">
+                        Terminei<br />de falar
+                      </span>
                     </>
                   ) : (
                     <>
@@ -469,8 +471,8 @@ function ColetaVoiceContent() {
                 {carregandoIA
                   ? 'Processando com inteligência financeira...'
                   : gravando
-                    ? '🔴 Ouvindo você... Toque novamente quando terminar de falar.'
-                    : '👉 Toque no microfone e responda falando naturalmente.'}
+                  ? '🔴 Ouvindo você... Toque em "Terminei de falar" quando concluir.'
+                  : '👉 Toque no microfone e responda falando naturalmente.'}
               </p>
 
               {/* Alternar para modo texto / digitação */}
