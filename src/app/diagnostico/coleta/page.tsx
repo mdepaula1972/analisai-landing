@@ -8,7 +8,7 @@ import {
   Mic, MicOff, Send, Volume2, VolumeX, Sparkles,
   CheckCircle2, ArrowRight, Clock, ShieldCheck,
   FileText, MessageCircle, RefreshCw, BarChart3,
-  HelpCircle, ChevronRight
+  HelpCircle, ChevronRight, Check, AlertCircle, FlaskConical
 } from 'lucide-react';
 
 interface Mensagem {
@@ -40,6 +40,7 @@ function ColetaVoiceContent() {
   );
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [finalizado, setFinalizado] = useState(false);
+  const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
   const [resumo, setResumo] = useState<ResumoFinanceiro>({});
 
   // Estados de voz e input
@@ -49,9 +50,26 @@ function ColetaVoiceContent() {
   const [carregandoIA, setCarregandoIA] = useState(false);
   const [audioAtivado, setAudioAtivado] = useState(true);
   const [modoTexto, setModoTexto] = useState(false);
+  const [modoTesteAberto, setModoTesteAberto] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+
+  // Exemplos rápidos para o usuário testar a IA
+  const exemplosTeste = [
+    {
+      titulo: 'Comércio / Restaurante',
+      texto: 'Tenho um restaurante com 4 funcionários. Faturamos em média 45 mil por mês. Nossos custos fixos são aluguel de 4 mil e folha de 10 mil. O custo de comida e bebidas é cerca de 18 mil. Sinto que o dinheiro nunca sobra no fim do mês.',
+    },
+    {
+      titulo: 'Clínica / Saúde',
+      texto: 'Sou dentista e tenho uma clínica com 2 secretárias e 1 sócio. Faturamento de 60 mil por mês. Pró-labore total de 20 mil, aluguel e despesas da sala 7 mil, materiais 8 mil e impostos do Simples. Quero saber se vale a pena contratar mais um dentista.',
+    },
+    {
+      titulo: 'Prestador de Serviços / TI',
+      texto: 'Tenho uma agência de tecnologia e marketing com 3 sócios e 2 estagiários. Faturamos 35 mil recorrentes. Folha e pró-labore somam 18 mil, ferramentas e sistemas 3 mil. Nosso maior problema é atraso de pagamento de clientes e mistura de contas.',
+    },
+  ];
 
   // Inicializa síntese de voz (TTS) e Reconhecimento de fala (STT)
   useEffect(() => {
@@ -96,7 +114,6 @@ function ColetaVoiceContent() {
     }
   }, []);
 
-  // Fala da IA usando SpeechSynthesis
   function falarTexto(texto: string) {
     if (!audioAtivado || typeof window === 'undefined' || !synthRef.current) return;
     synthRef.current.cancel();
@@ -107,7 +124,6 @@ function ColetaVoiceContent() {
     synthRef.current.speak(utterance);
   }
 
-  // Tocar fala inicial
   useEffect(() => {
     const t = setTimeout(() => {
       falarTexto(assistenteFala);
@@ -115,7 +131,6 @@ function ColetaVoiceContent() {
     return () => clearTimeout(t);
   }, []);
 
-  // Alternar gravação do microfone
   function toggleGravacao() {
     if (!recognitionRef.current) {
       alert('Seu navegador não suporta reconhecimento de voz direto. Você pode usar o campo de texto!');
@@ -142,7 +157,6 @@ function ColetaVoiceContent() {
     }
   }
 
-  // Enviar mensagem para o backend com Gemini
   async function enviarResposta(mensagemTexto: string) {
     if (!mensagemTexto.trim() || carregandoIA) return;
 
@@ -189,7 +203,11 @@ function ColetaVoiceContent() {
         }
         if (data.etapa_atual) setEtapaAtual(data.etapa_atual);
         if (data.resumo_extracao) setResumo(data.resumo_extracao);
-        if (data.finalizado) setFinalizado(true);
+        if (data.aguardando_confirmacao) setAguardandoConfirmacao(true);
+        if (data.finalizado) {
+          setFinalizado(true);
+          setAguardandoConfirmacao(false);
+        }
 
         setHistorico([
           ...novoHistorico,
@@ -210,7 +228,7 @@ function ColetaVoiceContent() {
     { num: 2, label: 'Faturamento' },
     { num: 3, label: 'Custos & Gastos' },
     { num: 4, label: 'Gargalos & Dores' },
-    { num: 5, label: 'Cenários Futuros' },
+    { num: 5, label: 'Confirmação dos Dados' },
   ];
 
   return (
@@ -221,8 +239,8 @@ function ColetaVoiceContent() {
       <div className="absolute inset-0 bg-grid-amber opacity-20 pointer-events-none" />
 
       {/* ── HEADER ── */}
-      <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl px-4 sm:px-8 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl px-4 sm:px-8 py-3">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/logo.png" alt="AnalisAI.me" width={140} height={38} className="h-8 w-auto object-contain" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md hidden sm:inline-block">
@@ -230,17 +248,28 @@ function ColetaVoiceContent() {
             </span>
           </Link>
 
-          {/* Controle de Áudio */}
-          <div className="flex items-center gap-3">
+          {/* Ferramentas de Teste e Controle */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            
+            {/* Botão de Teste Rápido da IA */}
+            <button
+              onClick={() => setModoTesteAberto(!modoTesteAberto)}
+              className="flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer"
+            >
+              <FlaskConical className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Testar com Exemplo</span>
+              <span className="md:hidden">Teste</span>
+            </button>
+
             <button
               onClick={() => {
                 if (audioAtivado && synthRef.current) synthRef.current.cancel();
                 setAudioAtivado(!audioAtivado);
               }}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900/60 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/60 transition-colors"
             >
               {audioAtivado ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
-              <span className="hidden sm:inline">{audioAtivado ? 'Voz Ativada' : 'Voz Desativada'}</span>
+              <span className="hidden sm:inline">{audioAtivado ? 'Voz Ativa' : 'Mudo'}</span>
             </button>
 
             <Link
@@ -253,11 +282,46 @@ function ColetaVoiceContent() {
         </div>
       </header>
 
+      {/* ── BANNER DE PROVA DE CREDIBILIDADE: 2 REANÁLISES ── */}
+      <div className="relative z-10 bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
+        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+        <span><strong>Garantia AnalisAí:</strong> Você tem direito a <strong>2 reanálises gratuitas</strong> após a entrega do relatório para ajustar dados ou novos cenários.</span>
+      </div>
+
+      {/* ── PAINEL DROPDOWN DE TESTES RÁPIDOS (ADMIN) ── */}
+      {modoTesteAberto && (
+        <div className="relative z-20 max-w-2xl mx-auto w-full px-4 pt-3 animate-fadeIn">
+          <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/40 shadow-2xl space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                <FlaskConical className="w-4 h-4" /> Escolha um cenário para testar a IA instantaneamente:
+              </span>
+              <button onClick={() => setModoTesteAberto(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-2 pt-1">
+              {exemplosTeste.map((ex, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setModoTesteAberto(false);
+                    enviarResposta(ex.texto);
+                  }}
+                  className="p-2.5 text-left rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-900 transition-all cursor-pointer group"
+                >
+                  <p className="font-bold text-white group-hover:text-amber-300 mb-1">{ex.titulo}</p>
+                  <p className="text-[10px] text-slate-400 line-clamp-3">{ex.texto}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CORPO PRINCIPAL ── */}
       <main className="relative z-10 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col justify-center items-center">
 
         {!finalizado ? (
-          <div className="w-full flex flex-col items-center text-center space-y-6">
+          <div className="w-full flex flex-col items-center text-center space-y-5">
 
             {/* Barra de Progresso das Etapas */}
             <div className="w-full max-w-md">
@@ -277,18 +341,21 @@ function ColetaVoiceContent() {
 
             {/* Balão de Fala da Assistente IA */}
             <div className="relative w-full rounded-3xl border border-amber-500/30 bg-slate-900/90 p-6 sm:p-8 shadow-2xl shadow-amber-500/10 text-left">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
-                  Especialista Financeira AnalisAí
-                </span>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
+                    Especialista Financeira AnalisAí
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono">40 anos de gestão</span>
               </div>
 
-              <p className="text-lg sm:text-2xl font-semibold text-white leading-relaxed">
+              <p className="text-lg sm:text-xl font-semibold text-white leading-relaxed">
                 {assistenteFala}
               </p>
 
-              {/* Transcrição ao vivo do que o usuário fala */}
+              {/* Transcrição ao vivo */}
               {transcricaoAoVivo && (
                 <div className="mt-4 pt-4 border-t border-slate-800 text-sm text-amber-300 italic">
                   &ldquo;{transcricaoAoVivo}&rdquo;
@@ -296,8 +363,60 @@ function ColetaVoiceContent() {
               )}
             </div>
 
+            {/* Raio-X dos Dados Coletados em Tempo Real */}
+            {(resumo.faturamento_mensal_estimado || resumo.custos_fixos_estimados || resumo.ramo_atividade) && (
+              <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/50 p-4 text-left grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                {resumo.ramo_atividade && (
+                  <div className="p-2 rounded-lg bg-slate-950/60">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Ramo:</span>
+                    <span className="text-slate-200 font-semibold">{resumo.ramo_atividade}</span>
+                  </div>
+                )}
+                {resumo.faturamento_mensal_estimado ? (
+                  <div className="p-2 rounded-lg bg-slate-950/60">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Faturamento Estimado:</span>
+                    <span className="text-emerald-400 font-bold">R$ {resumo.faturamento_mensal_estimado.toLocaleString('pt-BR')}</span>
+                  </div>
+                ) : null}
+                {resumo.custos_fixos_estimados ? (
+                  <div className="p-2 rounded-lg bg-slate-950/60">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Custos Fixos:</span>
+                    <span className="text-amber-400 font-bold">R$ {resumo.custos_fixos_estimados.toLocaleString('pt-BR')}</span>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* ── BOTÕES DE CONFIRMAÇÃO EXPLICITA ── */}
+            {aguardandoConfirmacao ? (
+              <div className="w-full max-w-md p-4 rounded-2xl bg-slate-900 border border-emerald-500/40 space-y-3">
+                <p className="text-xs text-slate-300 font-medium">
+                  Os números acima estão corretos para gerar seu relatório?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => enviarResposta('Sim, os dados estão corretos, pode gerar o diagnóstico!')}
+                    disabled={carregandoIA}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 px-4 rounded-xl text-sm transition-all cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    Confirmar Dados
+                  </button>
+                  <button
+                    onClick={() => {
+                      setModoTexto(true);
+                      setTextoInput('Gostaria de ajustar o valor de ');
+                    }}
+                    className="flex-1 border border-slate-700 hover:border-slate-600 text-slate-300 py-3 px-4 rounded-xl text-xs font-semibold"
+                  >
+                    Ajustar um número
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {/* ── CONTROLE CENTRAL DE VOZ (MICROFONE) ── */}
-            <div className="flex flex-col items-center gap-4 pt-4">
+            <div className="flex flex-col items-center gap-3 pt-2">
               
               {/* Botão Microfone com Ondas */}
               <div className="relative">
@@ -386,26 +505,26 @@ function ColetaVoiceContent() {
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white">
-              Entrevista Concluída! 🎉
+              Entrevista e Dados Confirmados! 🎉
             </h1>
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-              Todos os dados do seu negócio foram coletados e registrados com segurança. Nosso motor financeiro já iniciou a elaboração do seu relatório.
+              Todos os dados do seu negócio foram mapeados com precisão. Nosso motor financeiro já iniciou a elaboração do seu diagnóstico.
             </p>
 
             {/* Resumo da Ficha Financeira Extraída */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 text-left space-y-3">
               <p className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4" /> Ficha Inicial Sintetizada pela IA
+                <BarChart3 className="w-4 h-4" /> Ficha Inicial Sintetizada
               </p>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
                   <span className="text-slate-400 block">Ramo:</span>
-                  <span className="text-white font-bold">{resumo.ramo_atividade || 'Informado'}</span>
+                  <span className="text-white font-bold">{resumo.ramo_atividade || 'Mapeado'}</span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
                   <span className="text-slate-400 block">Faturamento Médio:</span>
-                  <span className="text-white font-bold">
+                  <span className="text-emerald-400 font-bold">
                     {resumo.faturamento_mensal_estimado ? `R$ ${resumo.faturamento_mensal_estimado.toLocaleString('pt-BR')}` : 'Mapeado'}
                   </span>
                 </div>
@@ -419,13 +538,13 @@ function ColetaVoiceContent() {
               </div>
             </div>
 
-            {/* Próximos Passos */}
+            {/* Garantia das 2 Reanálises */}
             <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 text-xs text-slate-300 text-left space-y-2">
               <p className="font-bold text-white flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-emerald-400" /> Entrega em até 72 horas
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Entrega em até 72h + 2 Reanálises Inclusas
               </p>
               <p>
-                Você receberá o seu <strong>Relatório Executivo em PDF</strong> diretamente no seu e-mail e WhatsApp. Se tiver qualquer dúvida adicional, você pode falar direto com nosso time.
+                Você receberá o seu <strong>Relatório Executivo em PDF</strong> por e-mail e WhatsApp. Caso queira refinar qualquer número ou simular novos cenários após a leitura, você tem direito a <strong>2 reanálises gratuitas</strong>.
               </p>
             </div>
 
@@ -470,3 +589,4 @@ export default function DiagnosticoColetaPage() {
     </Suspense>
   );
 }
+

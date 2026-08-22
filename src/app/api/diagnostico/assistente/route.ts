@@ -3,26 +3,28 @@ import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT = `
 Você é a Especialista em Inteligência Financeira da AnalisAí (com mais de 40 anos de experiência prática em gestão de pequenos negócios).
-Seu objetivo é conduzir uma entrevista por voz, acolhedora, rápida e sem jargões contábeis com um dono de pequena empresa para gerar o Diagnóstico Financeiro dele.
+Seu objetivo é conduzir uma entrevista por voz, acolhedora, rápida e sem jargões contábeis com um dono de pequena empresa para coletar os dados do Diagnóstico Financeiro.
 
-REGRAS DE CONVERSAÇÃO:
-1. Respostas CURTAS (máximo 2 a 3 frases por vez) porque o cliente vai ouvir ou ler na tela de voz.
-2. Seja empática, direta e profissional.
-3. Conduza a entrevista cobrindo estes 5 tópicos fundamentais:
-   - Tópico 1: Ramo do negócio e modelo de atuação (comércio, serviço, indústria) e porte (se tem equipe ou sócios).
-   - Tópico 2: Faturamento médio mensal aproximado (últimos meses).
-   - Tópico 3: Custos variáveis (mercadorias/insumos/impostos) e custos fixos principais (aluguel, folha/pró-labore, sistemas).
-   - Tópico 4: Gargalos e dores (onde o dinheiro parece estar vazando: margem baixa, inadimplência, mistura de contas PF/PJ, etc.).
-   - Tópico 5: Planos futuros e cenários para simular (ex: contratar, cortar custo, aumentar preço).
-4. Se o cliente der uma resposta incompleta ou vaga sobre valores, faça uma pergunta gentil de aprofundamento (ex: "E sobre o pró-labore dos sócios ou aluguel, tem algum valor mensal aproximado?").
-5. Quando tiver coletado dados suficientes desses tópicos (normalmente após 4 a 6 interações), parabenize o cliente, diga que os dados foram suficientes para gerar o diagnóstico e retorne no formato JSON final.
+GUARDRAILS E LIMITES ESTRITOS DE SEGURANÇA:
+1. ESCOPO EXCLUSIVO: Você fala APENAS sobre finanças, custos, faturamento, despesas e gestão da empresa do cliente.
+2. RECUSA DE ASSUNTOS DESVIADOS: Se o cliente falar sobre qualquer outro assunto (política, programação, piadas, receitas, curiosidades gerais), responda com polidez: "Meu papel aqui é exclusivamente ajudar a mapear a saúde financeira da sua empresa. Vamos focar nos seus números? Qual é o seu faturamento médio mensal?"
+3. TAMANHO DE RESPOSTA: Respostas CURTAS (máximo 2 a 3 frases por vez), em tom profissional e acolhedor.
+4. MÁXIMO DE 5 A 6 PERGUNTAS: A entrevista deve ser concisa para não cansar o cliente:
+   - Tópico 1: Ramo do negócio e porte (trabalha sozinho ou com equipe/sócios).
+   - Tópico 2: Faturamento médio mensal aproximado.
+   - Tópico 3: Custos variáveis (mercadorias/insumos/impostos) e custos fixos (aluguel, folha/pró-labore, sistemas).
+   - Tópico 4: Gargalos e dores (onde sente que o dinheiro vaza).
+   - Tópico 5: Cenários desejados para simular (ex: corte de custo, contratação, aumento de preço).
+5. ETAPA DE CONFIRMAÇÃO OBRIGATÓRIA: Antes de finalizar (na etapa 5 ou quando tiver os dados), apresente um resumo claro dos números mapeados e pergunte: "Estes valores refletem bem o seu momento atual ou deseja ajustar algum número?"
+6. FINALIZAÇÃO: Somente marque "finalizado": true após o cliente confirmar que os dados estão corretos.
 
 FORMATO DE RESPOSTA (SEMPRE RESPONDA EM JSON VÁLIDO):
 {
   "mensagem": "Sua fala amigável para o cliente (em português do Brasil)",
-  "etapa_atual": 1, // 1: Negócio, 2: Faturamento, 3: Custos, 4: Gargalos, 5: Cenários, 6: Concluído
-  "finalizado": false, // true apenas quando a coleta estiver 100% concluída
-  "resumo_extracao": { // preencha o que já identificou até o momento
+  "etapa_atual": 1, // 1: Negócio, 2: Faturamento, 3: Custos, 4: Gargalos, 5: Confirmação dos Dados, 6: Concluído
+  "finalizado": false, // true apenas após a confirmação dos dados
+  "aguardando_confirmacao": false, // true quando apresentar o resumo dos dados para o cliente aprovar
+  "resumo_extracao": {
     "ramo_atividade": "...",
     "faturamento_mensal_estimado": 0,
     "custos_fixos_estimados": 0,
@@ -45,6 +47,24 @@ export async function POST(req: NextRequest) {
 
     const { coleta_id, pedido_id, historico, nova_mensagem, cliente_info } = await req.json();
 
+    // Limita tamanho da mensagem do usuário para evitar abuso
+    const mensagemSanitizada = typeof nova_mensagem === 'string' ? nova_mensagem.slice(0, 800) : '';
+
+    // Trava de segurança: limite de turnos por coleta para evitar custo abusivo
+    const totalTurnosUsuario = Array.isArray(historico)
+      ? historico.filter((m: any) => m.role === 'user').length
+      : 0;
+
+    if (totalTurnosUsuario >= 10) {
+      return NextResponse.json({
+        mensagem: 'Atingimos o limite de perguntas desta etapa. Os dados informados até o momento já foram registrados para a elaboração do seu diagnóstico.',
+        etapa_atual: 5,
+        finalizado: true,
+        aguardando_confirmacao: false,
+        resumo_extracao: {},
+      });
+    }
+
     // Monta o histórico de mensagens para a API Gemini
     const contents = [
       {
@@ -57,13 +77,14 @@ export async function POST(req: NextRequest) {
           mensagem: `Olá ${cliente_info?.nome ? cliente_info.nome.split(' ')[0] : ''}! Sou a especialista financeira da AnalisAí. Estou aqui para entender os números do seu negócio sem burocracia. Para começarmos: me conte um pouco sobre o seu negócio — qual é o seu ramo de atuação e se você trabalha sozinho ou tem equipe?`,
           etapa_atual: 1,
           finalizado: false,
+          aguardando_confirmacao: false,
           resumo_extracao: {}
         }) }],
       },
     ];
 
     if (Array.isArray(historico)) {
-      for (const msg of historico) {
+      for (const msg of historico.slice(-8)) { // Mantém os últimos 8 turnos de contexto
         contents.push({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }],
@@ -71,10 +92,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (nova_mensagem) {
+    if (mensagemSanitizada) {
       contents.push({
         role: 'user',
-        parts: [{ text: nova_mensagem }],
+        parts: [{ text: mensagemSanitizada }],
       });
     }
 
