@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 
 /* ── CONFIGURAÇÃO ── */
+const VERSION = 'v1.0 · 22/08/2026';
+
 // Substitua pela URL real do link de pagamento Asaas quando disponível
 const LINK_PAGAMENTO = 'https://wa.me/5514930855878?text=' + encodeURIComponent('Olá! Quero contratar o Diagnóstico Financeiro por R$ 197. Como prossigo?');
 
@@ -163,6 +165,12 @@ export default function DiagnosticoPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 relative">
+
+      {/* ── BADGE DE VERSÃO (debug/confirmação de deploy) ── */}
+      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-500/40 bg-slate-950/90 backdrop-blur-sm text-amber-400 text-[10px] font-bold font-mono shadow-lg">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        Diagnóstico Financeiro {VERSION}
+      </div>
 
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>

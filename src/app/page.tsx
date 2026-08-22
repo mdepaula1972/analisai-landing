@@ -141,9 +141,13 @@ export default function BpoLandingMain() {
             <a href="#servicos" className="whitespace-nowrap transition-colors hover:text-amber-300">Serviços</a>
             <Link href="/parceiros" className="whitespace-nowrap text-amber-300 transition-colors hover:text-amber-200">Parceria para Contadores</Link>
             <a href="#faq" className="whitespace-nowrap transition-colors hover:text-amber-300">FAQ</a>
+            <Link href="/diagnostico" className="whitespace-nowrap inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-extrabold text-amber-300 transition hover:bg-amber-500/20 hover:text-amber-200">
+              🔍 Diagnóstico R$197
+            </Link>
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
+            <Link href="/diagnostico" className="hidden sm:inline-flex rounded-xl border border-amber-400/30 px-2.5 py-2 text-[11px] font-bold text-amber-300 transition hover:border-amber-300/60 hover:bg-amber-400/10 lg:hidden sm:px-3 sm:text-xs">Diagnóstico</Link>
             <Link href="/parceiros" className="inline-flex rounded-xl border border-amber-400/30 px-2.5 py-2 text-[11px] font-bold text-amber-300 transition hover:border-amber-300/60 hover:bg-amber-400/10 lg:hidden sm:px-3 sm:text-xs">Parceria</Link>
             <a href={WA_DIAGNOSTICO_DIRETO} target="_blank" rel="noopener noreferrer" id="nav-cta-whatsapp" className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-3.5 py-2.5 text-xs font-extrabold text-slate-950 shadow-lg shadow-emerald-400/20 transition hover:-translate-y-0.5 hover:bg-emerald-300 sm:px-4 sm:text-sm">
               <Calendar className="h-4 w-4" />
