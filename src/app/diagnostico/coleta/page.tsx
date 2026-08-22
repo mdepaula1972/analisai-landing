@@ -28,7 +28,7 @@ interface ResumoFinanceiro {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.0 · 22/08/2026 - 18:40';
+const VERSION = 'v2.1 · 22/08/2026 - 18:45';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -41,7 +41,7 @@ function ColetaVoiceContent() {
   const [coletaId, setColetaId] = useState<string | null>(null);
   const [historico, setHistorico] = useState<Mensagem[]>([]);
   const [assistenteFala, setAssistenteFala] = useState(
-    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAí. Nossa conversa é estruturada em 5 passos rápidos: 1º Seu Modelo de Negócio, 2º Faturamento, 3º Custos e Despesas, 4º Gargalos e Dores, e 5º Confirmação do Raio-X. Para começarmos a Etapa 1: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`
+    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAI.me. Nossa conversa é estruturada em 5 passos rápidos: 1º Seu Modelo de Negócio, 2º Faturamento, 3º Custos e Despesas, 4º Gargalos e Dores, e 5º Confirmação do Raio-X. Para começarmos a Etapa 1: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`
   );
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [finalizado, setFinalizado] = useState(false);
@@ -289,7 +289,7 @@ function ColetaVoiceContent() {
       {/* ── BANNER DE GARANTIA E REANÁLISES ── */}
       <div className="relative z-10 bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
         <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-        <span><strong>Garantia AnalisAí:</strong> Você tem direito a <strong>2 reanálises gratuitas</strong> após a entrega do relatório para refinar dados ou novos cenários.</span>
+        <span><strong>Garantia AnalisAI.me:</strong> Você tem direito a <strong>2 reanálises gratuitas</strong> após a entrega do relatório para refinar dados ou novos cenários.</span>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
@@ -343,7 +343,7 @@ function ColetaVoiceContent() {
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                   <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
-                    Especialista Financeira AnalisAí
+                    Consultor Financeiro AnalisAI.me
                   </span>
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">40 anos de gestão</span>

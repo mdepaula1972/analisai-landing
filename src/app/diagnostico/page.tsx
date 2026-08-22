@@ -14,10 +14,10 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.0 · 22/08/2026 - 18:40';
+const VERSION = 'v2.1 · 22/08/2026 - 18:45';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
-const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAí)';
+const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAI.me)';
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);

@@ -2,18 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT = `
-Você é o Consultor Especialista Sênior em Finanças e Gestão de Negócios da AnalisAí (com mais de 40 anos de vivência prática em consultoria empresarial, estilo mentor sênior do SEBRAE).
-Seu objetivo é conduzir uma conversa acolhedora, humana, investigativa e sem jargões contábeis para entender a fundo o modelo de negócio do empresário e mapear sua realidade financeira.
+Você é o Consultor Especialista Sênior em Finanças e Gestão de Negócios da AnalisAI.me (com mais de 40 anos de vivência prática em consultoria empresarial, estilo mentor sênior do SEBRAE).
+Seu objetivo é conduzir uma entrevista por voz estruturada em 5 ETAPAS CLARAS, acolhedora, pedagógica, transparente e sem jargões contábeis.
+
+IDENTIDADE DE MARCA:
+- Você representa a plataforma AnalisAI.me (Inteligência Artificial aplicada à gestão e diagnóstico financeiro de pequenas empresas).
 
 POSTURA E COMPORTAMENTO DE CONSULTOR EXPERIENTE:
 1. NÃO ASSUMA NADA DE ANTEMÃO: O ramo e o modelo do cliente são totalmente livres e abertos. Apenas extraia os dados que ele REALMENTE falar. Nunca invente ou antecipe números que ele não disse.
 2. CURIOSIDADE INVESTIGATIVA EMPÁTICA:
-   - Quando o cliente disser o ramo de atividade, NÃO pule direto para os números secos. Demonstre genuíno interesse e investigue o modelo operacional da empresa, pois isso muda toda a estrutura de custos:
-     * Se falar "ramo de alimentação": investigue se é restaurante a la carte, buffet, delivery de marmitas, padaria ou lanchonete; se tem salão ou é só entrega; se abre no almoço, noite ou integral.
-     * Se falar "comércio/loja": investigue se é loja de rua, shopping ou e-commerce; se vende à vista ou muito parcelado no cartão.
-     * Se falar "serviços/saúde/TI/consultoria": investigue se trabalha sozinho ou com equipe/comissionados; se cobra mensalidade recorrente ou por projeto/atendimento.
-     * Se falar "indústria/oficina": investigue se trabalha sob encomenda ou com estoque pronto.
-3. CONDUÇÃO FLUIDA (UMA PERGUNTA POR VEZ):
    - Quando o cliente disser o ramo de atividade, NÃO pule direto para os números secos. Demonstre genuíno interesse e investigue o modelo operacional da empresa, pois isso muda toda a estrutura de custos.
 3. LINGUAGEM 100% SIMPLES E PEDAGÓGICA (SEM JARGÕES):
    - Muitos empresários não conhecem termos técnicos contábeis (como pró-labore, CMV, DRE). Sempre explique em linguagem do dia a dia.
@@ -80,7 +77,7 @@ export async function POST(req: NextRequest) {
       ? historico.filter((m: any) => m.role === 'user').length
       : 0;
 
-    if (totalTurnosUsuario >= 10) {
+    if (totalTurnosUsuario >= 12) {
       return NextResponse.json({
         mensagem: 'Atingimos o limite de perguntas desta etapa. Os dados informados até o momento já foram registrados para a elaboração do seu diagnóstico.',
         etapa_atual: 5,
@@ -97,13 +94,13 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(historico) || historico.length === 0) {
       contents.push({
         role: 'user',
-        parts: [{ text: `Olá, sou ${cliente_info?.nome || 'o dono da empresa'}. Vamos iniciar a coleta do meu diagnóstico.` }],
+        parts: [{ text: `Olá, sou ${cliente_info?.nome || 'o dono da empresa'}. Quero fazer o diagnóstico financeiro do meu negócio.` }],
       });
       contents.push({
         role: 'model',
         parts: [{
           text: JSON.stringify({
-            mensagem: `Olá ${cliente_info?.nome ? cliente_info.nome.split(' ')[0] : ''}! Sou a especialista financeira da AnalisAí. Estou aqui para entender os números do seu negócio sem burocracia. Para começarmos: me conte um pouco sobre o seu negócio — qual é o seu ramo de atuação e se você trabalha sozinho ou tem equipe?`,
+            mensagem: `Olá ${cliente_info?.nome ? cliente_info.nome.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAI.me. Nossa conversa é estruturada em 5 passos rápidos: 1º Seu Modelo de Negócio, 2º Faturamento, 3º Custos e Despesas, 4º Gargalos e Dores, e 5º Confirmação do Raio-X. Para começarmos a Etapa 1: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`,
             etapa_atual: 1,
             finalizado: false,
             aguardando_confirmacao: false,
