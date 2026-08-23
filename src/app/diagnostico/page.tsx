@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.2 · 23/08/2026 - 13:00';
+const VERSION = 'v3.3 · 23/08/2026 - 13:20';
 const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
@@ -207,18 +207,22 @@ export default function DiagnosticoPage() {
 
   const faqs = [
     {
+      question: 'Como funcionam as 3 reanálises nos 30, 60 e 90 dias?',
+      answer: 'Você recebe o Diagnóstico Inicial no ato e ganha acesso a 3 reavaliações programadas aos 30, 60 e 90 dias da contratação. Em cada janela de tempo, você refaz a conversa por voz para a IA recalcular sua DRE e verificar se suas ações deram resultado real. Caso o negócio não evolua, a IA recomenda a consultoria dedicada. O ciclo tem validade de 90 dias.',
+    },
+    {
       question: 'Preciso ter contador ou sistema de gestão?',
       answer: 'Não. Só precisa saber (ou conseguir estimar) seu faturamento e principais custos dos últimos meses.',
     },
     {
       question: 'É uma consultoria com reunião?',
-      answer: 'Não. Todo o processo é assíncrono por voz ou mensagem — entrevista rápida, pagamento, entrega. Se tiver dúvida sobre o relatório, pode perguntar por WhatsApp.',
+      answer: 'Não. Todo o processo é ágil por voz com Inteligência Artificial — você passa os dados e recebe o relatório em PDF no ato. Caso queira suporte humano ou BPO, pode acionar nossa equipe pelo WhatsApp.',
     },
     {
       question: 'Meus dados ficam seguros?',
       answer: (
         <>
-          Sim. Seus dados são usados exclusivamente para gerar o seu diagnóstico e não são compartilhados com terceiros.{' '}
+          Sim. Seus dados são protegidos pela LGPD, usados exclusivamente para gerar o seu diagnóstico e não são compartilhados com terceiros.{' '}
           <Link href="/privacidade" className="text-amber-400 hover:underline">
             Ver política de privacidade
           </Link>
@@ -227,8 +231,8 @@ export default function DiagnosticoPage() {
       ),
     },
     {
-      question: 'Isso é o mesmo que o AnalisAí?',
-      answer: 'É a porta de entrada. O diagnóstico é uma foto única do seu momento financeiro. O AnalisAí é o acompanhamento contínuo, mês a mês.',
+      question: 'Isso é o mesmo que o serviço de BPO Financeiro?',
+      answer: 'O diagnóstico é o raio-x inicial com acompanhamento de 90 dias. Se você quiser que nossa equipe assuma todo o seu contas a pagar, receber e conciliação no dia a dia, você pode contratar nosso BPO Financeiro mensal.',
     },
   ];
 
@@ -550,7 +554,7 @@ export default function DiagnosticoPage() {
                   { icon: <Zap className="w-5 h-5 text-emerald-400" />, title: 'Liberação Imediata no Ato', desc: 'Acesso instantâneo à Sala de Voz logo após a confirmação.' },
                   { icon: <CreditCard className="w-5 h-5 text-amber-400" />, title: 'PIX Instantâneo ou Cartão em até 12x', desc: 'Processamento 100% seguro com criptografia bancária.' },
                   { icon: <FileText className="w-5 h-5 text-emerald-400" />, title: 'Relatório Executivo Completo em PDF', desc: 'Emissão imediata por IA com DRE Gerencial, Score e Plano de Ação.' },
-                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Garantia AnalisAI.me', desc: 'Inclui 2 reanálises gratuitas após a entrega oficial.' },
+                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Ciclo de Acompanhamento de 90 Dias', desc: 'Inclui 3 reanálises completas (aos 30, 60 e 90 dias) com aviso de prazo para checar seu lucro.' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
                     <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 shrink-0">

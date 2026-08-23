@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.2 · 23/08/2026 - 13:00';
+const VERSION = 'v3.3 · 23/08/2026 - 13:20';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
@@ -415,10 +415,20 @@ function ColetaVoiceContent() {
         </div>
       </header>
 
-      {/* ── BANNER DE GARANTIA E REANÁLISES ── */}
-      <div className="relative z-10 bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 text-center text-xs text-emerald-300 flex items-center justify-center gap-2 print:hidden">
-        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-        <span><strong>Garantia AnalisAI.me:</strong> Relatório Executivo emitido no ato + <strong>2 reanálises gratuitas</strong> após a entrega.</span>
+      {/* ── BANNER DE CICLO DE 3 REANÁLISES E PRAZO DE VALIDADE ── */}
+      <div className="relative z-10 bg-gradient-to-r from-emerald-500/10 via-amber-500/10 to-emerald-500/10 border-b border-amber-500/20 px-4 py-2.5 text-center text-xs text-slate-200 flex flex-wrap items-center justify-center gap-2 sm:gap-3 print:hidden">
+        <span className="flex items-center gap-1.5 font-bold text-emerald-400">
+          <ShieldCheck className="w-4 h-4 shrink-0" />
+          Ciclo Oficial de 90 Dias Ativo
+        </span>
+        <span className="text-slate-400 hidden sm:inline">•</span>
+        <span className="text-slate-300">
+          <strong>3 Reanálises Programadas:</strong> 30, 60 e 90 dias após a entrega
+        </span>
+        <span className="text-slate-400 hidden sm:inline">•</span>
+        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-bold">
+          ⏳ Validade do ciclo: 90 dias
+        </span>
       </div>
 
       {/* ── CORPO PRINCIPAL ── */}
@@ -1085,6 +1095,79 @@ function ColetaVoiceContent() {
               <div className="pt-2 flex items-center justify-between text-[10px] text-slate-500 print:text-slate-600 border-t border-slate-800 print:border-slate-200">
                 <span>Emitido por Inteligência AnalisAI.me</span>
                 <span>Chave: {pedidoId || 'DIAG-PRO'}</span>
+              </div>
+            </div>
+
+            {/* ── PAINEL DE CRONOGRAMA DAS 3 REANÁLISES & GATILHO CONSULTIVO ── */}
+            <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-950 to-slate-900 border border-amber-500/30 space-y-4 print:border-slate-300">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/80 print:border-slate-200 pb-3">
+                <div>
+                  <h5 className="text-xs font-black uppercase text-amber-400 print:text-slate-900 flex items-center gap-1.5">
+                    <Clock className="w-4 h-4" /> Cronograma de Reavaliações (Ciclo de 90 Dias)
+                  </h5>
+                  <p className="text-[11px] text-slate-400 print:text-slate-600">
+                    Acompanhe se as medidas implementadas estão aumentando seu lucro real.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold font-mono shrink-0">
+                  ⏳ Validade: 90 dias a contar de hoje
+                </span>
+              </div>
+
+              {/* Grid 3 Checkpoints */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-900 border border-emerald-500/30 print:border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase text-emerald-400">1º Checkpoint</span>
+                    <span className="text-[10px] text-slate-500 font-mono">30 Dias</span>
+                  </div>
+                  <h6 className="font-bold text-white print:text-slate-900">Corte de Desperdícios</h6>
+                  <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
+                    Refaça a entrevista por voz para checar a primeira redução de custos fixos e CMV.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-900 border border-amber-500/30 print:border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase text-amber-400">2º Checkpoint</span>
+                    <span className="text-[10px] text-slate-500 font-mono">60 Dias</span>
+                  </div>
+                  <h6 className="font-bold text-white print:text-slate-900">Recuperação de Margem</h6>
+                  <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
+                    Recalcule sua DRE e avalie o impacto do novo mix de vendas e precificação.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-900 border border-cyan-500/30 print:border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase text-cyan-400">3º Checkpoint Final</span>
+                    <span className="text-[10px] text-slate-500 font-mono">90 Dias</span>
+                  </div>
+                  <h6 className="font-bold text-white print:text-slate-900">Consolidação do Lucro</h6>
+                  <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
+                    Validação final do novo ponto de equilíbrio e estabilidade do fluxo de caixa.
+                  </p>
+                </div>
+              </div>
+
+              {/* Gatilho Inteligente de Consultoria / BPO */}
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs print:hidden">
+                <div className="space-y-0.5">
+                  <span className="font-extrabold text-amber-300 flex items-center gap-1.5 text-xs">
+                    <HelpCircle className="w-4 h-4 text-amber-400" /> Os números não evoluíram ou você não tem tempo para executar?
+                  </span>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    Se na reanálise dos 30 ou 60 dias sua margem continuar apertada por falta de tempo, deixe que nossos especialistas assumam o seu financeiro no dia a dia com a **Consultoria & BPO Dedicado**.
+                  </p>
+                </div>
+                <a
+                  href={`https://wa.me/${WHATSAPP_OFICIAL}?text=${encodeURIComponent(`Olá! Estou com o relatório do Diagnóstico da empresa ${razaoSocial || resumo.ramo_atividade || ''} e gostaria de uma proposta de Consultoria e BPO Financeiro para acelerar meus resultados.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all shadow-lg"
+                >
+                  Contratar Consultoria / BPO
+                </a>
               </div>
             </div>
 
