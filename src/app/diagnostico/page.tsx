@@ -14,8 +14,8 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.8 · 23/08/2026 - 12:00';
-const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/o6JY2Vjvtc';
+const VERSION = 'v3.0 · 23/08/2026 - 12:10';
+const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
 const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAI.me)';
@@ -545,211 +545,45 @@ export default function DiagnosticoPage() {
               <p className="text-amber-400 text-sm font-semibold">Pagamento único · Sem assinatura ou mensalidade</p>
             </div>
 
-            {/* Botão de Destaque InfinitePay */}
-            <div className="p-5 sm:p-6 bg-emerald-500/10 border-b border-emerald-500/20 text-center space-y-3">
+            {/* Botão de Destaque InfinitePay Exclusivo */}
+            <div className="p-6 sm:p-8 space-y-6">
+              
+              <div className="space-y-3.5 text-left">
+                {[
+                  { icon: <Zap className="w-5 h-5 text-emerald-400" />, title: 'Liberação Imediata no Ato', desc: 'Acesso instantâneo à Sala de Voz logo após a confirmação.' },
+                  { icon: <CreditCard className="w-5 h-5 text-amber-400" />, title: 'PIX Instantâneo ou Cartão em até 12x', desc: 'Processamento 100% seguro com criptografia bancária.' },
+                  { icon: <FileText className="w-5 h-5 text-emerald-400" />, title: 'Relatório Executivo Completo em PDF', desc: 'Emissão imediata por IA com DRE Gerencial, Score e Plano de Ação.' },
+                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Garantia AnalisAI.me', desc: 'Inclui 2 reanálises gratuitas após a entrega oficial.' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-3.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
+                    <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 shrink-0">
+                      {item.icon}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{item.title}</h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <a
                 href={CHECKOUT_INFINITEPAY}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black py-4 px-6 rounded-2xl shadow-xl shadow-emerald-500/20 text-base sm:text-lg transition-all hover:scale-[1.02]"
+                className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-300 hover:from-emerald-400 hover:to-emerald-200 text-slate-950 font-black px-8 py-5 rounded-2xl shadow-2xl shadow-emerald-500/30 transition-all duration-200 hover:scale-[1.02] text-base sm:text-lg group cursor-pointer text-center"
               >
-                <Zap className="w-5 h-5 fill-current" />
-                Pagar com InfinitePay (PIX & Cartão em até 12x)
-                <ArrowRight className="w-5 h-5" />
+                <Zap className="w-5 h-5 fill-current shrink-0" />
+                Pagar com InfinitePay (PIX & Cartão) — R$ 197
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform shrink-0" />
               </a>
-              <p className="text-[11px] text-emerald-300/80">
-                🔒 Checkout 100% seguro pela InfinitePay com liberação instantânea no ato.
-              </p>
+
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Ambiente Seguro InfinitePay · Seus dados protegidos pela LGPD</span>
+              </div>
+
             </div>
-
-            {/* Alternador de Método de Pagamento */}
-            <div className="p-4 sm:p-6 bg-slate-950/60 border-b border-slate-800">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 text-center">Ou pague diretamente por chave PIX:</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setMetodoPagamento('pix')}
-                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${metodoPagamento === 'pix'
-                      ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 scale-[1.02]'
-                      : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
-                    }`}
-                >
-                  <QrCode className="w-4 h-4" />
-                  Chave PIX CNPJ
-                </button>
-
-                <button
-                  onClick={() => setMetodoPagamento('cartao')}
-                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer ${metodoPagamento === 'cartao'
-                      ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 scale-[1.02]'
-                      : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
-                    }`}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Cartão (Stripe)
-                </button>
-              </div>
-            </div>
-
-            {/* CONTEÚDO: OPÇÃO PIX */}
-            {metodoPagamento === 'pix' && (
-              <div className="p-6 sm:p-8 space-y-6">
-
-                {/* Box Chave Pix com Credibilidade */}
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                      <QrCode className="w-4 h-4" /> Chave PIX Oficial (CNPJ)
-                    </span>
-                    <span className="text-[11px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md">
-                      Aprovação Imediata
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 mb-3">
-                    <span className="font-mono text-sm sm:text-base font-extrabold text-white tracking-wide break-all">
-                      {CHAVE_PIX_CNPJ}
-                    </span>
-                    <button
-                      onClick={handleCopiarPix}
-                      className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${copied
-                          ? 'bg-emerald-500 text-slate-950'
-                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
-                        }`}
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      {copied ? 'Copiado!' : 'Copiar CNPJ'}
-                    </button>
-                  </div>
-
-                  <div className="text-xs text-slate-400 space-y-1.5 pt-1 border-t border-emerald-500/20">
-                    <p><span className="text-slate-300 font-semibold">Razão Social:</span> {RAZAO_SOCIAL}</p>
-                    <p><span className="text-slate-300 font-semibold">Nome Fantasia:</span> {NOME_FANTASIA}</p>
-                    <p><span className="text-slate-300 font-semibold">Valor:</span> R$ 197,00</p>
-                  </div>
-                </div>
-
-                {/* Formulário de Identificação do Pagamento */}
-                <form onSubmit={handleConfirmarPix} className="space-y-4">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">
-                      Identificação do seu Diagnóstico
-                    </p>
-                    <p className="text-xs text-slate-400 mb-3">
-                      Informe seus dados para identificarmos o pagamento no banco e enviarmos o seu formulário/relatório:
-                    </p>
-                  </div>
-
-                  {pixError && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
-                      {pixError}
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Nome completo do pagador *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: João da Silva / Minha Empresa Ltda"
-                      value={pixNome}
-                      onChange={(e) => setPixNome(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">WhatsApp *</label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="(00) 00000-0000"
-                        value={pixWhatsapp}
-                        onChange={(e) => setPixWhatsapp(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">E-mail para receber relatório *</label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="seu@email.com"
-                        value={pixEmail}
-                        onChange={(e) => setPixEmail(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-500"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={pixLoading}
-                    className="w-full mt-2 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-70 text-slate-950 font-extrabold py-4 px-6 rounded-2xl shadow-xl shadow-emerald-500/20 text-base transition-all hover:scale-[1.02] cursor-pointer"
-                  >
-                    {pixLoading ? (
-                      <>
-                        <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                        </svg>
-                        Registrando...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        Já fiz o PIX — Confirmar meus dados
-                      </>
-                    )}
-                  </button>
-                  <p className="text-[11px] text-center text-slate-500">
-                    Você não precisa enviar comprovante se não quiser. Confirmamos pelo nome do pagador no extrato.
-                  </p>
-                </form>
-
-              </div>
-            )}
-
-            {/* CONTEÚDO: OPÇÃO CARTÃO (STRIPE) */}
-            {metodoPagamento === 'cartao' && (
-              <div className="p-6 sm:p-8 space-y-6">
-                <div className="space-y-4">
-                  {[
-                    { icon: <Clock className="w-5 h-5 text-amber-400" />, text: 'Entrega garantida em até 72h após pagamento e formulário' },
-                    { icon: <Shield className="w-5 h-5 text-emerald-400" />, text: 'Checkout seguro com criptografia de ponta a ponta (Stripe)' },
-                    { icon: <Lock className="w-5 h-5 text-emerald-400" />, text: 'Sem acesso à sua conta bancária — nunca' },
-                    { icon: <FileText className="w-5 h-5 text-amber-400" />, text: 'Relatório PDF em linguagem simples, pronto para usar' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="p-1.5 rounded-lg bg-slate-800/80 flex-shrink-0">{item.icon}</div>
-                      <p className="text-slate-300 text-sm">{item.text}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleStripeCheckout}
-                  disabled={stripeLoading}
-                  className="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 disabled:opacity-70 text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.02] text-base sm:text-lg group cursor-pointer"
-                >
-                  {stripeLoading ? (
-                    <>
-                      <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                      </svg>
-                      Redirecionando para Stripe...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="w-5 h-5 flex-shrink-0" />
-                      Pagar com Cartão no Stripe — R$ 197
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
 
           </div>
 
