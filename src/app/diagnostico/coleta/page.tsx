@@ -18,17 +18,24 @@ interface Mensagem {
 
 interface ResumoFinanceiro {
   ramo_atividade?: string;
+  modelo_operacao?: string;
   faturamento_mensal_estimado?: number;
+  custo_mercadorias_insumos?: number;
+  aluguel_condominio?: number;
+  folha_funcionarios?: number;
+  pro_labore_socios?: number;
+  utilidades_energia_internet?: number;
+  sistemas_ferramentas?: number;
+  outras_despesas_fixas?: number;
   custos_fixos_estimados?: number;
   custos_variaveis_estimados?: number;
-  pro_labore_estimado?: number;
   mistura_contas_pf_pj?: string;
   principais_gargalos?: string[];
   cenarios_solicitados?: string[];
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.3 · 23/08/2026 - 10:40';
+const VERSION = 'v2.4 · 23/08/2026 - 10:50';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -41,12 +48,22 @@ function ColetaVoiceContent() {
   const [coletaId, setColetaId] = useState<string | null>(null);
   const [historico, setHistorico] = useState<Mensagem[]>([]);
   const [assistenteFala, setAssistenteFala] = useState(
-    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAI.me. Nossa conversa é estruturada em 5 passos rápidos: 1º Seu Modelo de Negócio, 2º Faturamento, 3º Custos e Despesas, 4º Gargalos e Dores, e 5º Confirmação do Raio-X. Para começarmos a Etapa 1: me conta, qual é a sua atividade e como sua empresa funciona no dia a dia?`
+    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAI.me. Enquanto conversamos, vou montando a sua FICHA FINANCEIRA AO VIVO na tela. Para começarmos o Passo 1: qual é a sua atividade e como sua empresa funciona no dia a dia?`
   );
   const [etapaAtual, setEtapaAtual] = useState(1);
   const [finalizado, setFinalizado] = useState(false);
   const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
-  const [resumo, setResumo] = useState<ResumoFinanceiro>({});
+  const [abaFichaAberta, setAbaFichaAberta] = useState(true);
+  const [resumo, setResumo] = useState<ResumoFinanceiro>({
+    faturamento_mensal_estimado: 0,
+    custo_mercadorias_insumos: 0,
+    aluguel_condominio: 0,
+    folha_funcionarios: 0,
+    pro_labore_socios: 0,
+    utilidades_energia_internet: 0,
+    sistemas_ferramentas: 0,
+    outras_despesas_fixas: 0,
+  });
 
   // Estados de voz e input
   const [gravando, setGravando] = useState(false);
@@ -58,6 +75,40 @@ function ColetaVoiceContent() {
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+
+  // Recalcula totais automáticos
+  const totalDespesasFixas = 
+    (resumo.aluguel_condominio || 0) +
+    (resumo.folha_funcionarios || 0) +
+    (resumo.pro_labore_socios || 0) +
+    (resumo.utilidades_energia_internet || 0) +
+    (resumo.sistemas_ferramentas || 0) +
+    (resumo.outras_despesas_fixas || 0) || (resumo.custos_fixos_estimados || 0);
+
+  const totalCustosVariaveis = (resumo.custo_mercadorias_insumos || 0) || (resumo.custos_variaveis_estimados || 0);
+  const faturamento = resumo.faturamento_mensal_estimado || 0;
+  const sobraOperacional = faturamento - totalCustosVariaveis - totalDespesasFixas;
+
+  // Função para atualizar campos individuais da ficha
+  const atualizarCampoFicha = (campo: keyof ResumoFinanceiro, valor: any) => {
+    setResumo(prev => {
+      const atualizado = { ...prev, [campo]: valor };
+      if (typeof valor === 'number') {
+        const novosFixos = 
+          (campo === 'aluguel_condominio' ? valor : (atualizado.aluguel_condominio || 0)) +
+          (campo === 'folha_funcionarios' ? valor : (atualizado.folha_funcionarios || 0)) +
+          (campo === 'pro_labore_socios' ? valor : (atualizado.pro_labore_socios || 0)) +
+          (campo === 'utilidades_energia_internet' ? valor : (atualizado.utilidades_energia_internet || 0)) +
+          (campo === 'sistemas_ferramentas' ? valor : (atualizado.sistemas_ferramentas || 0)) +
+          (campo === 'outras_despesas_fixas' ? valor : (atualizado.outras_despesas_fixas || 0));
+        atualizado.custos_fixos_estimados = novosFixos;
+        if (campo === 'custo_mercadorias_insumos') {
+          atualizado.custos_variaveis_estimados = valor;
+        }
+      }
+      return atualizado;
+    });
+  };
 
   // Inicializa síntese de voz (TTS) e Reconhecimento de fala (STT)
   useEffect(() => {
@@ -173,6 +224,7 @@ function ColetaVoiceContent() {
           pedido_id: pedidoId,
           historico: novoHistorico,
           nova_mensagem: novaMensagemUsuario,
+          resumo_atual: resumo,
           cliente_info: {
             nome: nomeParam,
             email: emailParam,
@@ -361,41 +413,247 @@ function ColetaVoiceContent() {
               )}
             </div>
 
-            {/* Raio-X dos Dados Coletados em Tempo Real */}
-            {(resumo.faturamento_mensal_estimado || resumo.custos_fixos_estimados || resumo.ramo_atividade || resumo.pro_labore_estimado) && (
-              <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/50 p-4 text-left grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                {resumo.ramo_atividade && (
-                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Ramo & Modelo:</span>
-                    <span className="text-slate-200 font-semibold line-clamp-1">{resumo.ramo_atividade}</span>
-                  </div>
-                )}
-                {resumo.faturamento_mensal_estimado ? (
-                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Faturamento Médio:</span>
-                    <span className="text-emerald-400 font-bold">R$ {resumo.faturamento_mensal_estimado.toLocaleString('pt-BR')}</span>
-                  </div>
-                ) : null}
-                {resumo.custos_fixos_estimados ? (
-                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Custos Fixos:</span>
-                    <span className="text-amber-400 font-bold">R$ {resumo.custos_fixos_estimados.toLocaleString('pt-BR')}</span>
-                  </div>
-                ) : null}
-                {resumo.pro_labore_estimado ? (
-                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Pró-labore Sócios:</span>
-                    <span className="text-cyan-400 font-bold">R$ {resumo.pro_labore_estimado.toLocaleString('pt-BR')}</span>
-                  </div>
-                ) : null}
-                {resumo.mistura_contas_pf_pj ? (
-                  <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Mistura PF/PJ:</span>
-                    <span className="text-rose-400 font-bold">{resumo.mistura_contas_pf_pj}</span>
-                  </div>
-                ) : null}
+            {/* ── FICHA FINANCEIRA INTERATIVA AO VIVO (EDITÁVEL PELO USUÁRIO OU PELA IA) ── */}
+            <div className="w-full rounded-3xl border border-slate-800 bg-slate-900/80 p-4 sm:p-6 shadow-2xl text-left space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    Ficha Financeira ao Vivo
+                  </h3>
+                  <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded-full font-mono">
+                    Editável por Voz ou Clique
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAbaFichaAberta(!abaFichaAberta)}
+                  className="text-xs text-slate-400 hover:text-white font-medium underline"
+                >
+                  {abaFichaAberta ? 'Recolher Ficha' : 'Expandir Ficha'}
+                </button>
               </div>
-            )}
+
+              {abaFichaAberta && (
+                <div className="space-y-4 text-xs">
+                  
+                  {/* Ramo e Modelo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-400 block text-[11px] font-bold mb-1">
+                        Atividade / Ramo de Atuação:
+                      </label>
+                      <input
+                        type="text"
+                        value={resumo.ramo_atividade || ''}
+                        onChange={(e) => atualizarCampoFicha('ramo_atividade', e.target.value)}
+                        placeholder="Ex: Restaurante, Loja de Roupas, Clínica, Oficina..."
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:border-amber-400 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-400 block text-[11px] font-bold mb-1">
+                        Modelo de Operação:
+                      </label>
+                      <input
+                        type="text"
+                        value={resumo.modelo_operacao || ''}
+                        onChange={(e) => atualizarCampoFicha('modelo_operacao', e.target.value)}
+                        placeholder="Ex: Loja física e delivery, fábrica sob encomenda..."
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:border-amber-400 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Vendas & Custos Variáveis */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="p-3 rounded-2xl bg-slate-950/60 border border-emerald-500/20">
+                      <label className="text-emerald-400 block text-[11px] font-bold mb-1">
+                        💰 Faturamento Médio Mensal (R$):
+                      </label>
+                      <input
+                        type="number"
+                        value={resumo.faturamento_mensal_estimado || ''}
+                        onChange={(e) => atualizarCampoFicha('faturamento_mensal_estimado', parseFloat(e.target.value) || 0)}
+                        placeholder="0,00"
+                        className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-3 py-2 text-emerald-300 font-bold text-sm focus:border-emerald-400 outline-none"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">Quanto costuma entrar no caixa por mês.</span>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-slate-950/60 border border-amber-500/20">
+                      <label className="text-amber-400 block text-[11px] font-bold mb-1">
+                        📦 Custos com Mercadorias / Insumos (R$):
+                      </label>
+                      <input
+                        type="number"
+                        value={resumo.custo_mercadorias_insumos || ''}
+                        onChange={(e) => atualizarCampoFicha('custo_mercadorias_insumos', parseFloat(e.target.value) || 0)}
+                        placeholder="0,00"
+                        className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-3 py-2 text-amber-300 font-bold text-sm focus:border-amber-400 outline-none"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">Compra de produtos p/ revenda ou matérias-primas.</span>
+                    </div>
+                  </div>
+
+                  {/* Despesas Fixas Discriminadas */}
+                  <div className="pt-2">
+                    <span className="text-slate-400 block text-[11px] font-bold uppercase tracking-wider mb-2">
+                      🏛️ Principais Despesas Fixas da Empresa:
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      
+                      {/* Aluguel */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
+                          🏢 Aluguel, IPTU & Condomínio:
+                        </label>
+                        <input
+                          type="number"
+                          value={resumo.aluguel_condominio || ''}
+                          onChange={(e) => atualizarCampoFicha('aluguel_condominio', parseFloat(e.target.value) || 0)}
+                          placeholder="0,00"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
+                        />
+                      </div>
+
+                      {/* Folha */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
+                          👥 Folha de Funcionários:
+                        </label>
+                        <input
+                          type="number"
+                          value={resumo.folha_funcionarios || ''}
+                          onChange={(e) => atualizarCampoFicha('folha_funcionarios', parseFloat(e.target.value) || 0)}
+                          placeholder="0,00"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
+                        />
+                      </div>
+
+                      {/* Pró-labore */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-cyan-500/30">
+                        <label className="text-cyan-400 block text-[10px] font-bold mb-1">
+                          💼 Pró-labore Sócios (Salário):
+                        </label>
+                        <input
+                          type="number"
+                          value={resumo.pro_labore_socios || ''}
+                          onChange={(e) => atualizarCampoFicha('pro_labore_socios', parseFloat(e.target.value) || 0)}
+                          placeholder="0,00"
+                          className="w-full bg-slate-900 border border-cyan-500/40 rounded-lg px-2.5 py-1.5 text-cyan-300 font-bold focus:border-cyan-400 outline-none"
+                        />
+                      </div>
+
+                      {/* Utilidades */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
+                          ⚡ Energia, Água & Internet:
+                        </label>
+                        <input
+                          type="number"
+                          value={resumo.utilidades_energia_internet || ''}
+                          onChange={(e) => atualizarCampoFicha('utilidades_energia_internet', parseFloat(e.target.value) || 0)}
+                          placeholder="0,00"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
+                        />
+                      </div>
+
+                      {/* Sistemas */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
+                          💻 Sistemas & Softwares:
+                        </label>
+                        <input
+                          type="number"
+                          value={resumo.sistemas_ferramentas || ''}
+                          onChange={(e) => atualizarCampoFicha('sistemas_ferramentas', parseFloat(e.target.value) || 0)}
+                          placeholder="0,00"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
+                        />
+                      </div>
+
+                      {/* Outras Despesas */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
+                          📦 Outras Despesas Fixas:
+                        </label>
+                        <input
+                          type="number"
+                          value={resumo.outras_despesas_fixas || ''}
+                          onChange={(e) => atualizarCampoFicha('outras_despesas_fixas', parseFloat(e.target.value) || 0)}
+                          placeholder="0,00"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
+                        />
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Separação PF/PJ */}
+                  <div className="pt-2">
+                    <label className="text-slate-400 block text-[11px] font-bold mb-1.5">
+                      💳 Mistura de Contas Pessoais com a Empresa:
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {['Não mistura (Contas 100% separadas)', 'Parcialmente (Paga algumas contas da casa)', 'Sim (Usa caixa da empresa para tudo)'].map((opcao) => (
+                        <button
+                          key={opcao}
+                          type="button"
+                          onClick={() => atualizarCampoFicha('mistura_contas_pf_pj', opcao)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                            resumo.mistura_contas_pf_pj === opcao
+                              ? 'bg-rose-500/20 border border-rose-500 text-rose-300'
+                              : 'bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {opcao}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Totalizador Financeiro em Tempo Real */}
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                    <div>
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Faturamento:</span>
+                      <span className="text-emerald-400 font-bold text-xs sm:text-sm">
+                        R$ {faturamento.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Custos Variáveis:</span>
+                      <span className="text-amber-400 font-bold text-xs sm:text-sm">
+                        R$ {totalCustosVariaveis.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Total Despesas Fixas:</span>
+                      <span className="text-rose-400 font-bold text-xs sm:text-sm">
+                        R$ {totalDespesasFixas.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Sobra Operacional:</span>
+                      <span className={`font-black text-xs sm:text-sm ${sobraOperacional >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        R$ {sobraOperacional.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => enviarResposta(`Atualizei alguns números na ficha: Faturamento R$ ${faturamento}, Mercadorias R$ ${totalCustosVariaveis}, Despesas Fixas R$ ${totalDespesasFixas}. Pode analisar?`)}
+                      disabled={carregandoIA}
+                      className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Pedir para a IA analisar a ficha atualizada
+                    </button>
+                  </div>
+
+                </div>
+              )}
+            </div>
 
             {/* ── BOTÕES DE CONFIRMAÇÃO EXPLICITA ── */}
             {aguardandoConfirmacao ? (

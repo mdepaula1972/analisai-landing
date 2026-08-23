@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.3 · 23/08/2026 - 10:40';
+const VERSION = 'v2.4 · 23/08/2026 - 10:50';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
 const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAI.me)';
