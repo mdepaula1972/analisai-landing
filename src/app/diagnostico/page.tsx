@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.1 · 23/08/2026 - 12:30';
+const VERSION = 'v3.2 · 23/08/2026 - 13:00';
 const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
@@ -296,18 +296,16 @@ export default function DiagnosticoPage() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-[1.08]">
-            Descubra onde seu dinheiro está{' '}
-            <span className="text-shimmer-amber">vazando.</span>
+            Você sabe para onde está indo o{' '}
+            <span className="text-shimmer-amber">dinheiro do seu negócio?</span>
             <br />
-            <span className="text-slate-300 font-bold text-3xl sm:text-4xl lg:text-5xl">
-              Sem reunião, sem compromisso mensal.
+            <span className="text-slate-300 font-bold text-2xl sm:text-3xl lg:text-4xl mt-2 block">
+              Você vende. Recebe. Paga. Mas quanto realmente sobra?
             </span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Um diagnóstico financeiro completo do seu negócio, feito por quem entende de gestão financeira há{' '}
-            <span className="text-white font-semibold">40 anos</span>. Você preenche um formulário, a gente analisa, você recebe um relatório claro em até{' '}
-            <span className="text-amber-400 font-semibold">72h</span>.
+          <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
+            Descubra em 5 minutos por voz com nossa IA e receba no ato seu <strong className="text-white">Relatório Executivo Oficial com DRE Gerencial Sintética</strong> + <span className="text-amber-400 font-bold">Ciclo de 3 Reanálises (30, 60 e 90 dias)</span> para acompanhar se o seu lucro aumentou.
           </p>
 
           {/* CTA principal */}
@@ -318,25 +316,24 @@ export default function DiagnosticoPage() {
               className="inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-amber-500/50 text-base sm:text-lg group cursor-pointer"
             >
               <Sparkles className="w-5 h-5 flex-shrink-0" />
-              Quero meu diagnóstico — R$ 197
+              Descobrir meu Lucro Real — R$ 197
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
 
             <p className="text-slate-400 text-sm max-w-md">
-              Feito para donos de pequenos negócios do{' '}
-              <span className="text-slate-300 font-medium">Simples Nacional</span> que não têm — e não precisam ter — um financeiro em tempo integral.
+              Feito para MEIs e pequenas empresas que precisam de <span className="text-slate-300 font-medium">clareza financeira rápida</span> sem reuniões e sem planilhas complexas.
             </p>
           </div>
 
           {/* Mini trust bar */}
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-slate-500 text-xs font-medium">
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-slate-400 text-xs font-medium">
             {[
-              { icon: <Clock className="w-4 h-4 text-amber-400" />, label: 'Entrega em até 72h' },
-              { icon: <Shield className="w-4 h-4 text-emerald-400" />, label: 'Dados protegidos por contrato' },
+              { icon: <Clock className="w-4 h-4 text-emerald-400" />, label: 'Emissão Imediata no Ato' },
+              { icon: <Shield className="w-4 h-4 text-emerald-400" />, label: '3 Reanálises (30, 60 e 90 dias)' },
               { icon: <Lock className="w-4 h-4 text-emerald-400" />, label: 'Sem acesso à sua conta bancária' },
-              { icon: <Star className="w-4 h-4 text-amber-400" />, label: '40 anos de experiência' },
+              { icon: <BarChart3 className="w-4 h-4 text-amber-400" />, label: 'DRE Gerencial Completa' },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-1.5">
+              <div key={i} className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 py-1.5 rounded-full">
                 {item.icon}
                 <span>{item.label}</span>
               </div>
