@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.5 · 23/08/2026 - 11:05';
+const VERSION = 'v2.6 · 23/08/2026 - 11:30';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
@@ -346,8 +346,8 @@ function ColetaVoiceContent() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 relative pb-32 print:pb-0 print:bg-white print:text-slate-900">
 
-      {/* ── BADGE DE VERSÃO FIXO ── */}
-      <div className="fixed bottom-3 left-3 z-50 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[10px] font-bold font-mono shadow-xl print:hidden">
+      {/* ── BADGE DE VERSÃO FIXO (Apenas Desktop para não sobrepor o microfone no mobile) ── */}
+      <div className="hidden md:flex fixed bottom-3 left-3 z-50 items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[10px] font-bold font-mono shadow-xl print:hidden">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
         Sala de Voz {VERSION}
       </div>
@@ -378,7 +378,7 @@ function ColetaVoiceContent() {
                   AnalisAI<span className="text-amber-400">.me</span>
                 </span>
                 <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">
-                  Diagnóstico Pro
+                  {VERSION.split('·')[0].trim()}
                 </span>
               </div>
               <span className="text-[10px] text-slate-400 block -mt-0.5">
@@ -926,21 +926,46 @@ function ColetaVoiceContent() {
               </div>
             </div>
 
-            {/* Botões Finais de Suporte WhatsApp */}
+            {/* Botões Finais de Ação & Envio de Relatório no WhatsApp */}
             <div className="flex flex-col sm:flex-row gap-3 pt-4 print:hidden">
               <a
-                href={`https://wa.me/${WHATSAPP_OFICIAL}?text=${encodeURIComponent(`Olá! Acabei de gerar meu Relatório Executivo no AnalisAI.me para a empresa ${razaoSocial || resumo.ramo_atividade || ''} e gostaria de agendar a sessão com o consultor.`)}`}
+                href={`https://wa.me/${WHATSAPP_OFICIAL}?text=${encodeURIComponent(
+                  `*RELATÓRIO EXECUTIVO DE DIAGNÓSTICO FINANCEIRO - AnalisAI.me*\n\n` +
+                  `Olá Consultores! Gerei meu relatório oficial e gostaria de agendar o alinhamento com o especialista.\n\n` +
+                  `🏢 *DADOS DA EMPRESA:*\n` +
+                  `• Empresa: ${razaoSocial || resumo.ramo_atividade || 'Não informada'}\n` +
+                  `• Responsável: ${nomeResponsavel || nomeParam || 'Gestor'}\n` +
+                  `• CNPJ/CPF: ${documentoEmpresa || 'Não informado'}\n` +
+                  `• Ramo & Modelo: ${resumo.ramo_atividade || 'Mapeado'}\n\n` +
+                  `💰 *RAIO-X FINANCEIRO CONSOLIDADO:*\n` +
+                  `• Faturamento Médio Mensal: R$ ${faturamento.toLocaleString('pt-BR')}\n` +
+                  `• Custos com Insumos/Mercadorias: R$ ${totalCustosVariaveis.toLocaleString('pt-BR')}\n` +
+                  `• Total Despesas Fixas: R$ ${totalDespesasFixas.toLocaleString('pt-BR')}\n` +
+                  `• Sobra Operacional Estimada: R$ ${sobraOperacional.toLocaleString('pt-BR')}\n` +
+                  `• Pró-labore dos Sócios: R$ ${(resumo.pro_labore_socios || 0).toLocaleString('pt-BR')}\n` +
+                  `• Mistura de Contas PF/PJ: ${resumo.mistura_contas_pf_pj || 'Não informado'}\n\n` +
+                  `📊 *SCORE DE SAÚDE:* ${relatorioEmitido?.score_saude_financeira || 70}/100 (${relatorioEmitido?.classificacao_saude || 'Atenção Operacional'})\n\n` +
+                  `Gostaria de entender os próximos passos para consultoria / assessoria!`
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 px-6 rounded-xl transition-all"
+                className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 px-6 rounded-xl transition-all shadow-lg"
               >
                 <MessageCircle className="w-4 h-4" />
-                Falar com a Equipe no WhatsApp (13) 3150-0987
+                Enviar Relatório para a Equipe no WhatsApp (13) 3150-0987
               </a>
 
               <button
+                onClick={() => window.print()}
+                className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-6 py-3.5 rounded-xl text-xs transition-all shadow-lg cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir / Salvar em PDF
+              </button>
+
+              <button
                 onClick={() => setRelatorioEmitido(null)}
-                className="px-6 py-3.5 rounded-xl border border-slate-800 text-slate-300 hover:text-white transition-colors text-sm font-semibold cursor-pointer"
+                className="px-5 py-3.5 rounded-xl border border-slate-800 text-slate-300 hover:text-white transition-colors text-xs font-semibold cursor-pointer"
               >
                 Voltar à Ficha
               </button>
