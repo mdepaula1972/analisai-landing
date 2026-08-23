@@ -4,6 +4,7 @@ import React from 'react';
 import { PlanoTenant } from '@/types/tenant';
 import { Lock, ArrowRight, Zap, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
+import { WHATSAPP_NUMBER } from '@/lib/contact';
 
 interface PlanGateProps {
   planoNecessario: PlanoTenant;
@@ -69,7 +70,7 @@ export function PlanGate({ planoNecessario, planoAtual, children, featureLabel }
       </div>
 
       <Link
-        href={`https://wa.me/5514930855878?text=${encodeURIComponent(`Olá! Gostaria de fazer upgrade para o ${info.titulo}.`)}`}
+        href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Gostaria de fazer upgrade para o ${info.titulo}.`)}`}
         target="_blank"
         rel="noopener noreferrer"
         className={`inline-flex items-center gap-2 ${btnCor} font-bold px-7 py-3.5 rounded-xl transition-all shadow-lg text-sm group hover:scale-[1.02]`}

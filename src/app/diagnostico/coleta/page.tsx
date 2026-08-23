@@ -28,7 +28,7 @@ interface ResumoFinanceiro {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.2 · 22/08/2026 - 18:55';
+const VERSION = 'v2.3 · 23/08/2026 - 10:40';
 
 function ColetaVoiceContent() {
   const searchParams = useSearchParams();
@@ -561,7 +561,7 @@ function ColetaVoiceContent() {
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <a
-                href="https://wa.me/5514930855878?text=Ol%C3%A1!%20Acabei%20de%20concluir%20a%20minha%20entrevista%20por%20voz%20do%20Diagn%C3%B3stico%20Financeiro."
+                href="https://wa.me/551331500987?text=Ol%C3%A1!%20Acabei%20de%20concluir%20a%20minha%20entrevista%20por%20voz%20do%20Diagn%C3%B3stico%20Financeiro."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 px-6 rounded-xl transition-all"
