@@ -118,9 +118,9 @@ export default function ContratoPage() {
           <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-5 my-2 text-slate-300 space-y-2.5 text-xs leading-relaxed">
             <p className="font-bold text-amber-400 text-sm">Disposições Específicas do Ciclo de Diagnóstico Express:</p>
             <p><strong>7.1. Objeto:</strong> A contratação avulsa do Diagnóstico Financeiro (R$ 197) confere à CONTRATANTE a emissão imediata de Relatório Executivo Oficial por IA e o direito a 3 (três) reanálises programadas nos marcos de 30, 60 e 90 dias a contar da data de confirmação do pagamento.</p>
-            <p><strong>7.2. Janela de Tolerância de 5 Dias Úteis:</strong> A realização de cada reanálise deve ocorrer impreterivelmente dentro da janela de até <strong>5 (cinco) dias úteis subsequentes</strong> à abertura de cada marco temporal (aos 30, 60 e 90 dias).</p>
-            <p><strong>7.3. Preclusão da Etapa:</strong> A não realização da reanálise pelo cliente dentro do prazo de tolerância de 5 dias úteis do ciclo vigente acarreta a perda definitiva do direito àquela etapa específica, ficando vedada a cumulação de reanálises no ciclo seguinte.</p>
-            <p><strong>7.4. Validade Máxima:</strong> O ciclo total de acompanhamento e o acesso à sala de voz expiram em 90 dias corridos (+ 5 dias úteis de tolerância final).</p>
+            <p><strong>7.2. Janela de Tolerância de 5 Dias Corridos:</strong> A realização de cada reanálise deve ocorrer impreterivelmente dentro da janela de até <strong>5 (cinco) dias corridos subsequentes</strong> à abertura de cada marco temporal (aos 30, 60 e 90 dias).</p>
+            <p><strong>7.3. Preclusão da Etapa:</strong> A não realização da reanálise pelo cliente dentro do prazo de tolerância de 5 dias corridos do ciclo vigente acarreta a perda definitiva do direito àquela etapa específica, ficando vedada a cumulação de reanálises no ciclo seguinte.</p>
+            <p><strong>7.4. Validade Máxima:</strong> O ciclo total de acompanhamento e o acesso à sala de voz expiram em 90 dias corridos (+ 5 dias corridos de tolerância final).</p>
           </div>
 
           <h3 className="text-base font-bold text-amber-400 pt-2">CLÁUSULA 8ª — DO FORO</h3>

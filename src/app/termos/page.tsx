@@ -68,9 +68,9 @@ export default function TermosPage() {
             <p className="font-bold text-amber-400 text-sm">Regulamento do Ciclo de Acompanhamento de 90 Dias:</p>
             <ul className="list-disc pl-5 space-y-2">
               <li><strong>Direito a 3 Reanálises Programadas:</strong> A contratação do Diagnóstico Financeiro confere ao Usuário a emissão do Relatório Inicial no ato e o direito a 3 (três) reanálises/reavaliações programadas nos marcos de <strong>30, 60 e 90 dias corridos</strong> a partir da data de confirmação do pagamento.</li>
-              <li><strong>Janela de Tolerância de 5 Dias Úteis:</strong> Cada reanálise fica disponível para execução a partir da data exata de seu respectivo marco (30, 60 ou 90 dias) e deverá ser realizada pelo Usuário no prazo limite improrrogável de até <strong>5 (cinco) dias úteis subsequentes</strong> à abertura da janela.</li>
-              <li><strong>Perda do Direito da Etapa (Sem Cumulação):</strong> Caso o Usuário não realize a reanálise dentro da janela de 5 dias úteis do ciclo vigente, <strong>o direito àquela reanálise específica precluirá</strong>, ficando o Usuário autorizado a realizar apenas a reanálise do ciclo subsequente quando de sua abertura (aos 60 ou 90 dias), sendo vedada a cumulação ou compensação retroativa.</li>
-              <li><strong>Validade Máxima:</strong> O ciclo completo de acompanhamento e o acesso à sala de reavaliação expiram definitivamente após <strong>90 dias corridos (+ 5 dias úteis do último ciclo)</strong> da compra.</li>
+              <li><strong>Janela de Tolerância de 5 Dias Corridos:</strong> Cada reanálise fica disponível para execução a partir da data exata de seu respectivo marco (30, 60 ou 90 dias) e deverá ser realizada pelo Usuário no prazo limite improrrogável de até <strong>5 (cinco) dias corridos subsequentes</strong> à abertura da janela.</li>
+              <li><strong>Perda do Direito da Etapa (Sem Cumulação):</strong> Caso o Usuário não realize a reanálise dentro da janela de 5 dias corridos do ciclo vigente, <strong>o direito àquela reanálise específica precluirá</strong>, ficando o Usuário autorizado a realizar apenas a reanálise do ciclo subsequente quando de sua abertura (aos 60 ou 90 dias), sendo vedada a cumulação ou compensação retroativa.</li>
+              <li><strong>Validade Máxima:</strong> O ciclo completo de acompanhamento e o acesso à sala de reavaliação expiram definitivamente após <strong>90 dias corridos (+ 5 dias corridos do último ciclo)</strong> da compra.</li>
             </ul>
           </div>
 
