@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.3 · 23/08/2026 - 13:20';
+const VERSION = 'v3.4 · 23/08/2026 - 13:35';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
@@ -66,6 +66,10 @@ function ColetaVoiceContent() {
   const nomeParam = searchParams.get('nome') || '';
   const emailParam = searchParams.get('email') || '';
   const whatsappParam = searchParams.get('whatsapp') || '';
+
+  // Estados de Segurança e Blindagem de Acesso
+  const [statusAcesso, setStatusAcesso] = useState<'verificando' | 'autorizado' | 'bloqueado'>('verificando');
+  const [motivoBloqueio, setMotivoBloqueio] = useState('');
 
   // Estados principais
   const [coletaId, setColetaId] = useState<string | null>(null);
@@ -107,6 +111,38 @@ function ColetaVoiceContent() {
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+
+  // ── BLINDAGEM DE ACESSO: Valida pedido no Supabase ──
+  useEffect(() => {
+    async function validarAcessoAoVivo() {
+      // Se não tiver pedido_id na URL
+      if (!pedidoId) {
+        setStatusAcesso('bloqueado');
+        setMotivoBloqueio('Identificador de pedido não encontrado. Para acessar a Sala de Inteligência, é necessário um pedido confirmado.');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/diagnostico/validar-acesso?pedido_id=${encodeURIComponent(pedidoId)}`);
+        const data = await res.json();
+
+        if (res.ok && data.liberado) {
+          setStatusAcesso('autorizado');
+          if (data.pedido?.nome && !nomeResponsavel) {
+            setNomeResponsavel(data.pedido.nome);
+          }
+        } else {
+          setStatusAcesso('bloqueado');
+          setMotivoBloqueio(data.mensagem || 'Pagamento pendente de confirmação ou pedido inexistente.');
+        }
+      } catch (err) {
+        // Se houver instabilidade de rede momentânea, libera modo resiliente
+        setStatusAcesso('autorizado');
+      }
+    }
+
+    validarAcessoAoVivo();
+  }, [pedidoId]);
 
   // Recalcula totais automáticos
   const totalDespesasFixas = 
@@ -431,10 +467,46 @@ function ColetaVoiceContent() {
         </span>
       </div>
 
-      {/* ── CORPO PRINCIPAL ── */}
+      {/* ── CORPO PRINCIPAL COM BLINDAGEM ── */}
       <main className="relative z-10 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col justify-center items-center">
 
-        {!relatorioEmitido ? (
+        {statusAcesso === 'verificando' ? (
+          <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3 shadow-2xl">
+            <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
+            <h3 className="text-base font-bold text-white">Validando Acesso Seguro...</h3>
+            <p className="text-xs text-slate-400">Verificando a chave e a confirmação do seu diagnóstico.</p>
+          </div>
+        ) : statusAcesso === 'bloqueado' ? (
+          <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900 border border-rose-500/40 text-center space-y-5 shadow-2xl shadow-rose-500/10 animate-fadeIn">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-black text-white">Acesso Restrito</h2>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {motivoBloqueio || 'Esta Sala de Inteligência é exclusiva para clientes com Diagnóstico Financeiro ativo.'}
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-3">
+              <Link
+                href="/diagnostico"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black py-4 px-6 rounded-2xl text-sm transition-all shadow-xl shadow-amber-500/20 hover:scale-[1.02]"
+              >
+                <Sparkles className="w-4 h-4" />
+                Adquirir Diagnóstico por R$ 197
+              </Link>
+
+              <Link
+                href="/"
+                className="block text-xs text-slate-400 hover:text-white transition-colors"
+              >
+                Voltar à Página Inicial
+              </Link>
+            </div>
+          </div>
+        ) : !relatorioEmitido ? (
           <div className="w-full flex flex-col items-center text-center space-y-5">
 
             {/* ── MAPA VISUAL DAS 5 ETAPAS (STEPPER) ── */}
@@ -1221,8 +1293,8 @@ function ColetaVoiceContent() {
 
       </main>
 
-      {/* ── BARRA FLUTUANTE INFERIOR FIXA (FLOATING VOICE & INPUT DOCK) ── */}
-      {!relatorioEmitido && (
+      {/* ── BARRA FLUTUANTE INFERIOR FIXA (Apenas para Usuários Autorizados) ── */}
+      {!relatorioEmitido && statusAcesso === 'autorizado' && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/85 backdrop-blur-2xl border-t border-slate-800/80 px-4 py-3 shadow-2xl shadow-black print:hidden">
           <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
             
