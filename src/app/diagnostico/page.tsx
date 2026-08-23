@@ -14,8 +14,8 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.7 · 23/08/2026 - 11:50';
-const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
+const VERSION = 'v2.8 · 23/08/2026 - 12:00';
+const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/o6JY2Vjvtc';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
 const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAI.me)';

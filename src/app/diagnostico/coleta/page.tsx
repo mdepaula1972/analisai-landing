@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.7 · 23/08/2026 - 11:50';
+const VERSION = 'v2.8 · 23/08/2026 - 12:00';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
