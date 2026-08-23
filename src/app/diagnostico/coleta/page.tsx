@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.7 · 23/08/2026 - 13:55';
+const VERSION = 'v3.8 · 23/08/2026 - 14:00';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
@@ -396,21 +396,21 @@ function ColetaVoiceContent() {
       <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl px-4 sm:px-8 py-3.5 shadow-lg shadow-black/20 print:hidden">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
 
-          {/* Logo com presença e autoridade */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="p-1 rounded-xl bg-slate-900 border border-slate-800 group-hover:border-amber-500/40 transition-colors shadow-md">
+          {/* Logo com presença dominante ampliado 3x */}
+          <Link href="/" className="flex items-center gap-3.5 group">
+            <div className="p-1.5 rounded-2xl bg-slate-900 border border-slate-800 group-hover:border-amber-500/40 transition-colors shadow-md">
               <Image
                 src="/logo.png"
                 alt="Logo AnalisAI.me"
-                width={36}
-                height={36}
-                className="w-8 h-8 sm:w-9 sm:h-9 object-contain"
+                width={180}
+                height={50}
+                className="h-10 sm:h-12 w-auto object-contain"
                 priority
               />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-base sm:text-lg font-black text-white tracking-tight group-hover:text-amber-400 transition-colors">
+                <span className="text-sm sm:text-base font-black text-white tracking-tight group-hover:text-amber-400 transition-colors">
                   AnalisAI<span className="text-amber-400">.me</span>
                 </span>
                 <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">
@@ -418,7 +418,7 @@ function ColetaVoiceContent() {
                 </span>
               </div>
               <span className="text-[10px] text-slate-400 block -mt-0.5">
-                Inteligência Financeira com Emissão no Ato
+                Sala de Inteligência Financeira
               </span>
             </div>
           </Link>
@@ -862,23 +862,23 @@ function ColetaVoiceContent() {
           /* ── VISUALIZADOR OFICIAL DO RELATÓRIO EXECUTIVO (PRONTO PARA PDF / IMPRESSÃO) ── */
           <div className="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl text-left space-y-8 animate-fadeIn print:border-none print:shadow-none print:p-0 print:bg-white print:text-slate-900">
             
-            {/* Cabeçalho do Relatório com Logo AnalisAI.me */}
+            {/* Cabeçalho do Relatório com Logo AnalisAI.me Dominante */}
             <div className="border-b border-slate-800 print:border-slate-300 pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-2xl bg-slate-950 border border-slate-800 print:border-slate-300">
+              <div className="flex items-center gap-4">
+                <div className="p-2 sm:p-3 rounded-2xl bg-slate-950 border border-slate-800 print:border-slate-300 shadow-lg">
                   <Image
                     src="/logo.png"
                     alt="Logo AnalisAI.me"
-                    width={48}
-                    height={48}
-                    className="w-10 h-10 object-contain"
+                    width={240}
+                    height={66}
+                    className="h-12 sm:h-16 w-auto object-contain"
                   />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-white print:text-slate-950">
+                  <h2 className="text-xl sm:text-2xl font-black text-white print:text-slate-950">
                     AnalisAI<span className="text-amber-400">.me</span>
                   </h2>
-                  <p className="text-xs text-slate-400 print:text-slate-600">
+                  <p className="text-xs sm:text-sm text-slate-400 print:text-slate-600">
                     Autoridade Emissora de Diagnósticos Empresariais
                   </p>
                 </div>

@@ -15,7 +15,7 @@ export default function PrivacidadePage() {
           <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-emerald-400 transition-colors text-sm font-medium">
             <ArrowLeft className="w-4 h-4" /> Voltar ao Início
           </Link>
-          <Image src="/logo.png" alt="AnalisAI.me" width={240} height={66} className="h-10 w-auto object-contain" />
+          <Image src="/logo.png" alt="AnalisAI.me" width={320} height={90} className="h-12 sm:h-16 w-auto object-contain" />
           <a
             href="/docs/Politica_de_Privacidade_AnalisAi.docx"
             download

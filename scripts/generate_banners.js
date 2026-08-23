@@ -80,20 +80,23 @@ function getBannerSVG(option) {
     <line x1="900" y1="0" x2="900" y2="1080" />
   </g>
 
-  <!-- ── CABEÇALHO COM LOGOTIPO OFICIAL EM DESTAQUE ── -->
-  <g transform="translate(540, 70)" text-anchor="middle" class="font-sans">
+  <!-- ── CABEÇALHO COM LOGOTIPO OFICIAL EM DESTAQUE (AMPLIADO 3X) ── -->
+  <g transform="translate(540, 78)" text-anchor="middle" class="font-sans">
     
-    <!-- Pílula Container com Borda Dourada -->
-    <rect x="-180" y="-30" width="360" height="60" rx="30" fill="#0f1219" stroke="rgba(245, 158, 11, 0.4)" stroke-width="1.5" filter="url(#cardShadow)" />
+    <!-- Pílula Container Imponente -->
+    <rect x="-260" y="-45" width="520" height="90" rx="45" fill="#0b0e14" stroke="rgba(245, 158, 11, 0.45)" stroke-width="2" filter="url(#cardShadow)" />
     
-    <!-- Logotipo Oficial Incorporado -->
-    <image href="${logoBase64}" x="-160" y="-22" width="170" height="44" preserveAspectRatio="xMidYMid meet" />
+    <!-- Logotipo Oficial Incorporado 3x Maior -->
+    <image href="${logoBase64}" x="-235" y="-34" width="280" height="68" preserveAspectRatio="xMidYMid meet" />
     
     <!-- Linha Divisória Sutil -->
-    <line x1="25" y1="-14" x2="25" y2="14" stroke="#334155" stroke-width="1.5" />
+    <line x1="60" y1="-25" x2="60" y2="25" stroke="#334155" stroke-width="2" />
 
-    <!-- Tag Diagnóstico -->
-    <text x="100" y="5" fill="#f59e0b" font-size="12" font-weight="900" letter-spacing="1.5">DIAGNÓSTICO</text>
+    <!-- Tag Diagnóstico Oficial -->
+    <g transform="translate(150, 0)">
+      <rect x="-70" y="-16" width="140" height="32" rx="16" fill="rgba(245, 158, 11, 0.15)" stroke="rgba(245, 158, 11, 0.3)" />
+      <text y="5" fill="#f59e0b" font-size="13" font-weight="900" letter-spacing="1.5">DIAGNÓSTICO</text>
+    </g>
   </g>
 
   <!-- ── HEADLINE PRINCIPAL (PERFEITAMENTE ESPAÇADA) ── -->

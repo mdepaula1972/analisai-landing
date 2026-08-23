@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.7 · 23/08/2026 - 13:55';
+const VERSION = 'v3.8 · 23/08/2026 - 14:00';
 const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
@@ -245,25 +245,25 @@ export default function DiagnosticoPage() {
         Diagnóstico {VERSION}
       </div>
 
-      {/* ── NAVBAR COM LOGO EM DESTAQUE ── */}
-      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl shadow-black/40' : 'bg-slate-950/60 backdrop-blur-sm'}`}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
+      {/* ── NAVBAR COM LOGO EM DESTAQUE DOMINANTE ── */}
+      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl shadow-black/40' : 'bg-slate-950/70 backdrop-blur-md'}`}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-24 sm:h-28 flex items-center justify-between">
 
-          {/* Logo Principal com Presença Forte */}
-          <Link href="/" className="flex items-center gap-3.5 group">
-            <div className="p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 group-hover:border-amber-500/50 shadow-xl shadow-black/30 transition-all">
+          {/* Logo Principal 3x Maior com Presença Forte */}
+          <Link href="/" className="flex items-center gap-4 group">
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 group-hover:border-amber-500/50 shadow-2xl shadow-black/40 transition-all">
               <Image
                 src="/logo.png"
                 alt="AnalisAI.me — Inteligência Financeira"
-                width={220}
-                height={60}
-                className="h-11 sm:h-13 w-auto object-contain"
+                width={360}
+                height={100}
+                className="h-14 sm:h-18 lg:h-20 w-auto object-contain transition-transform group-hover:scale-105"
                 priority
               />
             </div>
-            <div className="hidden sm:flex flex-col">
-              <span className="text-sm font-black tracking-wide text-white">AnalisAI.me</span>
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">
+            <div className="hidden md:flex flex-col">
+              <span className="text-base font-black tracking-wide text-white">AnalisAI.me</span>
+              <span className="text-xs font-extrabold uppercase tracking-widest text-amber-400">
                 Diagnóstico Financeiro
               </span>
             </div>
@@ -272,7 +272,7 @@ export default function DiagnosticoPage() {
           <button
             onClick={scrollToPagamento}
             id="nav-cta-diagnostico"
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-3 rounded-xl transition-all hover:scale-[1.03] shadow-xl shadow-amber-500/25 text-sm sm:text-base flex items-center gap-2 cursor-pointer"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl transition-all hover:scale-[1.03] shadow-xl shadow-amber-500/25 text-sm sm:text-base flex items-center gap-2 cursor-pointer"
           >
             <Zap className="w-4 h-4 fill-slate-950" />
             Quero por R$ 197
@@ -652,7 +652,7 @@ export default function DiagnosticoPage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 border-t border-slate-800/40">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 text-xs">
             <div className="flex items-center gap-2">
-              <Image src="/logo.png" alt="AnalisAI.me" width={100} height={28} className="h-6 w-auto opacity-60" />
+              <Image src="/logo.png" alt="AnalisAI.me" width={240} height={66} className="h-10 sm:h-12 w-auto opacity-90" />
             </div>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <Link href="/" className="hover:text-slate-300 transition-colors flex items-center gap-1">

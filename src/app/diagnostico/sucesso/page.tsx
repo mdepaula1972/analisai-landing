@@ -7,7 +7,7 @@ import { CheckCircle2, Clock, Mail, ArrowRight, Shield, MessageCircle, Sparkles 
 import { useSearchParams } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.7 · 23/08/2026 - 13:55';
+const VERSION = 'v3.8 · 23/08/2026 - 14:00';
 const PHONE_NUMBER = '551331500987';
 const WA_SUCESSO_LINK = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Acabei de contratar o Diagnóstico Financeiro (R$ 197) e gostaria de confirmar meus dados e receber o formulário.')}`;
 
@@ -56,12 +56,12 @@ function SucessoContent() {
 
       <div className={`max-w-lg w-full text-center transition-all duration-700 delay-200 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
 
-        {/* Logo de Destaque */}
-        <Link href="/" className="inline-flex items-center gap-3 p-2 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/50 shadow-xl mb-6 transition-all group">
-          <Image src="/logo.png" alt="AnalisAI.me" width={180} height={50} className="h-10 sm:h-12 w-auto mx-auto object-contain" />
-          <div className="text-left hidden sm:block pr-2">
-            <span className="text-xs font-black text-white block">AnalisAI.me</span>
-            <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">Inteligência Financeira</span>
+        {/* Logo de Destaque Dominante */}
+        <Link href="/" className="inline-flex items-center gap-4 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 shadow-2xl mb-6 transition-all group">
+          <Image src="/logo.png" alt="AnalisAI.me" width={320} height={90} className="h-14 sm:h-18 w-auto mx-auto object-contain transition-transform group-hover:scale-105" />
+          <div className="text-left hidden sm:block pr-3">
+            <span className="text-sm font-black text-white block">AnalisAI.me</span>
+            <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-widest">Inteligência Financeira</span>
           </div>
         </Link>
 
