@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.0 · 23/08/2026 - 12:10';
+const VERSION = 'v3.1 · 23/08/2026 - 12:30';
 const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';

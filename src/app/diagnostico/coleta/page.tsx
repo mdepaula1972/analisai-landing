@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.0 · 23/08/2026 - 12:10';
+const VERSION = 'v3.1 · 23/08/2026 - 12:30';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
@@ -843,34 +843,196 @@ function ColetaVoiceContent() {
               </div>
             </div>
 
-            {/* DRE Gerencial Sintética */}
+            {/* ── DRE GERENCIAL SINTÉTICA OFICIAL ── */}
             <div className="space-y-3">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 print:text-slate-900 border-b border-slate-800 print:border-slate-200 pb-1">
-                📊 Raio-X dos Números Coletados
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 print:border-slate-200">
-                  <span className="text-slate-500 block">Faturamento Médio:</span>
-                  <span className="text-emerald-400 print:text-emerald-700 font-bold text-sm">
-                    R$ {faturamento.toLocaleString('pt-BR')}
+              <div className="flex items-center justify-between border-b border-slate-800 print:border-slate-300 pb-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-amber-400 print:text-slate-900 flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4" /> DRE Gerencial Sintética (Demonstrativo de Resultado)
+                </h4>
+                <span className="text-[10px] text-slate-400 print:text-slate-600 font-mono">
+                  Base Mensal Estimada
+                </span>
+              </div>
+
+              {/* Tabela Estruturada de DRE */}
+              <div className="overflow-x-auto rounded-2xl border border-slate-800 print:border-slate-300 bg-slate-950/60 print:bg-white text-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 print:border-slate-300 bg-slate-900/80 print:bg-slate-100 text-[11px] font-bold text-slate-400 print:text-slate-700">
+                      <th className="py-2.5 px-3 sm:px-4">Estrutura de Contas</th>
+                      <th className="py-2.5 px-3 sm:px-4 text-right">Valor Mensal (R$)</th>
+                      <th className="py-2.5 px-3 sm:px-4 text-right">% s/ Faturamento</th>
+                      <th className="py-2.5 px-3 sm:px-4 text-left hidden sm:table-cell">Diagnóstico / Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 print:divide-slate-200">
+                    
+                    {/* Receita Bruta */}
+                    <tr className="font-bold text-slate-100 print:text-slate-900 bg-emerald-500/5">
+                      <td className="py-2.5 px-3 sm:px-4 text-emerald-400 print:text-emerald-800 flex items-center gap-1">
+                        (+) Faturamento Bruto Médio
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right text-emerald-400 print:text-emerald-800">
+                        R$ {faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right text-slate-300 print:text-slate-700 font-mono">
+                        100,0%
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Base operacional total
+                      </td>
+                    </tr>
+
+                    {/* CMV / Variáveis */}
+                    <tr className="text-slate-300 print:text-slate-800">
+                      <td className="py-2.5 px-3 sm:px-4 text-amber-400/90 print:text-amber-800 pl-6 sm:pl-8">
+                        (-) Custos com Mercadorias / Insumos (CMV)
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right text-amber-400/90 print:text-amber-800">
+                        - R$ {totalCustosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? ((totalCustosVariaveis / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        {(totalCustosVariaveis / (faturamento || 1)) > 0.45 ? '⚠️ Acima da média' : '✅ Nível controlado'}
+                      </td>
+                    </tr>
+
+                    {/* Margem de Contribuição */}
+                    <tr className="font-extrabold text-slate-100 print:text-slate-900 bg-slate-900/60 print:bg-slate-50 border-t border-slate-700/60">
+                      <td className="py-2.5 px-3 sm:px-4 text-cyan-400 print:text-cyan-800">
+                        (=) MARGEM DE CONTRIBUIÇÃO BRUTA
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right text-cyan-400 print:text-cyan-800">
+                        R$ {(faturamento - totalCustosVariaveis).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? (((faturamento - totalCustosVariaveis) / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Recurso para pagar fixos e lucro
+                      </td>
+                    </tr>
+
+                    {/* Folha */}
+                    <tr className="text-slate-400 print:text-slate-700">
+                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
+                        (-) Folha de Pagamento & Encargos
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
+                        - R$ {(resumo.folha_funcionarios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? (((resumo.folha_funcionarios || 0) / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Equipe operacional
+                      </td>
+                    </tr>
+
+                    {/* Aluguel */}
+                    <tr className="text-slate-400 print:text-slate-700">
+                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
+                        (-) Aluguel, IPTU & Ocupação
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
+                        - R$ {(resumo.aluguel_condominio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? (((resumo.aluguel_condominio || 0) / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Custo de ponto físico
+                      </td>
+                    </tr>
+
+                    {/* Pró-labore */}
+                    <tr className="text-slate-400 print:text-slate-700">
+                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
+                        (-) Pró-labore dos Sócios (Salário)
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
+                        - R$ {(resumo.pro_labore_socios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? (((resumo.pro_labore_socios || 0) / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Remuneração da gestão
+                      </td>
+                    </tr>
+
+                    {/* Outras Fixas */}
+                    <tr className="text-slate-400 print:text-slate-700">
+                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
+                        (-) Utilidades, Softwares & Outras Fixas
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
+                        - R$ {((resumo.utilidades_energia_internet || 0) + (resumo.sistemas_ferramentas || 0) + (resumo.outras_despesas_fixas || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? ((((resumo.utilidades_energia_internet || 0) + (resumo.sistemas_ferramentas || 0) + (resumo.outras_despesas_fixas || 0)) / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Infraestrutura geral
+                      </td>
+                    </tr>
+
+                    {/* Total Despesas Fixas */}
+                    <tr className="font-bold text-slate-200 print:text-slate-900 bg-slate-950/40">
+                      <td className="py-2.5 px-3 sm:px-4 text-rose-400 print:text-rose-800">
+                        (=) TOTAL DE DESPESAS FIXAS
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right text-rose-400 print:text-rose-800">
+                        - R$ {totalDespesasFixas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? ((totalDespesasFixas / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
+                        Peso dos custos de estrutura
+                      </td>
+                    </tr>
+
+                    {/* Resultado Operacional Líquido */}
+                    <tr className={`font-black text-sm ${sobraOperacional >= 0 ? 'bg-emerald-500/10 text-emerald-400 print:text-emerald-800' : 'bg-rose-500/10 text-rose-400 print:text-rose-800'}`}>
+                      <td className="py-3 px-3 sm:px-4">
+                        (=) RESULTADO OPERACIONAL LÍQUIDO (SOBRA)
+                      </td>
+                      <td className="py-3 px-3 sm:px-4 text-right">
+                        R$ {sobraOperacional.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-3 sm:px-4 text-right font-mono">
+                        {faturamento > 0 ? ((sobraOperacional / faturamento) * 100).toFixed(1) : '0.0'}%
+                      </td>
+                      <td className="py-3 px-3 sm:px-4 hidden sm:table-cell text-xs">
+                        {sobraOperacional >= 0 ? '✅ Operação Lucrativa' : '🚨 Sangria Operacional'}
+                      </td>
+                    </tr>
+
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Box Ponto de Equilíbrio */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 print:border-slate-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="font-bold text-amber-400 print:text-amber-800 block text-xs">
+                    🎯 Ponto de Equilíbrio Operacional Estimado:
+                  </span>
+                  <span className="text-slate-400 print:text-slate-600 text-[11px]">
+                    Faturamento mínimo necessário por mês apenas para cobrir todos os custos e não ter prejuízo.
                   </span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 print:border-slate-200">
-                  <span className="text-slate-500 block">Custos Variáveis:</span>
-                  <span className="text-amber-400 print:text-amber-700 font-bold text-sm">
-                    R$ {totalCustosVariaveis.toLocaleString('pt-BR')}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 print:border-slate-200">
-                  <span className="text-slate-500 block">Despesas Fixas:</span>
-                  <span className="text-rose-400 print:text-rose-700 font-bold text-sm">
-                    R$ {totalDespesasFixas.toLocaleString('pt-BR')}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 print:border-slate-200">
-                  <span className="text-slate-500 block">Sobra Operacional:</span>
-                  <span className={`font-black text-sm ${sobraOperacional >= 0 ? 'text-emerald-400 print:text-emerald-700' : 'text-rose-400 print:text-rose-700'}`}>
-                    R$ {sobraOperacional.toLocaleString('pt-BR')}
+                <div className="text-right">
+                  <span className="text-base font-black text-white print:text-slate-950">
+                    R$ {(() => {
+                      const mc = faturamento - totalCustosVariaveis;
+                      const percMC = faturamento > 0 ? (mc / faturamento) : 0;
+                      const pe = percMC > 0 ? (totalDespesasFixas / percMC) : 0;
+                      return pe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    })()}
                   </span>
                 </div>
               </div>
