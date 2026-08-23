@@ -57,7 +57,7 @@ interface RelatorioData {
 }
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.4 · 23/08/2026 - 13:35';
+const VERSION = 'v3.5 · 23/08/2026 - 13:45';
 const WHATSAPP_OFICIAL = '551331500987';
 
 function ColetaVoiceContent() {
@@ -1191,33 +1191,33 @@ function ColetaVoiceContent() {
                 <div className="p-3.5 rounded-2xl bg-slate-900 border border-emerald-500/30 print:border-slate-200 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase text-emerald-400">1º Checkpoint</span>
-                    <span className="text-[10px] text-slate-500 font-mono">30 Dias</span>
+                    <span className="text-[10px] text-slate-400 font-mono">30d (+5d úteis)</span>
                   </div>
                   <h6 className="font-bold text-white print:text-slate-900">Corte de Desperdícios</h6>
                   <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
-                    Refaça a entrevista por voz para checar a primeira redução de custos fixos e CMV.
+                    Disponível no 30º dia por até 5 dias úteis para checar a primeira redução de custos fixos e CMV.
                   </p>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-slate-900 border border-amber-500/30 print:border-slate-200 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase text-amber-400">2º Checkpoint</span>
-                    <span className="text-[10px] text-slate-500 font-mono">60 Dias</span>
+                    <span className="text-[10px] text-slate-400 font-mono">60d (+5d úteis)</span>
                   </div>
                   <h6 className="font-bold text-white print:text-slate-900">Recuperação de Margem</h6>
                   <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
-                    Recalcule sua DRE e avalie o impacto do novo mix de vendas e precificação.
+                    Disponível no 60º dia por até 5 dias úteis para avaliar o novo mix de vendas e precificação.
                   </p>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-slate-900 border border-cyan-500/30 print:border-slate-200 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase text-cyan-400">3º Checkpoint Final</span>
-                    <span className="text-[10px] text-slate-500 font-mono">90 Dias</span>
+                    <span className="text-[10px] text-slate-400 font-mono">90d (+5d úteis)</span>
                   </div>
                   <h6 className="font-bold text-white print:text-slate-900">Consolidação do Lucro</h6>
                   <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
-                    Validação final do novo ponto de equilíbrio e estabilidade do fluxo de caixa.
+                    Disponível no 90º dia por até 5 dias úteis para consolidação final do ponto de equilíbrio.
                   </p>
                 </div>
               </div>

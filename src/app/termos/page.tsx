@@ -61,9 +61,20 @@ export default function TermosPage() {
           </div>
 
           <h3 className="text-base font-bold text-amber-400">1. Objeto</h3>
-          <p>A Solucione Assessoria Virtual (AnalisAI.me) presta serviços de terceirização financeira (BPO Financeiro), que incluem organização de contas a pagar/receber, conciliação bancária, DRE gerencial e relatórios executivos. Adicionalmente, disponibilizará em breve a plataforma AnalisAI de inteligência artificial preditiva.</p>
+          <p>A Solucione Assessoria Virtual (AnalisAI.me) presta serviços de terceirização financeira (BPO Financeiro), que incluem organização de contas a pagar/receber, conciliação bancária, DRE gerencial e relatórios executivos. Adicionalmente, disponibiliza o Diagnóstico Financeiro Express por Inteligência Artificial e a plataforma AnalisAI de inteligência preditiva.</p>
 
-          <h3 className="text-base font-bold text-amber-400 pt-2">2. Natureza dos Serviços — Limites Operacionais</h3>
+          <h3 className="text-base font-bold text-amber-400 pt-2">2. Regras Específicas do Diagnóstico Financeiro &amp; Ciclo de 3 Reanálises</h3>
+          <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-5 my-2 text-slate-300 space-y-3 text-xs leading-relaxed">
+            <p className="font-bold text-amber-400 text-sm">Regulamento do Ciclo de Acompanhamento de 90 Dias:</p>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong>Direito a 3 Reanálises Programadas:</strong> A contratação do Diagnóstico Financeiro confere ao Usuário a emissão do Relatório Inicial no ato e o direito a 3 (três) reanálises/reavaliações programadas nos marcos de <strong>30, 60 e 90 dias corridos</strong> a partir da data de confirmação do pagamento.</li>
+              <li><strong>Janela de Tolerância de 5 Dias Úteis:</strong> Cada reanálise fica disponível para execução a partir da data exata de seu respectivo marco (30, 60 ou 90 dias) e deverá ser realizada pelo Usuário no prazo limite improrrogável de até <strong>5 (cinco) dias úteis subsequentes</strong> à abertura da janela.</li>
+              <li><strong>Perda do Direito da Etapa (Sem Cumulação):</strong> Caso o Usuário não realize a reanálise dentro da janela de 5 dias úteis do ciclo vigente, <strong>o direito àquela reanálise específica precluirá</strong>, ficando o Usuário autorizado a realizar apenas a reanálise do ciclo subsequente quando de sua abertura (aos 60 ou 90 dias), sendo vedada a cumulação ou compensação retroativa.</li>
+              <li><strong>Validade Máxima:</strong> O ciclo completo de acompanhamento e o acesso à sala de reavaliação expiram definitivamente após <strong>90 dias corridos (+ 5 dias úteis do último ciclo)</strong> da compra.</li>
+            </ul>
+          </div>
+
+          <h3 className="text-base font-bold text-amber-400 pt-2">3. Natureza dos Serviços — Limites Operacionais</h3>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 my-2 text-slate-300 space-y-2 text-xs">
             <p className="font-bold text-white">Regras Claras de Atuação:</p>
             <ul className="list-disc pl-5 space-y-1">
@@ -71,17 +82,17 @@ export default function TermosPage() {
               <li>A Contratada <strong>NÃO realiza pagamentos, PIX ou qualquer movimentação bancária</strong> em nome do Cliente;</li>
               <li>A Contratada <strong>NÃO solicita senhas de acesso</strong> ao internet banking ou aplicativos do Cliente;</li>
               <li>Toda efetivação financeira é feita exclusivamente pelo Cliente ou por pessoa autorizada por ele;</li>
-              <li>Os serviços de BPO não substituem os serviços de contabilidade fiscal/tributária.</li>
+              <li>Os serviços de BPO e Diagnóstico não substituem os serviços de contabilidade fiscal/tributária.</li>
             </ul>
           </div>
 
-          <h3 className="text-base font-bold text-amber-400 pt-2">3. Responsabilidades do Cliente</h3>
+          <h3 className="text-base font-bold text-amber-400 pt-2">4. Responsabilidades do Cliente</h3>
           <p>O Cliente é responsável por fornecer com veracidade e tempestividade os extratos e comprovantes necessários, bem como efetivar pessoalmente os pagamentos agendados e validados.</p>
 
-          <h3 className="text-base font-bold text-amber-400 pt-2">4. Propriedade Intelectual</h3>
+          <h3 className="text-base font-bold text-amber-400 pt-2">5. Propriedade Intelectual</h3>
           <p>Todos os direitos sobre a marca AnalisAI.me, marca Solucione Assessoria Virtual, metodologias, softwares e inteligência preditiva pertencem exclusivamente à Contratada.</p>
 
-          <h3 className="text-base font-bold text-amber-400 pt-2">5. Foro</h3>
+          <h3 className="text-base font-bold text-amber-400 pt-2">6. Foro</h3>
           <p>Fica eleito o foro da comarca da sede da Contratada para dirimir quaisquer controvérsias oriundas destes Termos.</p>
 
         </article>
