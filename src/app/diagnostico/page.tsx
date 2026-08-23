@@ -14,7 +14,8 @@ import {
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v2.6 · 23/08/2026 - 11:30';
+const VERSION = 'v2.7 · 23/08/2026 - 11:50';
+const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
 const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
 const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
 const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAI.me)';
@@ -544,9 +545,26 @@ export default function DiagnosticoPage() {
               <p className="text-amber-400 text-sm font-semibold">Pagamento único · Sem assinatura ou mensalidade</p>
             </div>
 
+            {/* Botão de Destaque InfinitePay */}
+            <div className="p-5 sm:p-6 bg-emerald-500/10 border-b border-emerald-500/20 text-center space-y-3">
+              <a
+                href={CHECKOUT_INFINITEPAY}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black py-4 px-6 rounded-2xl shadow-xl shadow-emerald-500/20 text-base sm:text-lg transition-all hover:scale-[1.02]"
+              >
+                <Zap className="w-5 h-5 fill-current" />
+                Pagar com InfinitePay (PIX & Cartão em até 12x)
+                <ArrowRight className="w-5 h-5" />
+              </a>
+              <p className="text-[11px] text-emerald-300/80">
+                🔒 Checkout 100% seguro pela InfinitePay com liberação instantânea no ato.
+              </p>
+            </div>
+
             {/* Alternador de Método de Pagamento */}
             <div className="p-4 sm:p-6 bg-slate-950/60 border-b border-slate-800">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 text-center">Escolha como prefere pagar:</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 text-center">Ou pague diretamente por chave PIX:</p>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setMetodoPagamento('pix')}
@@ -555,8 +573,8 @@ export default function DiagnosticoPage() {
                       : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-white'
                     }`}
                 >
-                  <Zap className="w-4 h-4 fill-current" />
-                  PIX Instantâneo
+                  <QrCode className="w-4 h-4" />
+                  Chave PIX CNPJ
                 </button>
 
                 <button
