@@ -9,16 +9,13 @@ import {
   AlertTriangle, TrendingDown, HelpCircle,
   ClipboardList, BarChart3, Mail, Lock,
   ChevronRight, Sparkles, Users, DollarSign,
-  Copy, Check, QrCode, CreditCard, Send,
+  CreditCard, Calculator, TrendingUp
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.8 · 23/08/2026 - 14:00';
+const VERSION = 'v4.0 · Diagnóstico Oficial';
 const CHECKOUT_INFINITEPAY = 'https://checkout.infinitepay.io/solucione-0s1/IEyW4Ufczq';
-const CHAVE_PIX_CNPJ = '57.740.336/0001-08';
-const RAZAO_SOCIAL = 'Consultoria MA de Paula LTDA';
-const NOME_FANTASIA = 'Solucione Assessoria Virtual (AnalisAI.me)';
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -58,24 +55,39 @@ function FaqItem({ question, answer }: { question: string; answer: React.ReactNo
 }
 
 export default function DiagnosticoPage() {
-  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [metodoPagamento, setMetodoPagamento] = useState<'pix' | 'cartao'>('pix');
 
-  // Formulário Pix
-  const [pixNome, setPixNome] = useState('');
-  const [pixEmail, setPixEmail] = useState('');
-  const [pixWhatsapp, setPixWhatsapp] = useState('');
-  const [pixLoading, setPixLoading] = useState(false);
-  const [pixError, setPixError] = useState('');
+  // Mini-Calculadora Ilustrativa (Client-Side)
+  const [calcFaturamento, setCalcFaturamento] = useState<string>('');
+  const [calcCustosFixos, setCalcCustosFixos] = useState<string>('');
 
-  // Cartão Stripe
-  const [stripeLoading, setStripeLoading] = useState(false);
+  const numFaturamento = parseFloat(calcFaturamento.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+  const numCustosFixos = parseFloat(calcCustosFixos.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+  const margemCalculada = numFaturamento > 0 ? ((numFaturamento - numCustosFixos) / numFaturamento) * 100 : null;
+  const sobraCalculada = numFaturamento > 0 ? numFaturamento - numCustosFixos : null;
 
+  // Evento de rastreamento: ViewContent (Meta Pixel) e view_diagnostico_page (GA4)
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', h);
+
+    if (typeof window !== 'undefined') {
+      if ((window as any).fbq) {
+        (window as any).fbq('track', 'ViewContent', {
+          content_name: 'Página Diagnóstico Financeiro',
+          value: 197.0,
+          currency: 'BRL',
+        });
+      }
+      if ((window as any).gtag) {
+        (window as any).gtag('event', 'view_diagnostico_page', {
+          page_title: 'Diagnostico Financeiro',
+          value: 197.0,
+          currency: 'BRL',
+        });
+      }
+    }
+
     return () => window.removeEventListener('scroll', h);
   }, []);
 
@@ -84,76 +96,34 @@ export default function DiagnosticoPage() {
   const [comoRef, comoInView] = useInView();
   const [relatorioRef, relatorioInView] = useInView();
   const [autorRef, autorInView] = useInView();
+  const [calculadoraRef, calculadoraInView] = useInView();
   const [precoRef, precoInView] = useInView();
   const [faqRef, faqInView] = useInView();
-
-  function handleCopiarPix() {
-    navigator.clipboard.writeText(CHAVE_PIX_CNPJ.replace(/[^\d]/g, '') || CHAVE_PIX_CNPJ);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
-  }
-
-  async function handleConfirmarPix(e: React.FormEvent) {
-    e.preventDefault();
-    if (!pixNome.trim() || !pixEmail.trim() || !pixWhatsapp.trim()) {
-      setPixError('Por favor, preencha todos os campos.');
-      return;
-    }
-
-    setPixLoading(true);
-    setPixError('');
-
-    try {
-      const res = await fetch('/api/diagnostico/pix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: pixNome,
-          email: pixEmail,
-          whatsapp: pixWhatsapp,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const queryParams = new URLSearchParams({
-          pedido_id: data.pedido_id || '',
-          nome: pixNome,
-          email: pixEmail,
-          whatsapp: pixWhatsapp,
-        });
-        router.push(`/diagnostico/sucesso?${queryParams.toString()}`);
-      } else {
-        setPixError(data.error || 'Erro ao registrar pedido.');
-        setPixLoading(false);
-      }
-    } catch {
-      setPixError('Erro de conexão. Tente novamente.');
-      setPixLoading(false);
-    }
-  }
-
-  async function handleStripeCheckout() {
-    if (stripeLoading) return;
-    setStripeLoading(true);
-    try {
-      const res = await fetch('/api/stripe/checkout', { method: 'POST' });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        alert('Erro ao iniciar pagamento no Stripe. Tente novamente.');
-        setStripeLoading(false);
-      }
-    } catch {
-      alert('Erro de conexão. Tente novamente.');
-      setStripeLoading(false);
-    }
-  }
 
   function scrollToPagamento() {
     const el = document.getElementById('secao-pagamento');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Evento de rastreamento no clique do botão InfinitePay
+  function handleInfinitePayClick() {
+    if (typeof window !== 'undefined') {
+      if ((window as any).fbq) {
+        (window as any).fbq('track', 'InitiateCheckout', {
+          content_name: 'Diagnóstico Financeiro 90 Dias',
+          value: 197.0,
+          currency: 'BRL',
+        });
+      }
+      if ((window as any).gtag) {
+        (window as any).gtag('event', 'click_pagamento', {
+          event_category: 'checkout',
+          event_label: 'InfinitePay',
+          value: 197.0,
+          currency: 'BRL',
+        });
+      }
+    }
   }
 
   const problemas = [
@@ -179,36 +149,36 @@ export default function DiagnosticoPage() {
     {
       num: '1',
       icon: <ClipboardList className="w-8 h-8 text-amber-400" />,
-      titulo: 'Você fala (ou digita)',
-      desc: 'Sem formulários chatos. Você só responde 4 perguntas rápidas por voz para a nossa IA sobre seu negócio.',
+      titulo: 'Você informa os números',
+      desc: 'Sem formulários complexos. Preencha seus números digitando ou ditando por voz na Sala de Coleta.',
     },
     {
       num: '2',
       icon: <BarChart3 className="w-8 h-8 text-amber-400" />,
-      titulo: 'A gente analisa',
-      desc: 'Rodamos seus dados no nosso motor de inteligência financeira e simulamos cenários reais para o seu negócio.',
+      titulo: 'Estruturação e Análise',
+      desc: 'Organizamos seus dados em uma DRE Gerencial clara, analisamos os gargalos e simulamos cenários de melhora.',
     },
     {
       num: '3',
       icon: <Mail className="w-8 h-8 text-amber-400" />,
-      titulo: 'Você recebe',
-      desc: 'Um relatório em PDF, em linguagem simples, com o diagnóstico e recomendações práticas — direto no seu e-mail ou WhatsApp.',
+      titulo: 'Receba seu Relatório',
+      desc: 'Um documento executivo em PDF, em linguagem simples, com recomendações práticas — entregue em até 72h no seu e-mail ou WhatsApp.',
     },
   ];
 
   const itensRelatorio = [
-    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'DRE organizado a partir dos seus dados' },
-    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'Diagnóstico em linguagem simples — onde o dinheiro está vazando' },
-    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: '2 a 3 cenários simulados (ex: "e se eu cortar este custo", "e se eu contratar mais uma pessoa")' },
-    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'Comparação com o padrão esperado para o seu setor' },
-    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'Recomendação de próximo passo concreto' },
-    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'PDF pronto para mostrar a sócio, contador ou banco' },
+    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'DRE Gerencial Sintética organizada a partir dos seus números' },
+    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'Diagnóstico em linguagem simples identificando onde o dinheiro está vazando' },
+    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: '2 a 3 cenários simulados (ex: "e se eu cortar este custo", "e se eu faturar 15% a mais")' },
+    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'Comparação de indicadores com a média esperada para o seu setor' },
+    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'Plano de ação estratégico e recomendações de próximos passos' },
+    { icon: <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />, texto: 'PDF executivo pronto para mostrar a sócio, contador ou banco' },
   ];
 
   const faqs = [
     {
-      question: 'Como funcionam as 3 reanálises nos 30, 60 e 90 dias?',
-      answer: 'Você recebe o Diagnóstico Inicial no ato e ganha acesso a 3 reavaliações programadas aos 30, 60 e 90 dias da contratação. Em cada janela de tempo, você refaz a conversa por voz para a IA recalcular sua DRE e verificar se suas ações deram resultado real. Caso o negócio não evolua, a IA recomenda a consultoria dedicada. O ciclo tem validade de 90 dias.',
+      question: 'Como funcionam as reavaliações nos 30, 60 e 90 dias?',
+      answer: 'Inclui reavaliação do seu progresso aos 30, 60 e 90 dias — você retorna à Sala de Voz, atualiza seus números, e recebe uma nova comparação com o diagnóstico inicial para acompanhar se suas ações aumentaram seu lucro real. O ciclo tem validade de 90 dias.',
     },
     {
       question: 'Preciso ter contador ou sistema de gestão?',
@@ -216,7 +186,7 @@ export default function DiagnosticoPage() {
     },
     {
       question: 'É uma consultoria com reunião?',
-      answer: 'Não. Todo o processo é ágil por voz com Inteligência Artificial — você passa os dados e recebe o relatório em PDF no ato. Caso queira suporte humano ou BPO, pode acionar nossa equipe pelo WhatsApp.',
+      answer: 'Não precisa de call ou reunião. Todo o processo é ágil e sem burocracia: você passa seus números por texto ou áudio, nossa equipe analisa e prepara seu relatório completo com entrega em até 72h.',
     },
     {
       question: 'Meus dados ficam seguros?',
@@ -245,11 +215,9 @@ export default function DiagnosticoPage() {
         Diagnóstico {VERSION}
       </div>
 
-      {/* ── NAVBAR COM LOGO EM DESTAQUE DOMINANTE ── */}
+      {/* ── NAVBAR ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 shadow-2xl shadow-black/40' : 'bg-slate-950/70 backdrop-blur-md'}`}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-24 sm:h-28 flex items-center justify-between">
-
-          {/* Logo Principal 3x Maior com Presença Forte */}
           <Link href="/" className="flex items-center gap-4 group">
             <div className="p-2 sm:p-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 group-hover:border-amber-500/50 shadow-2xl shadow-black/40 transition-all">
               <Image
@@ -293,7 +261,6 @@ export default function DiagnosticoPage() {
           ref={heroRef}
           className={`max-w-4xl mx-auto px-4 sm:px-6 relative z-10 text-center transition-all duration-700 ${heroInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
         >
-          {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider mb-8">
             <Zap className="w-3.5 h-3.5" />
             100% Virtual · Sem Reunião · Sem Assinatura
@@ -309,10 +276,9 @@ export default function DiagnosticoPage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
-            Descubra em 5 minutos por voz com nossa IA e receba no ato seu <strong className="text-white">Relatório Executivo Oficial com DRE Gerencial Sintética</strong> + <span className="text-amber-400 font-bold">Ciclo de 3 Reanálises (30, 60 e 90 dias)</span> para acompanhar se o seu lucro aumentou.
+            Descubra para onde vai cada centavo do seu negócio e receba seu <strong className="text-white">Relatório Executivo Oficial com DRE Gerencial Sintética</strong> revisado e estruturado por nossos especialistas + <span className="text-amber-400 font-bold">Ciclo de 3 Reanálises (30, 60 e 90 dias)</span> para acompanhar se o seu lucro aumentou.
           </p>
 
-          {/* CTA principal */}
           <div className="flex flex-col items-center gap-4">
             <button
               onClick={scrollToPagamento}
@@ -329,10 +295,9 @@ export default function DiagnosticoPage() {
             </p>
           </div>
 
-          {/* Mini trust bar */}
           <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-slate-400 text-xs font-medium">
             {[
-              { icon: <Clock className="w-4 h-4 text-emerald-400" />, label: 'Emissão Imediata no Ato' },
+              { icon: <Clock className="w-4 h-4 text-emerald-400" />, label: 'Entrega em até 72h' },
               { icon: <Shield className="w-4 h-4 text-emerald-400" />, label: '3 Reanálises (30, 60 e 90 dias)' },
               { icon: <Lock className="w-4 h-4 text-emerald-400" />, label: 'Sem acesso à sua conta bancária' },
               { icon: <BarChart3 className="w-4 h-4 text-amber-400" />, label: 'DRE Gerencial Completa' },
@@ -395,7 +360,7 @@ export default function DiagnosticoPage() {
           <div className="text-center mb-14">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider mb-4">
               <Zap className="w-3.5 h-3.5" />
-              Zero fricção humana
+              Zero complicação
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white mb-3">
               Como funciona
@@ -512,14 +477,84 @@ export default function DiagnosticoPage() {
               Gestão financeira, contábil e administrativa aplicados ao seu negócio — sem o custo de contratar isso em tempo integral.
             </p>
           </div>
+        </div>
+      </section>
 
-          <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
-            <p className="text-slate-500 text-sm font-medium">
-              🗣️ Espaço reservado para depoimentos de clientes-piloto
-            </p>
-            <p className="text-slate-600 text-xs mt-1">
-              Prova social pesa mais que anos de experiência sozinha — isso entra aqui quando disponível.
-            </p>
+      {/* ══════════════════════════════════════════════════════════ */}
+      {/* OBJETIVO 4 — MINI-CALCULADORA DE "GOSTINHO" */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      <section className="py-16 relative" aria-label="Simulador de margem">
+        <div
+          ref={calculadoraRef}
+          className={`max-w-2xl mx-auto px-4 sm:px-6 relative z-10 transition-all duration-700 ${calculadoraInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+        >
+          <div className="rounded-3xl border border-amber-500/30 bg-slate-900/95 p-6 sm:p-8 shadow-2xl shadow-amber-500/10 space-y-6">
+            <div className="text-center space-y-2 border-b border-slate-800 pb-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-300 text-xs font-bold uppercase tracking-wider">
+                <Calculator className="w-3.5 h-3.5" />
+                Simulador Rápido
+              </div>
+              <h3 className="text-xl sm:text-2xl font-extrabold text-white">
+                Calcule a prévia da sua margem operacional
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-400">
+                Digite os 2 números abaixo para ver uma estimativa simplificada em tempo real.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-emerald-400 mb-1.5">
+                  Faturamento médio mensal (R$)
+                </label>
+                <input
+                  type="text"
+                  value={calcFaturamento}
+                  onChange={(e) => setCalcFaturamento(e.target.value)}
+                  placeholder="Ex: 25000"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-400 rounded-xl px-3.5 py-3 text-sm text-emerald-300 font-bold outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-rose-400 mb-1.5">
+                  Custos fixos mensais (R$)
+                </label>
+                <input
+                  type="text"
+                  value={calcCustosFixos}
+                  onChange={(e) => setCalcCustosFixos(e.target.value)}
+                  placeholder="Ex: 15000"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-rose-400 rounded-xl px-3.5 py-3 text-sm text-slate-200 font-bold outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Resultado em Tempo Real */}
+            {margemCalculada !== null && (
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/20 text-center space-y-2 animate-fadeIn">
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
+                  Resultado Estimado:
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <span className={`text-2xl sm:text-3xl font-black ${margemCalculada >= 20 ? 'text-emerald-400' : margemCalculada >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+                    {margemCalculada.toFixed(1)}%
+                  </span>
+                  <span className="text-slate-400 text-sm">
+                    (aprox. R$ {sobraCalculada?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de sobra após custos fixos)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 font-medium">
+                  Com esses números, sua margem estimada fica em torno de <strong className="text-amber-400">{margemCalculada.toFixed(1)}%</strong>.
+                </p>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800 text-center">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                💡 <span className="text-slate-300 font-medium">Esse é só um retrato simples.</span> O Diagnóstico Financeiro completo mostra onde esse número pode melhorar — e o que fazer a respeito.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -527,7 +562,7 @@ export default function DiagnosticoPage() {
       {/* ══════════════════════════════════════════════════════════ */}
       {/* SEÇÃO 6 — PREÇO E CAIXA DE PAGAMENTO PIX / CARTÃO */}
       {/* ══════════════════════════════════════════════════════════ */}
-      <section id="secao-pagamento" className="py-20 relative scroll-mt-24" aria-label="Preço e pagamento">
+      <section id="secao-pagamento" className="py-12 relative scroll-mt-24" aria-label="Preço e pagamento">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(245,158,11,0.08),transparent)] pointer-events-none" />
 
         <div
@@ -546,15 +581,15 @@ export default function DiagnosticoPage() {
               <p className="text-amber-400 text-sm font-semibold">Pagamento único · Sem assinatura ou mensalidade</p>
             </div>
 
-            {/* Botão de Destaque InfinitePay Exclusivo */}
+            {/* Benefícios e Botão InfinitePay */}
             <div className="p-6 sm:p-8 space-y-6">
               
               <div className="space-y-3.5 text-left">
                 {[
-                  { icon: <Zap className="w-5 h-5 text-emerald-400" />, title: 'Liberação Imediata no Ato', desc: 'Acesso instantâneo à Sala de Voz logo após a confirmação.' },
+                  { icon: <Zap className="w-5 h-5 text-emerald-400" />, title: 'Acesso à Sala de Coleta', desc: 'Preencha seus dados por texto ou voz logo após a confirmação.' },
                   { icon: <CreditCard className="w-5 h-5 text-amber-400" />, title: 'PIX Instantâneo ou Cartão em até 12x', desc: 'Processamento 100% seguro com criptografia bancária.' },
-                  { icon: <FileText className="w-5 h-5 text-emerald-400" />, title: 'Relatório Executivo Completo em PDF', desc: 'Emissão imediata por IA com DRE Gerencial, Score e Plano de Ação.' },
-                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Ciclo de Acompanhamento de 90 Dias', desc: 'Inclui 3 reanálises completas (aos 30, 60 e 90 dias) com aviso de prazo para checar seu lucro.' },
+                  { icon: <FileText className="w-5 h-5 text-emerald-400" />, title: 'Relatório Executivo Completo em PDF', desc: 'DRE Gerencial Sintética, análise de gargalos, cenários e recomendações práticas.' },
+                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Ciclo de Acompanhamento de 90 Dias', desc: 'Inclui reavaliação do seu progresso aos 30, 60 e 90 dias — você retorna à Sala de Voz, atualiza seus números, e recebe uma nova comparação com o diagnóstico inicial.' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
                     <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 shrink-0">
@@ -572,6 +607,7 @@ export default function DiagnosticoPage() {
                 href={CHECKOUT_INFINITEPAY}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={handleInfinitePayClick}
                 className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-300 hover:from-emerald-400 hover:to-emerald-200 text-slate-950 font-black px-8 py-5 rounded-2xl shadow-2xl shadow-emerald-500/30 transition-all duration-200 hover:scale-[1.02] text-base sm:text-lg group cursor-pointer text-center"
               >
                 <Zap className="w-5 h-5 fill-current shrink-0" />
@@ -588,7 +624,6 @@ export default function DiagnosticoPage() {
 
           </div>
 
-          {/* Nota sobre o AnalisAí */}
           <div className="mt-8 p-5 rounded-2xl border border-slate-800 bg-slate-900/40 text-center">
             <p className="text-slate-400 text-sm leading-relaxed">
               Se depois você quiser acompanhamento contínuo do seu financeiro, existe o{' '}

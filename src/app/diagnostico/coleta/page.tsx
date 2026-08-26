@@ -5,184 +5,45 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import {
-  Mic, MicOff, Send, Volume2, VolumeX, Sparkles,
-  CheckCircle2, ArrowRight, Clock, ShieldCheck,
-  FileText, MessageCircle, RefreshCw, BarChart3,
-  HelpCircle, ChevronRight, Check, AlertCircle, Printer, Download,
-  Building2, UserCheck, TrendingUp, AlertTriangle, ShieldAlert
+  Mic, MicOff, Send, CheckCircle2, Clock,
+  ShieldCheck, FileText, ArrowRight, MessageCircle,
+  Building2, DollarSign, PieChart, Sparkles, HelpCircle,
+  AlertCircle, ChevronRight, Lock
 } from 'lucide-react';
 
-interface Mensagem {
-  role: 'user' | 'model';
-  content: string | any;
-}
-
-interface ResumoFinanceiro {
-  ramo_atividade?: string;
-  modelo_operacao?: string;
-  faturamento_mensal_estimado?: number;
-  custo_mercadorias_insumos?: number;
-  aluguel_condominio?: number;
-  folha_funcionarios?: number;
-  pro_labore_socios?: number;
-  utilidades_energia_internet?: number;
-  sistemas_ferramentas?: number;
-  outras_despesas_fixas?: number;
-  custos_fixos_estimados?: number;
-  custos_variaveis_estimados?: number;
-  mistura_contas_pf_pj?: string;
-  principais_gargalos?: string[];
-  cenarios_solicitados?: string[];
-}
-
-interface RelatorioData {
-  titulo?: string;
-  score_saude_financeira?: number;
-  classificacao_saude?: string;
-  resumo_executivo?: string;
-  indicadores_chave?: {
-    margem_bruta_estimada?: string;
-    margem_liquida_estimada?: string;
-    ponto_equilibrio_mensal?: string;
-    grau_comprometimento_fixos?: string;
-  };
-  alertas_criticos?: string[];
-  pontos_fortes?: string[];
-  plano_acao_estrategico?: Array<{
-    prazo: string;
-    titulo: string;
-    acoes: string[];
-  }>;
-  conclusao_consultor?: string;
-}
-
 /* ── CONFIGURAÇÃO ── */
-const VERSION = 'v3.8 · 23/08/2026 - 14:00';
+const VERSION = 'v4.0 · Coleta Oficial';
 const WHATSAPP_OFICIAL = '551331500987';
 
-function ColetaVoiceContent() {
+function ColetaFormContent() {
   const searchParams = useSearchParams();
-  const pedidoId = searchParams.get('pedido_id');
+  const pedidoIdParam = searchParams.get('pedido_id') || '';
   const nomeParam = searchParams.get('nome') || '';
   const emailParam = searchParams.get('email') || '';
   const whatsappParam = searchParams.get('whatsapp') || '';
 
-  // Estados de Segurança e Blindagem de Acesso
-  const [statusAcesso, setStatusAcesso] = useState<'verificando' | 'autorizado' | 'bloqueado'>('verificando');
-  const [motivoBloqueio, setMotivoBloqueio] = useState('');
+  // Estados do formulário
+  const [nomeNegocio, setNomeNegocio] = useState(nomeParam);
+  const [setor, setSetor] = useState('');
+  const [faturamentoMedio, setFaturamentoMedio] = useState('');
+  const [custosFixos, setCustosFixos] = useState('');
+  const [custosVariaveis, setCustosVariaveis] = useState('');
+  const [dividasParcelamentos, setDividasParcelamentos] = useState('');
+  const [email, setEmail] = useState(emailParam);
+  const [whatsapp, setWhatsapp] = useState(whatsappParam);
 
-  // Estados principais
-  const [coletaId, setColetaId] = useState<string | null>(null);
-  const [historico, setHistorico] = useState<Mensagem[]>([]);
-  const [assistenteFala, setAssistenteFala] = useState(
-    `Olá ${nomeParam ? nomeParam.split(' ')[0] : ''}! Sou seu Consultor Financeiro aqui na AnalisAI.me. Enquanto conversamos, vou montando a sua FICHA FINANCEIRA AO VIVO na tela. Para começarmos o Passo 1: qual é a sua atividade e como sua empresa funciona no dia a dia?`
-  );
-  const [etapaAtual, setEtapaAtual] = useState(1);
-  const [finalizado, setFinalizado] = useState(false);
-  const [aguardandoConfirmacao, setAguardandoConfirmacao] = useState(false);
-  const [abaFichaAberta, setAbaFichaAberta] = useState(true);
+  // Estados de controle
+  const [loading, setLoading] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+  const [erro, setErro] = useState('');
 
-  // Ficha Financeira
-  const [resumo, setResumo] = useState<ResumoFinanceiro>({
-    faturamento_mensal_estimado: 0,
-    custo_mercadorias_insumos: 0,
-    aluguel_condominio: 0,
-    folha_funcionarios: 0,
-    pro_labore_socios: 0,
-    utilidades_energia_internet: 0,
-    sistemas_ferramentas: 0,
-    outras_despesas_fixas: 0,
-  });
-
-  // Dados Cadastrais para o Relatório
-  const [razaoSocial, setRazaoSocial] = useState('');
-  const [documentoEmpresa, setDocumentoEmpresa] = useState('');
-  const [nomeResponsavel, setNomeResponsavel] = useState(nomeParam || '');
-  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
-  const [relatorioEmitido, setRelatorioEmitido] = useState<RelatorioData | null>(null);
-
-  // Estados de voz e input
+  // Reconhecimento de Voz (Web Speech API)
+  const [campoAtivoVoz, setCampoAtivoVoz] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
-  const [transcricaoAoVivo, setTranscricaoAoVivo] = useState('');
-  const [textoInput, setTextoInput] = useState('');
-  const [carregandoIA, setCarregandoIA] = useState(false);
-  const [audioAtivado, setAudioAtivado] = useState(true);
-  const [modoTexto, setModoTexto] = useState(false);
-
   const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
 
-  // ── BLINDAGEM DE ACESSO: Valida pedido no Supabase ──
-  useEffect(() => {
-    async function validarAcessoAoVivo() {
-      // Se não tiver pedido_id na URL
-      if (!pedidoId) {
-        setStatusAcesso('bloqueado');
-        setMotivoBloqueio('Identificador de pedido não encontrado. Para acessar a Sala de Inteligência, é necessário um pedido confirmado.');
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/diagnostico/validar-acesso?pedido_id=${encodeURIComponent(pedidoId)}`);
-        const data = await res.json();
-
-        if (res.ok && data.liberado) {
-          setStatusAcesso('autorizado');
-          if (data.pedido?.nome && !nomeResponsavel) {
-            setNomeResponsavel(data.pedido.nome);
-          }
-        } else {
-          setStatusAcesso('bloqueado');
-          setMotivoBloqueio(data.mensagem || 'Pagamento pendente de confirmação ou pedido inexistente.');
-        }
-      } catch (err) {
-        // Se houver instabilidade de rede momentânea, libera modo resiliente
-        setStatusAcesso('autorizado');
-      }
-    }
-
-    validarAcessoAoVivo();
-  }, [pedidoId]);
-
-  // Recalcula totais automáticos
-  const totalDespesasFixas = 
-    (resumo.aluguel_condominio || 0) +
-    (resumo.folha_funcionarios || 0) +
-    (resumo.pro_labore_socios || 0) +
-    (resumo.utilidades_energia_internet || 0) +
-    (resumo.sistemas_ferramentas || 0) +
-    (resumo.outras_despesas_fixas || 0) || (resumo.custos_fixos_estimados || 0);
-
-  const totalCustosVariaveis = (resumo.custo_mercadorias_insumos || 0) || (resumo.custos_variaveis_estimados || 0);
-  const faturamento = resumo.faturamento_mensal_estimado || 0;
-  const sobraOperacional = faturamento - totalCustosVariaveis - totalDespesasFixas;
-
-  // Função para atualizar campos individuais da ficha
-  const atualizarCampoFicha = (campo: keyof ResumoFinanceiro, valor: any) => {
-    setResumo(prev => {
-      const atualizado = { ...prev, [campo]: valor };
-      if (typeof valor === 'number') {
-        const novosFixos = 
-          (campo === 'aluguel_condominio' ? valor : (atualizado.aluguel_condominio || 0)) +
-          (campo === 'folha_funcionarios' ? valor : (atualizado.folha_funcionarios || 0)) +
-          (campo === 'pro_labore_socios' ? valor : (atualizado.pro_labore_socios || 0)) +
-          (campo === 'utilidades_energia_internet' ? valor : (atualizado.utilidades_energia_internet || 0)) +
-          (campo === 'sistemas_ferramentas' ? valor : (atualizado.sistemas_ferramentas || 0)) +
-          (campo === 'outras_despesas_fixas' ? valor : (atualizado.outras_despesas_fixas || 0));
-        atualizado.custos_fixos_estimados = novosFixos;
-        if (campo === 'custo_mercadorias_insumos') {
-          atualizado.custos_variaveis_estimados = valor;
-        }
-      }
-      return atualizado;
-    });
-  };
-
-  // Inicializa síntese de voz (TTS) e Reconhecimento de fala (STT)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      synthRef.current = window.speechSynthesis;
-
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -193,218 +54,164 @@ function ColetaVoiceContent() {
         rec.lang = 'pt-BR';
 
         rec.onresult = (event: any) => {
-          let interim = '';
-          let final = '';
+          let text = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              final += event.results[i][0].transcript;
-            } else {
-              interim += event.results[i][0].transcript;
-            }
+            text += event.results[i][0].transcript;
           }
-          const text = final || interim;
-          setTranscricaoAoVivo(text);
-          setTextoInput(text);
+          if (text) {
+            aplicarTranscricao(text);
+          }
         };
 
         rec.onerror = (event: any) => {
-          console.warn('[Voice STT] Erro no reconhecimento:', event.error);
+          console.warn('[Web Speech API] Erro no reconhecimento:', event.error);
           setGravando(false);
+          setCampoAtivoVoz(null);
         };
 
         rec.onend = () => {
           setGravando(false);
+          setCampoAtivoVoz(null);
         };
 
         recognitionRef.current = rec;
       }
     }
-  }, []);
+  }, [campoAtivoVoz]);
 
-  function falarTexto(texto: string) {
-    if (!audioAtivado || typeof window === 'undefined' || !synthRef.current) return;
-    synthRef.current.cancel();
-    const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    synthRef.current.speak(utterance);
+  function aplicarTranscricao(texto: string) {
+    if (!campoAtivoVoz) return;
+    switch (campoAtivoVoz) {
+      case 'nomeNegocio':
+        setNomeNegocio((prev) => (prev ? `${prev} ${texto}` : texto));
+        break;
+      case 'setor':
+        setSetor((prev) => (prev ? `${prev} ${texto}` : texto));
+        break;
+      case 'faturamentoMedio':
+        setFaturamentoMedio(texto.replace(/[^\d.,]/g, ''));
+        break;
+      case 'custosFixos':
+        setCustosFixos(texto.replace(/[^\d.,]/g, ''));
+        break;
+      case 'custosVariaveis':
+        setCustosVariaveis(texto.replace(/[^\d.,]/g, ''));
+        break;
+      case 'dividasParcelamentos':
+        setDividasParcelamentos((prev) => (prev ? `${prev} ${texto}` : texto));
+        break;
+      case 'email':
+        setEmail(texto.toLowerCase().replace(/\s+/g, ''));
+        break;
+      case 'whatsapp':
+        setWhatsapp(texto.replace(/[^\d]/g, ''));
+        break;
+      default:
+        break;
+    }
   }
 
-  function toggleGravacao() {
+  function toggleVozParaCampo(campo: string) {
     if (!recognitionRef.current) {
-      alert('Seu navegador não possui suporte a microfone por voz. Você pode utilizar o campo de texto digitado!');
-      setModoTexto(true);
+      alert('Seu navegador não suporta reconhecimento de voz nativo. Você pode digitar diretamente no campo.');
       return;
     }
 
-    if (gravando) {
+    if (gravando && campoAtivoVoz === campo) {
       recognitionRef.current.stop();
       setGravando(false);
-      if (transcricaoAoVivo.trim() || textoInput.trim()) {
-        enviarResposta(transcricaoAoVivo || textoInput);
-      }
+      setCampoAtivoVoz(null);
     } else {
-      if (synthRef.current) synthRef.current.cancel();
-      setTranscricaoAoVivo('');
-      setTextoInput('');
+      if (gravando) {
+        recognitionRef.current.stop();
+      }
+      setCampoAtivoVoz(campo);
+      setGravando(true);
       try {
         recognitionRef.current.start();
-        setGravando(true);
       } catch (err) {
-        console.error('Erro ao iniciar reconhecimento:', err);
+        console.error('Erro ao iniciar reconhecimento de voz:', err);
       }
     }
   }
 
-  async function enviarResposta(mensagemTexto: string) {
-    if (!mensagemTexto.trim() || carregandoIA) return;
-
-    if (recognitionRef.current && gravando) {
-      recognitionRef.current.stop();
-      setGravando(false);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nomeNegocio.trim() || !email.trim() || !whatsapp.trim()) {
+      setErro('Por favor, preencha o nome da sua empresa, e-mail e WhatsApp.');
+      return;
     }
 
-    const novaMensagemUsuario = mensagemTexto.trim();
-    setTextoInput('');
-    setTranscricaoAoVivo('');
-    setCarregandoIA(true);
-
-    const novoHistorico: Mensagem[] = [
-      ...historico,
-      { role: 'user', content: novaMensagemUsuario },
-    ];
-    setHistorico(novoHistorico);
+    setLoading(true);
+    setErro('');
 
     try {
-      const res = await fetch('/api/diagnostico/assistente', {
+      const res = await fetch('/api/diagnostico/salvar-coleta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          coleta_id: coletaId,
-          pedido_id: pedidoId,
-          historico: novoHistorico,
-          nova_mensagem: novaMensagemUsuario,
-          resumo_atual: resumo,
-          cliente_info: {
-            nome: nomeParam,
-            email: emailParam,
-            whatsapp: whatsappParam,
-          },
+          pedido_id: pedidoIdParam || null,
+          nome_negocio: nomeNegocio,
+          setor,
+          faturamento_medio: faturamentoMedio,
+          custos_fixos: custosFixos,
+          custos_variaveis: custosVariaveis,
+          dividas_parcelamentos: dividasParcelamentos,
+          email,
+          whatsapp,
+          origem_preenchimento: 'sala_de_coleta_v4',
         }),
       });
 
       const data = await res.json();
 
-      if (res.ok) {
-        if (data.coleta_id) setColetaId(data.coleta_id);
-        if (data.mensagem) {
-          setAssistenteFala(data.mensagem);
-          falarTexto(data.mensagem);
-        }
-        if (data.etapa_atual) setEtapaAtual(data.etapa_atual);
-        if (data.resumo_extracao) {
-          setResumo(prev => ({
-            ...prev,
-            ...Object.fromEntries(
-              Object.entries(data.resumo_extracao).filter(([_, v]) => v !== 0 && v !== '' && v !== null && v !== undefined)
-            )
-          }));
-        }
-        if (data.aguardando_confirmacao) setAguardandoConfirmacao(true);
-        if (data.finalizado) {
-          setFinalizado(true);
-          setAguardandoConfirmacao(false);
-        }
-
-        setHistorico([
-          ...novoHistorico,
-          { role: 'model', content: data.mensagem },
-        ]);
-      } else {
-        alert(data.error || 'Erro ao processar fala.');
-      }
-    } catch {
-      alert('Erro de conexão ao enviar sua mensagem.');
-    } finally {
-      setCarregandoIA(false);
-    }
-  }
-
-  // Gera o Relatório Executivo Oficial Instantaneamente
-  async function gerarRelatorioInstantaneo() {
-    setGerandoRelatorio(true);
-    try {
-      const res = await fetch('/api/diagnostico/gerar-relatorio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficha: {
-            ...resumo,
-            faturamento_mensal_estimado: faturamento,
-            custos_fixos_estimados: totalDespesasFixas,
-            custos_variaveis_estimados: totalCustosVariaveis,
-            sobra_operacional_estimada: sobraOperacional,
-          },
-          identificacao: {
-            razao_social: razaoSocial || resumo.ramo_atividade || 'Empresa Diagnosticada',
-            documento: documentoEmpresa || 'Não informado',
-            responsavel: nomeResponsavel || nomeParam || 'Gestor(a)',
-            email: emailParam,
-            whatsapp: whatsappParam,
-            data_emissao: new Date().toLocaleDateString('pt-BR'),
+      if (res.ok && data.success) {
+        // Dispara eventos de rastreamento (Meta Pixel e Google Analytics 4)
+        if (typeof window !== 'undefined') {
+          // Meta Pixel Lead Event
+          if ((window as any).fbq) {
+            (window as any).fbq('track', 'Lead', {
+              content_name: 'Diagnostico Financeiro Coleta',
+              status: 'enviado',
+            });
           }
-        }),
-      });
+          // GA4 submit_formulario Event
+          if ((window as any).gtag) {
+            (window as any).gtag('event', 'submit_formulario', {
+              event_category: 'diagnostico',
+              event_label: nomeNegocio,
+            });
+          }
+        }
 
-      const data = await res.json();
-      if (res.ok && data.relatorio) {
-        setRelatorioEmitido(data.relatorio);
-        setFinalizado(true);
+        setSucesso(true);
       } else {
-        alert(data.error || 'Erro ao emitir relatório instantâneo.');
+        setErro(data.error || 'Erro ao registrar os dados. Tente novamente.');
       }
     } catch {
-      alert('Erro de comunicação ao emitir o relatório.');
+      setErro('Erro de conexão ao enviar os dados. Por favor, tente novamente.');
     } finally {
-      setGerandoRelatorio(false);
+      setLoading(false);
     }
   }
-
-  const etapas = [
-    { num: 1, label: '1. Modelo', sub: 'Como você opera' },
-    { num: 2, label: '2. Vendas', sub: 'Faturamento médio' },
-    { num: 3, label: '3. Custos', sub: 'Insumos e fixos' },
-    { num: 4, label: '4. Diagnóstico', sub: 'Dores e melhorias' },
-    { num: 5, label: '5. Relatório', sub: 'Emissão imediata' },
-  ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 relative pb-32 print:pb-0 print:bg-white print:text-slate-900">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-amber-500 selection:text-slate-950 relative pb-16">
+      {/* Background glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_15%,rgba(245,158,11,0.12),transparent)] pointer-events-none" />
+      <div className="absolute inset-0 bg-grid-amber opacity-20 pointer-events-none" />
 
-      {/* ── BADGE DE VERSÃO FIXO (Apenas Desktop para não sobrepor o microfone no mobile) ── */}
-      <div className="hidden md:flex fixed bottom-3 left-3 z-50 items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/40 bg-slate-950/95 backdrop-blur-md text-amber-400 text-[10px] font-bold font-mono shadow-xl print:hidden">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-        Sala de Voz {VERSION}
-      </div>
-
-      {/* Backgrounds */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_20%,rgba(245,158,11,0.12),transparent)] pointer-events-none print:hidden" />
-      <div className="absolute inset-0 bg-grid-amber opacity-20 pointer-events-none print:hidden" />
-
-      {/* ── HEADER COM LOGO DESTACADO ── */}
-      <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl px-4 sm:px-8 py-3.5 shadow-lg shadow-black/20 print:hidden">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-
-          {/* Logo com presença dominante ampliado 3x */}
-          <Link href="/" className="flex items-center gap-3.5 group">
+      {/* ── HEADER ── */}
+      <header className="relative z-20 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-xl px-4 sm:px-8 py-4 shadow-lg">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-3 group">
             <div className="p-1.5 rounded-2xl bg-slate-900 border border-slate-800 group-hover:border-amber-500/40 transition-colors shadow-md">
               <Image
                 src="/logo.png"
                 alt="Logo AnalisAI.me"
-                width={180}
-                height={50}
-                className="h-10 sm:h-12 w-auto object-contain"
+                width={160}
+                height={45}
+                className="h-9 sm:h-11 w-auto object-contain"
                 priority
               />
             </div>
@@ -413,1014 +220,343 @@ function ColetaVoiceContent() {
                 <span className="text-sm sm:text-base font-black text-white tracking-tight group-hover:text-amber-400 transition-colors">
                   AnalisAI<span className="text-amber-400">.me</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">
-                  {VERSION.split('·')[0].trim()}
-                </span>
               </div>
-              <span className="text-[10px] text-slate-400 block -mt-0.5">
-                Sala de Inteligência Financeira
+              <span className="text-[10px] text-slate-400 block">
+                Sala de Coleta de Dados
               </span>
             </div>
           </Link>
 
-          {/* Botões de Controle Superior */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (audioAtivado && synthRef.current) synthRef.current.cancel();
-                setAudioAtivado(!audioAtivado);
-              }}
-              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                audioAtivado
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                  : 'border-slate-800 bg-slate-900 text-slate-500'
-              }`}
-              title={audioAtivado ? 'Voz da IA ativada' : 'Voz da IA mutada'}
-            >
-              {audioAtivado ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              <span className="hidden sm:inline">{audioAtivado ? 'Áudio Ativo' : 'Mudo'}</span>
-            </button>
-
-            <Link
-              href="/"
-              className="text-xs font-semibold text-slate-400 hover:text-white px-2.5 py-1.5"
-            >
-              Sair
-            </Link>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span className="hidden sm:inline">Ambiente Seguro LGPD</span>
           </div>
         </div>
       </header>
 
-      {/* ── BANNER DE CICLO DE 3 REANÁLISES E PRAZO DE VALIDADE ── */}
-      <div className="relative z-10 bg-gradient-to-r from-emerald-500/10 via-amber-500/10 to-emerald-500/10 border-b border-amber-500/20 px-4 py-2.5 text-center text-xs text-slate-200 flex flex-wrap items-center justify-center gap-2 sm:gap-3 print:hidden">
-        <span className="flex items-center gap-1.5 font-bold text-emerald-400">
-          <ShieldCheck className="w-4 h-4 shrink-0" />
-          Ciclo Oficial de 90 Dias Ativo
-        </span>
-        <span className="text-slate-400 hidden sm:inline">•</span>
-        <span className="text-slate-300">
-          <strong>3 Reanálises Programadas:</strong> 30, 60 e 90 dias após a entrega
-        </span>
-        <span className="text-slate-400 hidden sm:inline">•</span>
-        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-bold">
-          ⏳ Validade do ciclo: 90 dias
-        </span>
-      </div>
-
-      {/* ── CORPO PRINCIPAL COM BLINDAGEM ── */}
-      <main className="relative z-10 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col justify-center items-center">
-
-        {statusAcesso === 'verificando' ? (
-          <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3 shadow-2xl">
-            <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
-            <h3 className="text-base font-bold text-white">Validando Acesso Seguro...</h3>
-            <p className="text-xs text-slate-400">Verificando a chave e a confirmação do seu diagnóstico.</p>
-          </div>
-        ) : statusAcesso === 'bloqueado' ? (
-          <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900 border border-rose-500/40 text-center space-y-5 shadow-2xl shadow-rose-500/10 animate-fadeIn">
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto">
-              <ShieldAlert className="w-8 h-8" />
+      {/* ── CONTEÚDO PRINCIPAL ── */}
+      <main className="relative z-10 max-w-3xl w-full mx-auto px-4 sm:px-6 py-8 flex-1 flex flex-col justify-center">
+        {sucesso ? (
+          /* TELA DE CONFIRMAÇÃO */
+          <div className="w-full bg-slate-900/90 border border-emerald-500/30 rounded-3xl p-8 sm:p-12 text-center shadow-2xl shadow-emerald-500/10 animate-fadeIn space-y-6">
+            <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 className="w-10 h-10" />
             </div>
-            
-            <div className="space-y-1.5">
-              <h2 className="text-xl font-black text-white">Acesso Restrito</h2>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {motivoBloqueio || 'Esta Sala de Inteligência é exclusiva para clientes com Diagnóstico Financeiro ativo.'}
+
+            <div className="space-y-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs font-bold uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" /> Coleta Confirmada
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white">
+                Recebemos seus dados com sucesso!
+              </h2>
+              <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-lg mx-auto font-medium">
+                Seu Diagnóstico Financeiro personalizado está em preparação e chegará em{' '}
+                <strong className="text-amber-400">até 72 horas</strong> no e-mail ou WhatsApp informado.
               </p>
             </div>
 
-            <div className="pt-2 space-y-3">
+            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400 max-w-md mx-auto space-y-2 text-left">
+              <div className="flex items-center gap-2 text-slate-300 font-semibold">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>Próximos passos:</span>
+              </div>
+              <p>1. Nossos consultores analisarão sua estrutura de custos e faturamento.</p>
+              <p>2. Elaboraremos seu relatório com a DRE Gerencial Sintética e recomendações.</p>
+              <p>3. Você receberá o documento em PDF oficial diretamente no seu contato.</p>
+            </div>
+
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
-                href="/diagnostico"
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black py-4 px-6 rounded-2xl text-sm transition-all shadow-xl shadow-amber-500/20 hover:scale-[1.02]"
+                href={`https://wa.me/${WHATSAPP_OFICIAL}?text=${encodeURIComponent(
+                  `Olá! Acabei de enviar meus dados de diagnóstico para a empresa ${nomeNegocio}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3.5 rounded-2xl transition-all shadow-lg text-sm"
               >
-                <Sparkles className="w-4 h-4" />
-                Adquirir Diagnóstico por R$ 197
+                <MessageCircle className="w-4 h-4" />
+                Falar com a equipe no WhatsApp
               </Link>
 
               <Link
                 href="/"
-                className="block text-xs text-slate-400 hover:text-white transition-colors"
+                className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 rounded-2xl border border-slate-800 bg-slate-950 hover:bg-slate-900 text-slate-300 hover:text-white text-sm font-medium transition-all"
               >
-                Voltar à Página Inicial
+                Voltar à Página Principal
               </Link>
             </div>
           </div>
-        ) : !relatorioEmitido ? (
-          <div className="w-full flex flex-col items-center text-center space-y-5">
-
-            {/* ── MAPA VISUAL DAS 5 ETAPAS (STEPPER) ── */}
-            <div className="w-full max-w-3xl bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-lg">
-              <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-2 px-1">
-                <span className="text-amber-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" /> Entrevista em 5 Passos Rápidos
-                </span>
-                <span>Passo {etapaAtual} de 5</span>
+        ) : (
+          /* FORMULÁRIO DE COLETA (TEXTO OU VOZ) */
+          <div className="w-full bg-slate-900/90 border border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-6">
+            <div className="border-b border-slate-800 pb-5 text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
+                <FileText className="w-3.5 h-3.5" /> Etapa de Coleta de Dados
               </div>
+              <h1 className="text-xl sm:text-2xl font-black text-white">
+                Ficha de Informações do Negócio
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Preencha os campos abaixo digitando ou clicando no ícone do microfone <Mic className="inline w-3.5 h-3.5 text-amber-400" /> para ditar sua resposta por voz.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-5 gap-1 sm:gap-2">
-                {etapas.map((et) => {
-                  const isConcluida = etapaAtual > et.num;
-                  const isAtual = etapaAtual === et.num;
+            {erro && (
+              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{erro}</span>
+              </div>
+            )}
 
-                  return (
-                    <div
-                      key={et.num}
-                      className={`p-2 rounded-xl text-left transition-all ${
-                        isAtual
-                          ? 'bg-amber-500/15 border border-amber-500/60 shadow-md shadow-amber-500/10'
-                          : isConcluida
-                          ? 'bg-emerald-500/10 border border-emerald-500/30'
-                          : 'bg-slate-950/40 border border-slate-800/60 opacity-60'
+            <form onSubmit={handleSubmit} className="space-y-5 text-left">
+              {/* 1. Nome do Negócio e Setor */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Nome da Empresa / Negócio *
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      required
+                      value={nomeNegocio}
+                      onChange={(e) => setNomeNegocio(e.target.value)}
+                      placeholder="Ex: Minha Loja, Consultoria X..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-amber-400 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVozParaCampo('nomeNegocio')}
+                      title="Ditar por voz"
+                      className={`absolute right-2 p-1.5 rounded-lg text-xs transition-colors ${
+                        gravando && campoAtivoVoz === 'nomeNegocio'
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : 'text-slate-400 hover:text-amber-400'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className={`text-[11px] font-black ${isAtual ? 'text-amber-300' : isConcluida ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          {et.label}
-                        </span>
-                        {isConcluida && <Check className="w-3 h-3 text-emerald-400" />}
-                        {isAtual && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />}
-                      </div>
-                      <p className="text-[9px] text-slate-400 hidden sm:block truncate">{et.sub}</p>
-                    </div>
-                  );
-                })}
+                      {gravando && campoAtivoVoz === 'nomeNegocio' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Setor / Ramo de Atuação
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={setor}
+                      onChange={(e) => setSetor(e.target.value)}
+                      placeholder="Ex: Comércio, Alimentação, Serviços..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-amber-400 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVozParaCampo('setor')}
+                      title="Ditar por voz"
+                      className={`absolute right-2 p-1.5 rounded-lg text-xs transition-colors ${
+                        gravando && campoAtivoVoz === 'setor'
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : 'text-slate-400 hover:text-amber-400'
+                      }`}
+                    >
+                      {gravando && campoAtivoVoz === 'setor' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Balão de Fala do Consultor IA */}
-            <div className="relative w-full rounded-3xl border border-amber-500/30 bg-slate-900/90 p-6 sm:p-8 shadow-2xl shadow-amber-500/10 text-left">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
-                    Consultor Financeiro AnalisAI.me
-                  </span>
+              {/* 2. Faturamento e Custos */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-emerald-400 mb-1.5">
+                    Faturamento Médio (3 meses) *
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      required
+                      value={faturamentoMedio}
+                      onChange={(e) => setFaturamentoMedio(e.target.value)}
+                      placeholder="R$ 0,00"
+                      className="w-full bg-slate-950 border border-emerald-500/30 rounded-xl px-3.5 py-2.5 text-sm text-emerald-300 font-bold focus:border-emerald-400 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVozParaCampo('faturamentoMedio')}
+                      title="Ditar valor"
+                      className={`absolute right-2 p-1.5 rounded-lg text-xs transition-colors ${
+                        gravando && campoAtivoVoz === 'faturamentoMedio'
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : 'text-slate-400 hover:text-emerald-400'
+                      }`}
+                    >
+                      {gravando && campoAtivoVoz === 'faturamentoMedio' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Média mensal aproximada</span>
                 </div>
-                <span className="text-[10px] text-slate-500 font-mono">40 anos de vivência executiva</span>
+
+                <div>
+                  <label className="block text-xs font-bold text-rose-400 mb-1.5">
+                    Custos Fixos Mensais (R$)
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={custosFixos}
+                      onChange={(e) => setCustosFixos(e.target.value)}
+                      placeholder="R$ 0,00"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:border-rose-400 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVozParaCampo('custosFixos')}
+                      title="Ditar valor"
+                      className={`absolute right-2 p-1.5 rounded-lg text-xs transition-colors ${
+                        gravando && campoAtivoVoz === 'custosFixos'
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : 'text-slate-400 hover:text-rose-400'
+                      }`}
+                    >
+                      {gravando && campoAtivoVoz === 'custosFixos' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Aluguel, folha, pró-labore...</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-amber-400 mb-1.5">
+                    Custos Variáveis / Insumos (R$)
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={custosVariaveis}
+                      onChange={(e) => setCustosVariaveis(e.target.value)}
+                      placeholder="R$ 0,00"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:border-amber-400 outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVozParaCampo('custosVariaveis')}
+                      title="Ditar valor"
+                      className={`absolute right-2 p-1.5 rounded-lg text-xs transition-colors ${
+                        gravando && campoAtivoVoz === 'custosVariaveis'
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : 'text-slate-400 hover:text-amber-400'
+                      }`}
+                    >
+                      {gravando && campoAtivoVoz === 'custosVariaveis' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Mercadorias e matérias-primas</span>
+                </div>
               </div>
 
-              <p className="text-lg sm:text-xl font-semibold text-white leading-relaxed">
-                {assistenteFala}
-              </p>
-
-              {/* Transcrição ao vivo */}
-              {transcricaoAoVivo && (
-                <div className="mt-4 pt-4 border-t border-slate-800 text-sm text-amber-300 italic">
-                  &ldquo;{transcricaoAoVivo}&rdquo;
+              {/* 3. Dívidas e Parcelamentos */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  Dívidas, Empréstimos ou Parcelamentos Ativos
+                </label>
+                <div className="relative">
+                  <textarea
+                    rows={2}
+                    value={dividasParcelamentos}
+                    onChange={(e) => setDividasParcelamentos(e.target.value)}
+                    placeholder="Ex: Empréstimo bancário com parcelas de R$ 1.500 até dez/2026, parcelamento de impostos..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:border-amber-400 outline-none pr-10 resize-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleVozParaCampo('dividasParcelamentos')}
+                    title="Ditar observações"
+                    className={`absolute right-2 top-2 p-1.5 rounded-lg text-xs transition-colors ${
+                      gravando && campoAtivoVoz === 'dividasParcelamentos'
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : 'text-slate-400 hover:text-amber-400'
+                    }`}
+                  >
+                    {gravando && campoAtivoVoz === 'dividasParcelamentos' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* ── FICHA FINANCEIRA INTERATIVA AO VIVO (EDITÁVEL PELO USUÁRIO OU PELA IA) ── */}
-            <div className="w-full rounded-3xl border border-slate-800 bg-slate-900/80 p-4 sm:p-6 shadow-2xl text-left space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                    Ficha Financeira ao Vivo
-                  </h3>
-                  <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded-full font-mono">
-                    Editável por Voz ou Clique
-                  </span>
+              {/* 4. Contatos para Recebimento */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    E-mail para Recebimento do Relatório *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seuemail@empresa.com"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-amber-400 outline-none"
+                  />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    WhatsApp para Envio e Contato *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    placeholder="(11) 99999-9999"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-amber-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Botão de Envio */}
+              <div className="pt-4">
                 <button
-                  onClick={() => setAbaFichaAberta(!abaFichaAberta)}
-                  className="text-xs text-slate-400 hover:text-white font-medium underline"
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-8 py-4.5 rounded-2xl shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] text-base cursor-pointer disabled:opacity-50"
                 >
-                  {abaFichaAberta ? 'Recolher Ficha' : 'Expandir Ficha'}
+                  {loading ? (
+                    <span>Salvando dados com segurança...</span>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Enviar Dados para Elaboração do Diagnóstico
+                    </>
+                  )}
                 </button>
               </div>
 
-              {abaFichaAberta && (
-                <div className="space-y-4 text-xs">
-                  
-                  {/* Ramo e Modelo */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-slate-400 block text-[11px] font-bold mb-1">
-                        Atividade / Ramo de Atuação:
-                      </label>
-                      <input
-                        type="text"
-                        value={resumo.ramo_atividade || ''}
-                        onChange={(e) => atualizarCampoFicha('ramo_atividade', e.target.value)}
-                        placeholder="Ex: Restaurante, Loja de Roupas, Clínica, Oficina..."
-                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:border-amber-400 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-400 block text-[11px] font-bold mb-1">
-                        Modelo de Operação:
-                      </label>
-                      <input
-                        type="text"
-                        value={resumo.modelo_operacao || ''}
-                        onChange={(e) => atualizarCampoFicha('modelo_operacao', e.target.value)}
-                        placeholder="Ex: Loja física e delivery, fábrica sob encomenda..."
-                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:border-amber-400 outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Vendas & Custos Variáveis */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div className="p-3 rounded-2xl bg-slate-950/60 border border-emerald-500/20">
-                      <label className="text-emerald-400 block text-[11px] font-bold mb-1">
-                        💰 Faturamento Médio Mensal (R$):
-                      </label>
-                      <input
-                        type="number"
-                        value={resumo.faturamento_mensal_estimado || ''}
-                        onChange={(e) => atualizarCampoFicha('faturamento_mensal_estimado', parseFloat(e.target.value) || 0)}
-                        placeholder="0,00"
-                        className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-3 py-2 text-emerald-300 font-bold text-sm focus:border-emerald-400 outline-none"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1 block">Quanto costuma entrar no caixa por mês.</span>
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-950/60 border border-amber-500/20">
-                      <label className="text-amber-400 block text-[11px] font-bold mb-1">
-                        📦 Custos com Mercadorias / Insumos (R$):
-                      </label>
-                      <input
-                        type="number"
-                        value={resumo.custo_mercadorias_insumos || ''}
-                        onChange={(e) => atualizarCampoFicha('custo_mercadorias_insumos', parseFloat(e.target.value) || 0)}
-                        placeholder="0,00"
-                        className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-3 py-2 text-amber-300 font-bold text-sm focus:border-amber-400 outline-none"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1 block">Compra de produtos p/ revenda ou matérias-primas.</span>
-                    </div>
-                  </div>
-
-                  {/* Despesas Fixas Discriminadas */}
-                  <div className="pt-2">
-                    <span className="text-slate-400 block text-[11px] font-bold uppercase tracking-wider mb-2">
-                      🏛️ Principais Despesas Fixas da Empresa:
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      
-                      {/* Aluguel */}
-                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
-                          🏢 Aluguel, IPTU & Condomínio:
-                        </label>
-                        <input
-                          type="number"
-                          value={resumo.aluguel_condominio || ''}
-                          onChange={(e) => atualizarCampoFicha('aluguel_condominio', parseFloat(e.target.value) || 0)}
-                          placeholder="0,00"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
-                        />
-                      </div>
-
-                      {/* Folha */}
-                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
-                          👥 Folha de Funcionários:
-                        </label>
-                        <input
-                          type="number"
-                          value={resumo.folha_funcionarios || ''}
-                          onChange={(e) => atualizarCampoFicha('folha_funcionarios', parseFloat(e.target.value) || 0)}
-                          placeholder="0,00"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
-                        />
-                      </div>
-
-                      {/* Pró-labore */}
-                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-cyan-500/30">
-                        <label className="text-cyan-400 block text-[10px] font-bold mb-1">
-                          💼 Pró-labore Sócios (Salário):
-                        </label>
-                        <input
-                          type="number"
-                          value={resumo.pro_labore_socios || ''}
-                          onChange={(e) => atualizarCampoFicha('pro_labore_socios', parseFloat(e.target.value) || 0)}
-                          placeholder="0,00"
-                          className="w-full bg-slate-900 border border-cyan-500/40 rounded-lg px-2.5 py-1.5 text-cyan-300 font-bold focus:border-cyan-400 outline-none"
-                        />
-                      </div>
-
-                      {/* Utilidades */}
-                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
-                          ⚡ Energia, Água & Internet:
-                        </label>
-                        <input
-                          type="number"
-                          value={resumo.utilidades_energia_internet || ''}
-                          onChange={(e) => atualizarCampoFicha('utilidades_energia_internet', parseFloat(e.target.value) || 0)}
-                          placeholder="0,00"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
-                        />
-                      </div>
-
-                      {/* Sistemas */}
-                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
-                          💻 Sistemas & Softwares:
-                        </label>
-                        <input
-                          type="number"
-                          value={resumo.sistemas_ferramentas || ''}
-                          onChange={(e) => atualizarCampoFicha('sistemas_ferramentas', parseFloat(e.target.value) || 0)}
-                          placeholder="0,00"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
-                        />
-                      </div>
-
-                      {/* Outras Despesas */}
-                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                        <label className="text-slate-400 block text-[10px] font-bold mb-1">
-                          📦 Outras Despesas Fixas:
-                        </label>
-                        <input
-                          type="number"
-                          value={resumo.outras_despesas_fixas || ''}
-                          onChange={(e) => atualizarCampoFicha('outras_despesas_fixas', parseFloat(e.target.value) || 0)}
-                          placeholder="0,00"
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-semibold focus:border-amber-400 outline-none"
-                        />
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Separação PF/PJ */}
-                  <div className="pt-2">
-                    <label className="text-slate-400 block text-[11px] font-bold mb-1.5">
-                      💳 Mistura de Contas Pessoais com a Empresa:
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {['Não mistura (Contas 100% separadas)', 'Parcialmente (Paga algumas contas da casa)', 'Sim (Usa caixa da empresa para tudo)'].map((opcao) => (
-                        <button
-                          key={opcao}
-                          type="button"
-                          onClick={() => atualizarCampoFicha('mistura_contas_pf_pj', opcao)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                            resumo.mistura_contas_pf_pj === opcao
-                              ? 'bg-rose-500/20 border border-rose-500 text-rose-300'
-                              : 'bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {opcao}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Totalizador Financeiro em Tempo Real */}
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Faturamento:</span>
-                      <span className="text-emerald-400 font-bold text-xs sm:text-sm">
-                        R$ {faturamento.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Custos Variáveis:</span>
-                      <span className="text-amber-400 font-bold text-xs sm:text-sm">
-                        R$ {totalCustosVariaveis.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Total Despesas Fixas:</span>
-                      <span className="text-rose-400 font-bold text-xs sm:text-sm">
-                        R$ {totalDespesasFixas.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[10px] uppercase font-bold">Sobra Operacional:</span>
-                      <span className={`font-black text-xs sm:text-sm ${sobraOperacional >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        R$ {sobraOperacional.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                  </div>
-
-                </div>
-              )}
-            </div>
-
-            {/* ── PAINEL DE IDENTIFICAÇÃO E EMISSÃO IMEDIATA DO RELATÓRIO ── */}
-            <div className="w-full max-w-2xl p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-500/40 space-y-4 text-left shadow-2xl">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-white">Identificação para o Relatório Oficial em PDF</h4>
-                  <p className="text-xs text-slate-400">Insira os dados para o cabeçalho oficial de emissão.</p>
-                </div>
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-500 pt-2">
+                <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Seus dados são 100% confidenciais e protegidos sob a LGPD</span>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="text-slate-400 block font-bold mb-1">Razão Social ou Nome do Estabelecimento:</label>
-                  <input
-                    type="text"
-                    value={razaoSocial}
-                    onChange={(e) => setRazaoSocial(e.target.value)}
-                    placeholder="Ex: Restaurante Sabor & Arte LTDA"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:border-amber-400 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block font-bold mb-1">CNPJ ou CPF (Opcional):</label>
-                  <input
-                    type="text"
-                    value={documentoEmpresa}
-                    onChange={(e) => setDocumentoEmpresa(e.target.value)}
-                    placeholder="00.000.000/0001-00"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:border-amber-400 outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={gerarRelatorioInstantaneo}
-                disabled={gerandoRelatorio}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black py-4 px-6 rounded-2xl text-sm transition-all shadow-xl shadow-amber-500/20 hover:scale-[1.01] cursor-pointer disabled:opacity-50"
-              >
-                {gerandoRelatorio ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                    Gerando Relatório Executivo por IA...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    Gerar Meu Relatório Executivo em PDF no Ato
-                  </>
-                )}
-              </button>
-            </div>
-
-          </div>
-        ) : (
-          /* ── VISUALIZADOR OFICIAL DO RELATÓRIO EXECUTIVO (PRONTO PARA PDF / IMPRESSÃO) ── */
-          <div className="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl text-left space-y-8 animate-fadeIn print:border-none print:shadow-none print:p-0 print:bg-white print:text-slate-900">
-            
-            {/* Cabeçalho do Relatório com Logo AnalisAI.me Dominante */}
-            <div className="border-b border-slate-800 print:border-slate-300 pb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="p-2 sm:p-3 rounded-2xl bg-slate-950 border border-slate-800 print:border-slate-300 shadow-lg">
-                  <Image
-                    src="/logo.png"
-                    alt="Logo AnalisAI.me"
-                    width={240}
-                    height={66}
-                    className="h-12 sm:h-16 w-auto object-contain"
-                  />
-                </div>
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white print:text-slate-950">
-                    AnalisAI<span className="text-amber-400">.me</span>
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-400 print:text-slate-600">
-                    Autoridade Emissora de Diagnósticos Empresariais
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right sm:text-right text-xs text-slate-400 print:text-slate-600">
-                <p><strong>Emissão:</strong> {new Date().toLocaleDateString('pt-BR')}</p>
-                <p><strong>Empresa:</strong> {razaoSocial || resumo.ramo_atividade || 'Empresa Diagnosticada'}</p>
-                {documentoEmpresa && <p><strong>Doc:</strong> {documentoEmpresa}</p>}
-              </div>
-            </div>
-
-            {/* Ações de Impressão / PDF */}
-            <div className="flex items-center justify-between gap-3 print:hidden bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-              <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" /> Relatório Executivo Gerado com Sucesso!
-              </span>
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-4 py-2 rounded-xl text-xs transition-all shadow-lg cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                Imprimir / Baixar em PDF
-              </button>
-            </div>
-
-            {/* Score e Diagnóstico Geral */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 print:border-slate-200 text-center flex flex-col justify-center">
-                <span className="text-[10px] text-slate-500 uppercase font-bold">Saúde Financeira:</span>
-                <span className="text-3xl font-black text-amber-400 print:text-amber-600 mt-1">
-                  {relatorioEmitido.score_saude_financeira || 70}/100
-                </span>
-                <span className="text-xs font-bold text-slate-300 print:text-slate-700 mt-1">
-                  {relatorioEmitido.classificacao_saude || 'Atenção Operacional'}
-                </span>
-              </div>
-
-              <div className="sm:col-span-2 p-4 rounded-2xl bg-slate-950/80 border border-slate-800 print:border-slate-200">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Sumário Executivo:</span>
-                <p className="text-xs sm:text-sm text-slate-300 print:text-slate-800 leading-relaxed">
-                  {relatorioEmitido.resumo_executivo}
-                </p>
-              </div>
-            </div>
-
-            {/* ── DRE GERENCIAL SINTÉTICA OFICIAL ── */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 print:border-slate-300 pb-2">
-                <h4 className="text-xs font-black uppercase tracking-wider text-amber-400 print:text-slate-900 flex items-center gap-1.5">
-                  <BarChart3 className="w-4 h-4" /> DRE Gerencial Sintética (Demonstrativo de Resultado)
-                </h4>
-                <span className="text-[10px] text-slate-400 print:text-slate-600 font-mono">
-                  Base Mensal Estimada
-                </span>
-              </div>
-
-              {/* Tabela Estruturada de DRE */}
-              <div className="overflow-x-auto rounded-2xl border border-slate-800 print:border-slate-300 bg-slate-950/60 print:bg-white text-xs">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800 print:border-slate-300 bg-slate-900/80 print:bg-slate-100 text-[11px] font-bold text-slate-400 print:text-slate-700">
-                      <th className="py-2.5 px-3 sm:px-4">Estrutura de Contas</th>
-                      <th className="py-2.5 px-3 sm:px-4 text-right">Valor Mensal (R$)</th>
-                      <th className="py-2.5 px-3 sm:px-4 text-right">% s/ Faturamento</th>
-                      <th className="py-2.5 px-3 sm:px-4 text-left hidden sm:table-cell">Diagnóstico / Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 print:divide-slate-200">
-                    
-                    {/* Receita Bruta */}
-                    <tr className="font-bold text-slate-100 print:text-slate-900 bg-emerald-500/5">
-                      <td className="py-2.5 px-3 sm:px-4 text-emerald-400 print:text-emerald-800 flex items-center gap-1">
-                        (+) Faturamento Bruto Médio
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right text-emerald-400 print:text-emerald-800">
-                        R$ {faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right text-slate-300 print:text-slate-700 font-mono">
-                        100,0%
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Base operacional total
-                      </td>
-                    </tr>
-
-                    {/* CMV / Variáveis */}
-                    <tr className="text-slate-300 print:text-slate-800">
-                      <td className="py-2.5 px-3 sm:px-4 text-amber-400/90 print:text-amber-800 pl-6 sm:pl-8">
-                        (-) Custos com Mercadorias / Insumos (CMV)
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right text-amber-400/90 print:text-amber-800">
-                        - R$ {totalCustosVariaveis.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? ((totalCustosVariaveis / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        {(totalCustosVariaveis / (faturamento || 1)) > 0.45 ? '⚠️ Acima da média' : '✅ Nível controlado'}
-                      </td>
-                    </tr>
-
-                    {/* Margem de Contribuição */}
-                    <tr className="font-extrabold text-slate-100 print:text-slate-900 bg-slate-900/60 print:bg-slate-50 border-t border-slate-700/60">
-                      <td className="py-2.5 px-3 sm:px-4 text-cyan-400 print:text-cyan-800">
-                        (=) MARGEM DE CONTRIBUIÇÃO BRUTA
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right text-cyan-400 print:text-cyan-800">
-                        R$ {(faturamento - totalCustosVariaveis).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? (((faturamento - totalCustosVariaveis) / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Recurso para pagar fixos e lucro
-                      </td>
-                    </tr>
-
-                    {/* Folha */}
-                    <tr className="text-slate-400 print:text-slate-700">
-                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
-                        (-) Folha de Pagamento & Encargos
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
-                        - R$ {(resumo.folha_funcionarios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? (((resumo.folha_funcionarios || 0) / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Equipe operacional
-                      </td>
-                    </tr>
-
-                    {/* Aluguel */}
-                    <tr className="text-slate-400 print:text-slate-700">
-                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
-                        (-) Aluguel, IPTU & Ocupação
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
-                        - R$ {(resumo.aluguel_condominio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? (((resumo.aluguel_condominio || 0) / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Custo de ponto físico
-                      </td>
-                    </tr>
-
-                    {/* Pró-labore */}
-                    <tr className="text-slate-400 print:text-slate-700">
-                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
-                        (-) Pró-labore dos Sócios (Salário)
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
-                        - R$ {(resumo.pro_labore_socios || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? (((resumo.pro_labore_socios || 0) / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Remuneração da gestão
-                      </td>
-                    </tr>
-
-                    {/* Outras Fixas */}
-                    <tr className="text-slate-400 print:text-slate-700">
-                      <td className="py-2 px-3 sm:px-4 pl-6 sm:pl-8">
-                        (-) Utilidades, Softwares & Outras Fixas
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right text-rose-400/90 print:text-rose-800">
-                        - R$ {((resumo.utilidades_energia_internet || 0) + (resumo.sistemas_ferramentas || 0) + (resumo.outras_despesas_fixas || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? ((((resumo.utilidades_energia_internet || 0) + (resumo.sistemas_ferramentas || 0) + (resumo.outras_despesas_fixas || 0)) / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2 px-3 sm:px-4 text-slate-500 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Infraestrutura geral
-                      </td>
-                    </tr>
-
-                    {/* Total Despesas Fixas */}
-                    <tr className="font-bold text-slate-200 print:text-slate-900 bg-slate-950/40">
-                      <td className="py-2.5 px-3 sm:px-4 text-rose-400 print:text-rose-800">
-                        (=) TOTAL DE DESPESAS FIXAS
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right text-rose-400 print:text-rose-800">
-                        - R$ {totalDespesasFixas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? ((totalDespesasFixas / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-2.5 px-3 sm:px-4 text-slate-400 print:text-slate-600 hidden sm:table-cell text-[11px]">
-                        Peso dos custos de estrutura
-                      </td>
-                    </tr>
-
-                    {/* Resultado Operacional Líquido */}
-                    <tr className={`font-black text-sm ${sobraOperacional >= 0 ? 'bg-emerald-500/10 text-emerald-400 print:text-emerald-800' : 'bg-rose-500/10 text-rose-400 print:text-rose-800'}`}>
-                      <td className="py-3 px-3 sm:px-4">
-                        (=) RESULTADO OPERACIONAL LÍQUIDO (SOBRA)
-                      </td>
-                      <td className="py-3 px-3 sm:px-4 text-right">
-                        R$ {sobraOperacional.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-3 sm:px-4 text-right font-mono">
-                        {faturamento > 0 ? ((sobraOperacional / faturamento) * 100).toFixed(1) : '0.0'}%
-                      </td>
-                      <td className="py-3 px-3 sm:px-4 hidden sm:table-cell text-xs">
-                        {sobraOperacional >= 0 ? '✅ Operação Lucrativa' : '🚨 Sangria Operacional'}
-                      </td>
-                    </tr>
-
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Box Ponto de Equilíbrio */}
-              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 print:border-slate-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                <div>
-                  <span className="font-bold text-amber-400 print:text-amber-800 block text-xs">
-                    🎯 Ponto de Equilíbrio Operacional Estimado:
-                  </span>
-                  <span className="text-slate-400 print:text-slate-600 text-[11px]">
-                    Faturamento mínimo necessário por mês apenas para cobrir todos os custos e não ter prejuízo.
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-base font-black text-white print:text-slate-950">
-                    R$ {(() => {
-                      const mc = faturamento - totalCustosVariaveis;
-                      const percMC = faturamento > 0 ? (mc / faturamento) : 0;
-                      const pe = percMC > 0 ? (totalDespesasFixas / percMC) : 0;
-                      return pe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    })()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Alertas Críticos */}
-            {relatorioEmitido.alertas_criticos && relatorioEmitido.alertas_criticos.length > 0 && (
-              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 print:border-rose-300 text-xs space-y-2">
-                <h5 className="font-bold text-rose-400 print:text-rose-700 flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4" /> Alertas Críticos de Risco e Caixa
-                </h5>
-                <ul className="space-y-1 text-slate-300 print:text-slate-800 pl-4 list-disc">
-                  {relatorioEmitido.alertas_criticos.map((alerta, idx) => (
-                    <li key={idx}>{alerta}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Plano de Ação Estratégico */}
-            {relatorioEmitido.plano_acao_estrategico && (
-              <div className="space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 print:text-slate-900 border-b border-slate-800 print:border-slate-200 pb-1">
-                  🎯 Plano de Ação Recomendado
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  {relatorioEmitido.plano_acao_estrategico.map((plano, idx) => (
-                    <div key={idx} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 print:border-slate-200 space-y-2">
-                      <span className="text-[10px] font-bold uppercase text-amber-400 print:text-amber-700 block">
-                        {plano.prazo}
-                      </span>
-                      <h6 className="font-bold text-white print:text-slate-950">{plano.titulo}</h6>
-                      <ul className="space-y-1 text-slate-400 print:text-slate-700 pl-3 list-disc text-[11px]">
-                        {plano.acoes.map((acao, i) => (
-                          <li key={i}>{acao}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Parecer do Consultor e Validação */}
-            <div className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 print:border-slate-200 text-xs space-y-2">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Parecer dos Especialistas:</span>
-              <p className="text-slate-300 print:text-slate-800 italic leading-relaxed">
-                &ldquo;{relatorioEmitido.conclusao_consultor || 'Recomendamos acompanhamento contínuo dos indicadores para garantir o estancamento de vazamentos e a consolidação de uma margem líquida sustentável.'}&rdquo;
-              </p>
-              <div className="pt-2 flex items-center justify-between text-[10px] text-slate-500 print:text-slate-600 border-t border-slate-800 print:border-slate-200">
-                <span>Emitido por Inteligência AnalisAI.me</span>
-                <span>Chave: {pedidoId || 'DIAG-PRO'}</span>
-              </div>
-            </div>
-
-            {/* ── PAINEL DE CRONOGRAMA DAS 3 REANÁLISES & GATILHO CONSULTIVO ── */}
-            <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-950 to-slate-900 border border-amber-500/30 space-y-4 print:border-slate-300">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/80 print:border-slate-200 pb-3">
-                <div>
-                  <h5 className="text-xs font-black uppercase text-amber-400 print:text-slate-900 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" /> Cronograma de Reavaliações (Ciclo de 90 Dias)
-                  </h5>
-                  <p className="text-[11px] text-slate-400 print:text-slate-600">
-                    Acompanhe se as medidas implementadas estão aumentando seu lucro real.
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold font-mono shrink-0">
-                  ⏳ Validade: 90 dias a contar de hoje
-                </span>
-              </div>
-
-              {/* Grid 3 Checkpoints */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3.5 rounded-2xl bg-slate-900 border border-emerald-500/30 print:border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase text-emerald-400">1º Checkpoint</span>
-                    <span className="text-[10px] text-slate-400 font-mono">30d (+5d corridos)</span>
-                  </div>
-                  <h6 className="font-bold text-white print:text-slate-900">Corte de Desperdícios</h6>
-                  <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
-                    Disponível no 30º dia por até 5 dias corridos para checar a primeira redução de custos fixos e CMV.
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900 border border-amber-500/30 print:border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase text-amber-400">2º Checkpoint</span>
-                    <span className="text-[10px] text-slate-400 font-mono">60d (+5d corridos)</span>
-                  </div>
-                  <h6 className="font-bold text-white print:text-slate-900">Recuperação de Margem</h6>
-                  <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
-                    Disponível no 60º dia por até 5 dias corridos para avaliar o novo mix de vendas e precificação.
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900 border border-cyan-500/30 print:border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase text-cyan-400">3º Checkpoint Final</span>
-                    <span className="text-[10px] text-slate-400 font-mono">90d (+5d corridos)</span>
-                  </div>
-                  <h6 className="font-bold text-white print:text-slate-900">Consolidação do Lucro</h6>
-                  <p className="text-[11px] text-slate-400 print:text-slate-700 leading-relaxed">
-                    Disponível no 90º dia por até 5 dias corridos para consolidação final do ponto de equilíbrio.
-                  </p>
-                </div>
-              </div>
-
-              {/* Gatilho Inteligente de Consultoria / BPO */}
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs print:hidden">
-                <div className="space-y-0.5">
-                  <span className="font-extrabold text-amber-300 flex items-center gap-1.5 text-xs">
-                    <HelpCircle className="w-4 h-4 text-amber-400" /> Os números não evoluíram ou você não tem tempo para executar?
-                  </span>
-                  <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Se na reanálise dos 30 ou 60 dias sua margem continuar apertada por falta de tempo, deixe que nossos especialistas assumam o seu financeiro no dia a dia com a **Consultoria & BPO Dedicado**.
-                  </p>
-                </div>
-                <a
-                  href={`https://wa.me/${WHATSAPP_OFICIAL}?text=${encodeURIComponent(`Olá! Estou com o relatório do Diagnóstico da empresa ${razaoSocial || resumo.ramo_atividade || ''} e gostaria de uma proposta de Consultoria e BPO Financeiro para acelerar meus resultados.`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all shadow-lg"
-                >
-                  Contratar Consultoria / BPO
-                </a>
-              </div>
-            </div>
-
-            {/* Botões Finais de Ação & Envio de Relatório no WhatsApp */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4 print:hidden">
-              <a
-                href={`https://wa.me/${WHATSAPP_OFICIAL}?text=${encodeURIComponent(
-                  `*RELATÓRIO EXECUTIVO DE DIAGNÓSTICO FINANCEIRO - AnalisAI.me*\n\n` +
-                  `Olá Consultores! Gerei meu relatório oficial e gostaria de agendar o alinhamento com o especialista.\n\n` +
-                  `🏢 *DADOS DA EMPRESA:*\n` +
-                  `• Empresa: ${razaoSocial || resumo.ramo_atividade || 'Não informada'}\n` +
-                  `• Responsável: ${nomeResponsavel || nomeParam || 'Gestor'}\n` +
-                  `• CNPJ/CPF: ${documentoEmpresa || 'Não informado'}\n` +
-                  `• Ramo & Modelo: ${resumo.ramo_atividade || 'Mapeado'}\n\n` +
-                  `💰 *RAIO-X FINANCEIRO CONSOLIDADO:*\n` +
-                  `• Faturamento Médio Mensal: R$ ${faturamento.toLocaleString('pt-BR')}\n` +
-                  `• Custos com Insumos/Mercadorias: R$ ${totalCustosVariaveis.toLocaleString('pt-BR')}\n` +
-                  `• Total Despesas Fixas: R$ ${totalDespesasFixas.toLocaleString('pt-BR')}\n` +
-                  `• Sobra Operacional Estimada: R$ ${sobraOperacional.toLocaleString('pt-BR')}\n` +
-                  `• Pró-labore dos Sócios: R$ ${(resumo.pro_labore_socios || 0).toLocaleString('pt-BR')}\n` +
-                  `• Mistura de Contas PF/PJ: ${resumo.mistura_contas_pf_pj || 'Não informado'}\n\n` +
-                  `📊 *SCORE DE SAÚDE:* ${relatorioEmitido?.score_saude_financeira || 70}/100 (${relatorioEmitido?.classificacao_saude || 'Atenção Operacional'})\n\n` +
-                  `Gostaria de entender os próximos passos para consultoria / assessoria!`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-3.5 px-6 rounded-xl transition-all shadow-lg"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Enviar Relatório para a Equipe no WhatsApp (13) 3150-0987
-              </a>
-
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-6 py-3.5 rounded-xl text-xs transition-all shadow-lg cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                Imprimir / Salvar em PDF
-              </button>
-
-              <button
-                onClick={() => setRelatorioEmitido(null)}
-                className="px-5 py-3.5 rounded-xl border border-slate-800 text-slate-300 hover:text-white transition-colors text-xs font-semibold cursor-pointer"
-              >
-                Voltar à Ficha
-              </button>
-            </div>
-
+            </form>
           </div>
         )}
-
       </main>
-
-      {/* ── BARRA FLUTUANTE INFERIOR FIXA (Apenas para Usuários Autorizados) ── */}
-      {!relatorioEmitido && statusAcesso === 'autorizado' && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/85 backdrop-blur-2xl border-t border-slate-800/80 px-4 py-3 shadow-2xl shadow-black print:hidden">
-          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-            
-            {/* Status Compacto à Esquerda */}
-            <div className="hidden sm:flex flex-col text-left">
-              <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                {gravando ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                    <span className="text-red-400">Gravando sua voz...</span>
-                  </>
-                ) : carregandoIA ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
-                    <span className="text-amber-300">Consultor analisando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3 text-amber-400" />
-                    <span>Toque no microfone e fale naturalmente</span>
-                  </>
-                )}
-              </span>
-              <span className="text-[10px] text-slate-500 truncate max-w-xs">
-                {transcricaoAoVivo ? `"${transcricaoAoVivo}"` : 'Você pode falar valores ou editar na tela'}
-              </span>
-            </div>
-
-            {/* Botão Microfone Central Flutuante */}
-            <div className="flex items-center gap-3 mx-auto sm:mx-0">
-              <button
-                onClick={toggleGravacao}
-                disabled={carregandoIA}
-                className={`relative px-5 py-2.5 sm:px-6 sm:py-3 rounded-full flex items-center gap-2.5 font-bold transition-all shadow-xl cursor-pointer ${
-                  gravando
-                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/40 animate-pulse scale-105'
-                    : carregandoIA
-                    ? 'bg-slate-800 text-slate-500 cursor-wait'
-                    : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/30 hover:scale-105'
-                }`}
-                aria-label={gravando ? 'Terminei de falar' : 'Tocar para Falar'}
-              >
-                {carregandoIA ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                    <span className="text-xs uppercase tracking-wider">Processando</span>
-                  </>
-                ) : gravando ? (
-                  <>
-                    <MicOff className="w-4 h-4" />
-                    <span className="text-xs uppercase tracking-wider">Terminei de falar</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-4 h-4" />
-                    <span className="text-xs uppercase tracking-wider">Falar com Consultor</span>
-                  </>
-                )}
-              </button>
-
-              {/* Botão de Digitação / Teclado */}
-              <button
-                onClick={() => setModoTexto(!modoTexto)}
-                className={`p-2.5 rounded-full border text-xs transition-colors ${
-                  modoTexto ? 'border-amber-500 bg-amber-500/20 text-amber-300' : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
-                }`}
-                title="Digitar texto"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Atalho para Gerar Relatório Direto */}
-            <div className="hidden sm:block">
-              <button
-                onClick={gerarRelatorioInstantaneo}
-                disabled={gerandoRelatorio}
-                className="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 font-bold px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Gerar Relatório Agora
-              </button>
-            </div>
-
-          </div>
-
-          {/* Campo de Texto em Modo Digitação */}
-          {modoTexto && (
-            <div className="max-w-2xl mx-auto flex items-center gap-2 mt-2.5 pt-2.5 border-t border-slate-800/80">
-              <input
-                type="text"
-                placeholder="Digite sua resposta ou ajuste de valor aqui..."
-                value={textoInput}
-                onChange={(e) => setTextoInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') enviarResposta(textoInput);
-                }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"
-              />
-              <button
-                onClick={() => enviarResposta(textoInput)}
-                disabled={!textoInput.trim() || carregandoIA}
-                className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold disabled:opacity-50 transition-all cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── FOOTER DISCRETO ── */}
-      <footer className="relative z-10 border-t border-slate-900 px-4 py-4 text-center text-xs text-slate-500 print:hidden">
-        <p className="flex items-center justify-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          Seus dados e relatórios são protegidos pela LGPD. Emissão oficial AnalisAI.me.
-        </p>
-      </footer>
     </div>
   );
 }
 
 export default function DiagnosticoColetaPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Carregando Sala de Voz...</div>}>
-      <ColetaVoiceContent />
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
+          <div className="animate-pulse text-amber-400 text-sm font-bold">
+            Carregando Sala de Coleta...
+          </div>
+        </div>
+      }
+    >
+      <ColetaFormContent />
     </Suspense>
   );
 }
