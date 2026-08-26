@@ -63,13 +63,13 @@ export default function TermosPage() {
           <h3 className="text-base font-bold text-amber-400">1. Objeto</h3>
           <p>A Solucione Assessoria Virtual (AnalisAI.me) presta serviços de terceirização financeira (BPO Financeiro), que incluem organização de contas a pagar/receber, conciliação bancária, DRE gerencial e relatórios executivos. Adicionalmente, disponibiliza o Diagnóstico Financeiro Express por Inteligência Artificial e a plataforma AnalisAI de inteligência preditiva.</p>
 
-          <h3 className="text-base font-bold text-amber-400 pt-2">2. Regras Específicas do Diagnóstico Financeiro &amp; Ciclo de 3 Reanálises</h3>
+          <h3 className="text-base font-bold text-amber-400 pt-2">2. Regras Específicas do Diagnóstico Financeiro &amp; Ciclo de 2 Reanálises</h3>
           <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-5 my-2 text-slate-300 space-y-3 text-xs leading-relaxed">
             <p className="font-bold text-amber-400 text-sm">Regulamento do Ciclo de Acompanhamento de 90 Dias:</p>
             <ul className="list-disc pl-5 space-y-2">
-              <li><strong>Direito a 3 Reanálises Programadas:</strong> A contratação do Diagnóstico Financeiro confere ao Usuário a emissão do Relatório Inicial no ato e o direito a 3 (três) reanálises/reavaliações programadas nos marcos de <strong>30, 60 e 90 dias corridos</strong> a partir da data de confirmação do pagamento.</li>
-              <li><strong>Janela de Tolerância de 5 Dias Corridos:</strong> Cada reanálise fica disponível para execução a partir da data exata de seu respectivo marco (30, 60 ou 90 dias) e deverá ser realizada pelo Usuário no prazo limite improrrogável de até <strong>5 (cinco) dias corridos subsequentes</strong> à abertura da janela.</li>
-              <li><strong>Perda do Direito da Etapa (Sem Cumulação):</strong> Caso o Usuário não realize a reanálise dentro da janela de 5 dias corridos do ciclo vigente, <strong>o direito àquela reanálise específica precluirá</strong>, ficando o Usuário autorizado a realizar apenas a reanálise do ciclo subsequente quando de sua abertura (aos 60 ou 90 dias), sendo vedada a cumulação ou compensação retroativa.</li>
+              <li><strong>Direito a 2 Reanálises Programadas:</strong> A contratação do Diagnóstico Financeiro confere ao Usuário a emissão do Relatório Inicial e o direito a 2 (duas) reanálises/reavaliações programadas nos marcos de <strong>45 e 90 dias corridos</strong> a partir da data de confirmação do pagamento.</li>
+              <li><strong>Janela de Tolerância de 5 Dias Corridos:</strong> Cada reanálise fica disponível para execução a partir da data exata de seu respectivo marco (45 ou 90 dias) e deverá ser realizada pelo Usuário no prazo limite improrrogável de até <strong>5 (cinco) dias corridos subsequentes</strong> à abertura da janela.</li>
+              <li><strong>Perda do Direito da Etapa (Sem Cumulação):</strong> Caso o Usuário não realize a reanálise dentro da janela de 5 dias corridos do ciclo vigente, <strong>o direito àquela reanálise específica precluirá</strong>, ficando o Usuário autorizado a realizar apenas a reanálise subsequente aos 90 dias, sendo vedada a cumulação ou compensação retroativa.</li>
               <li><strong>Validade Máxima:</strong> O ciclo completo de acompanhamento e o acesso à sala de reavaliação expiram definitivamente após <strong>90 dias corridos (+ 5 dias corridos do último ciclo)</strong> da compra.</li>
             </ul>
           </div>

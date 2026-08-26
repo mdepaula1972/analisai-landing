@@ -177,8 +177,8 @@ export default function DiagnosticoPage() {
 
   const faqs = [
     {
-      question: 'Como funcionam as reavaliações nos 30, 60 e 90 dias?',
-      answer: 'Inclui reavaliação do seu progresso aos 30, 60 e 90 dias — você retorna à Sala de Voz, atualiza seus números, e recebe uma nova comparação com o diagnóstico inicial para acompanhar se suas ações aumentaram seu lucro real. O ciclo tem validade de 90 dias.',
+      question: 'Como funcionam as reavaliações nos 45 e 90 dias?',
+      answer: 'Inclui reavaliação do seu progresso aos 45 e 90 dias — você retorna à Sala de Voz, atualiza seus números, e recebe uma nova comparação com o diagnóstico inicial para acompanhar se suas ações aumentaram seu lucro real. O ciclo tem validade de 90 dias.',
     },
     {
       question: 'Preciso ter contador ou sistema de gestão?',
@@ -276,7 +276,7 @@ export default function DiagnosticoPage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
-            Descubra para onde vai cada centavo do seu negócio e receba seu <strong className="text-white">Relatório Executivo Oficial com DRE Gerencial Sintética</strong> revisado e estruturado por nossos especialistas + <span className="text-amber-400 font-bold">Ciclo de 3 Reanálises (30, 60 e 90 dias)</span> para acompanhar se o seu lucro aumentou.
+            Descubra para onde vai cada centavo do seu negócio e receba seu <strong className="text-white">Relatório Executivo Oficial com DRE Gerencial Sintética</strong> revisado e estruturado por nossos especialistas + <span className="text-amber-400 font-bold">Ciclo com 2 Reanálises (45 e 90 dias)</span> para acompanhar se o seu lucro aumentou.
           </p>
 
           <div className="flex flex-col items-center gap-4">
@@ -298,7 +298,7 @@ export default function DiagnosticoPage() {
           <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-slate-400 text-xs font-medium">
             {[
               { icon: <Clock className="w-4 h-4 text-emerald-400" />, label: 'Entrega em até 72h' },
-              { icon: <Shield className="w-4 h-4 text-emerald-400" />, label: '3 Reanálises (30, 60 e 90 dias)' },
+              { icon: <Shield className="w-4 h-4 text-emerald-400" />, label: '2 Reanálises (45 e 90 dias)' },
               { icon: <Lock className="w-4 h-4 text-emerald-400" />, label: 'Sem acesso à sua conta bancária' },
               { icon: <BarChart3 className="w-4 h-4 text-amber-400" />, label: 'DRE Gerencial Completa' },
             ].map((item, i) => (
@@ -530,23 +530,50 @@ export default function DiagnosticoPage() {
               </div>
             </div>
 
-            {/* Resultado em Tempo Real */}
+            {/* Resultado em Tempo Real com Interpretação */}
             {margemCalculada !== null && (
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/20 text-center space-y-2 animate-fadeIn">
+              <div className="p-5 rounded-2xl bg-slate-950/90 border border-amber-500/25 text-center space-y-3 animate-fadeIn">
                 <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
                   Resultado Estimado:
                 </p>
-                <div className="flex items-center justify-center gap-2">
-                  <span className={`text-2xl sm:text-3xl font-black ${margemCalculada >= 20 ? 'text-emerald-400' : margemCalculada >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <span className={`text-3xl sm:text-4xl font-black ${margemCalculada >= 20 ? 'text-emerald-400' : margemCalculada >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
                     {margemCalculada.toFixed(1)}%
                   </span>
-                  <span className="text-slate-400 text-sm">
+                  <span className="text-slate-400 text-xs sm:text-sm">
                     (aprox. R$ {sobraCalculada?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de sobra após custos fixos)
                   </span>
                 </div>
-                <p className="text-xs text-slate-300 font-medium">
-                  Com esses números, sua margem estimada fica em torno de <strong className="text-amber-400">{margemCalculada.toFixed(1)}%</strong>.
-                </p>
+
+                {/* Comentário Interpretativo para o Usuário */}
+                {margemCalculada < 0 ? (
+                  <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-300 text-left text-xs sm:text-sm leading-relaxed space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold uppercase text-[10px] tracking-wider text-rose-400">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Atenção: Margem Negativa
+                    </div>
+                    <p>
+                      Seus custos fixos estão consumindo mais do que você fatura. Isso significa que, nesse ritmo, o caixa do seu negócio tende a encolher mês a mês — vale entender exatamente onde, antes que vire bola de neve.
+                    </p>
+                  </div>
+                ) : margemCalculada <= 20 ? (
+                  <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200 text-left text-xs sm:text-sm leading-relaxed space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold uppercase text-[10px] tracking-wider text-amber-400">
+                      <TrendingDown className="w-3.5 h-3.5" /> Atenção: Margem Apertada
+                    </div>
+                    <p>
+                      Sua margem existe, mas está estreita. Pequenas variações de custo podem zerar essa sobra rapidamente.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 text-left text-xs sm:text-sm leading-relaxed space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold uppercase text-[10px] tracking-wider text-emerald-400">
+                      <TrendingUp className="w-3.5 h-3.5" /> Margem Saudável
+                    </div>
+                    <p>
+                      Seus números indicam folga real. O diagnóstico completo mostra se essa margem está sendo usada da melhor forma.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -589,7 +616,7 @@ export default function DiagnosticoPage() {
                   { icon: <Zap className="w-5 h-5 text-emerald-400" />, title: 'Acesso à Sala de Coleta', desc: 'Preencha seus dados por texto ou voz logo após a confirmação.' },
                   { icon: <CreditCard className="w-5 h-5 text-amber-400" />, title: 'PIX Instantâneo ou Cartão em até 12x', desc: 'Processamento 100% seguro com criptografia bancária.' },
                   { icon: <FileText className="w-5 h-5 text-emerald-400" />, title: 'Relatório Executivo Completo em PDF', desc: 'DRE Gerencial Sintética, análise de gargalos, cenários e recomendações práticas.' },
-                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Ciclo de Acompanhamento de 90 Dias', desc: 'Inclui reavaliação do seu progresso aos 30, 60 e 90 dias — você retorna à Sala de Voz, atualiza seus números, e recebe uma nova comparação com o diagnóstico inicial.' },
+                  { icon: <Shield className="w-5 h-5 text-emerald-400" />, title: 'Ciclo de Acompanhamento de 90 Dias', desc: 'Inclui reavaliação do seu progresso aos 45 e 90 dias — você retorna à Sala de Voz, atualiza seus números, e recebe uma nova comparação com o diagnóstico inicial.' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3.5 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
                     <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 shrink-0">
