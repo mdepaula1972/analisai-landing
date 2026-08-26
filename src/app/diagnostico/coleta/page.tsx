@@ -36,6 +36,7 @@ function ColetaFormContent() {
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState('');
+  const [concordaTermos, setConcordaTermos] = useState(false);
 
   // Reconhecimento de Voz (Web Speech API)
   const [campoAtivoVoz, setCampoAtivoVoz] = useState<string | null>(null);
@@ -137,6 +138,10 @@ function ColetaFormContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!concordaTermos) {
+      setErro('É necessário autorizar o uso dos dados para gerar o seu diagnóstico financeiro.');
+      return;
+    }
     if (!nomeNegocio.trim() || !email.trim() || !whatsapp.trim()) {
       setErro('Por favor, preencha o nome da sua empresa, e-mail e WhatsApp.');
       return;
@@ -515,12 +520,37 @@ function ColetaFormContent() {
                 </div>
               </div>
 
+              {/* Checkbox de Consentimento Obrigatório */}
+              <div className="pt-2">
+                <label className="flex items-start gap-3 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={concordaTermos}
+                    onChange={(e) => setConcordaTermos(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-950 cursor-pointer"
+                  />
+                  <span className="text-xs text-slate-300 leading-relaxed">
+                    Autorizo o uso dos dados informados exclusivamente para gerar meu diagnóstico financeiro, conforme a{' '}
+                    <Link
+                      href="/privacidade"
+                      target="_blank"
+                      className="text-amber-400 font-semibold underline hover:text-amber-300 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Política de Privacidade
+                    </Link>
+                    .
+                  </span>
+                </label>
+              </div>
+
               {/* Botão de Envio */}
-              <div className="pt-4">
+              <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-8 py-4.5 rounded-2xl shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] text-base cursor-pointer disabled:opacity-50"
+                  disabled={loading || !concordaTermos}
+                  className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-8 py-4.5 rounded-2xl shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   {loading ? (
                     <span>Salvando dados com segurança...</span>
