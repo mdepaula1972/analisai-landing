@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { notificarAdminNovaColeta } from '@/lib/whatsapp';
+import { notificarAdminNovaColetaEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -81,6 +82,19 @@ export async function POST(req: NextRequest) {
         coletaId = data.id;
       }
     }
+
+    // Dispara notificação por E-mail (Resend) em segundo plano
+    notificarAdminNovaColetaEmail({
+      nome_negocio,
+      setor,
+      faturamento_medio,
+      custos_fixos,
+      custos_variaveis,
+      dividas_parcelamentos,
+      email,
+      whatsapp,
+      pedido_id: isValidUUID ? pedido_id : null,
+    }).catch((err) => console.error('[Resend Email] Falha no disparo de notificação:', err));
 
     // Dispara notificação no WhatsApp do administrador em segundo plano
     notificarAdminNovaColeta({
