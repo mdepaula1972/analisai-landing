@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { notificarAdminNovaColeta } from '@/lib/whatsapp';
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,6 +81,18 @@ export async function POST(req: NextRequest) {
         coletaId = data.id;
       }
     }
+
+    // Dispara notificação no WhatsApp do administrador em segundo plano
+    notificarAdminNovaColeta({
+      nome_negocio,
+      setor,
+      faturamento_medio,
+      custos_fixos,
+      custos_variaveis,
+      dividas_parcelamentos,
+      email,
+      whatsapp,
+    }).catch((err) => console.error('[WhatsApp] Falha no disparo de notificação:', err));
 
     return NextResponse.json({
       success: true,
