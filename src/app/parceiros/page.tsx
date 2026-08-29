@@ -167,21 +167,21 @@ export default function ParceirosPage() {
 
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 shadow-xl shadow-black/30' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-1.5 text-slate-400 hover:text-amber-400 transition-colors text-xs sm:text-sm font-medium mr-2">
-              <ArrowLeft className="w-4 h-4" /> Início
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <Link href="/" className="flex items-center gap-1 text-slate-400 hover:text-amber-400 transition-colors text-xs sm:text-sm font-medium mr-1 sm:mr-2">
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Início
             </Link>
             <span className="text-slate-700">|</span>
             <div className="flex flex-col items-start justify-center">
-              <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-10 sm:h-14 w-auto object-contain" priority />
-              <span className="text-[9px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded-md -mt-0.5">
+              <Image src="/logo.png" alt="AnalisAI.me — Programa de Parcerias Contábeis" width={480} height={132} className="h-8 sm:h-10 xl:h-12 w-auto object-contain" priority />
+              <span className="text-[8px] sm:text-[9px] font-extrabold tracking-widest uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded-md -mt-0.5">
                 v2.5.0 · BPO Multi-tenant
               </span>
             </div>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">
+          <nav className="hidden lg:flex items-center gap-3 xl:gap-5 text-xs xl:text-sm font-medium text-slate-300">
             <a href="#programa" className="hover:text-amber-400 transition-colors font-semibold text-amber-400">O Programa</a>
             <a href="#beneficios" className="hover:text-amber-400 transition-colors">Benefícios</a>
             <a href="#por-que-escolhem" className="hover:text-amber-400 transition-colors">Por Que Nós</a>
@@ -196,10 +196,11 @@ export default function ParceirosPage() {
             target="_blank"
             rel="noopener noreferrer"
             id="nav-cta-parceiro-whatsapp"
-            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-3 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-emerald-500/25 text-sm flex items-center gap-2"
+            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3.5 py-2 sm:px-5 sm:py-2.5 xl:py-3 rounded-xl transition-all hover:scale-[1.03] shadow-lg shadow-emerald-500/25 text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shrink-0"
           >
-            <Handshake className="w-4 h-4" />
-            Seja um Parceiro
+            <Handshake className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Seja um Parceiro</span>
+            <span className="sm:hidden">Parceria</span>
           </a>
         </div>
       </header>
