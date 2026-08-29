@@ -243,7 +243,7 @@ export default function DiagnosticoPage() {
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl transition-all hover:scale-[1.03] shadow-xl shadow-amber-500/25 text-sm sm:text-base flex items-center gap-2 cursor-pointer"
           >
             <Zap className="w-4 h-4 fill-slate-950" />
-            Quero por R$ 197
+            Iniciar Diagnóstico
           </button>
         </div>
       </header>
@@ -286,7 +286,7 @@ export default function DiagnosticoPage() {
               className="inline-flex items-center gap-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-8 py-5 rounded-2xl shadow-2xl shadow-amber-500/30 transition-all duration-200 hover:scale-[1.04] hover:shadow-amber-500/50 text-base sm:text-lg group cursor-pointer"
             >
               <Sparkles className="w-5 h-5 flex-shrink-0" />
-              Descobrir meu Lucro Real — R$ 197
+              Descobrir meu Lucro Real
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
 
@@ -638,7 +638,7 @@ export default function DiagnosticoPage() {
                 className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-300 hover:from-emerald-400 hover:to-emerald-200 text-slate-950 font-black px-8 py-5 rounded-2xl shadow-2xl shadow-emerald-500/30 transition-all duration-200 hover:scale-[1.02] text-base sm:text-lg group cursor-pointer text-center"
               >
                 <Zap className="w-5 h-5 fill-current shrink-0" />
-                Pagar com InfinitePay (PIX & Cartão) — R$ 197
+                Iniciar Diagnóstico e Acessar Sala de Coleta
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform shrink-0" />
               </a>
 

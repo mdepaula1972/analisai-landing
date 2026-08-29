@@ -33,15 +33,15 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
             <Link href="/parceiros" className="whitespace-nowrap hover:text-amber-300 transition-colors">Parceiros Contábeis</Link>
             {/* Links secundários sutis — diagnósticos */}
             <div className="flex items-center gap-1 border-l border-slate-700 pl-3 ml-1">
-              <Link href="/diagnostico" className="whitespace-nowrap text-slate-400 hover:text-emerald-400 transition-colors text-[11px]">Diagnóstico PJ</Link>
+              <Link href="/diagnostico-pj" className="whitespace-nowrap text-slate-400 hover:text-emerald-400 transition-colors text-[11px]">Diagnóstico PJ</Link>
               <span className="text-slate-700">·</span>
-              <Link href="/diagnostico" className="whitespace-nowrap text-slate-400 hover:text-emerald-400 transition-colors text-[11px]">Diagnóstico PF</Link>
+              <Link href="/diagnostico-pf" className="whitespace-nowrap text-slate-400 hover:text-emerald-400 transition-colors text-[11px]">Diagnóstico PF</Link>
             </div>
           </nav>
 
           {/* CTAs */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <Link href="/diagnostico" className="hidden sm:inline-flex rounded-xl border border-emerald-400/30 px-2.5 py-1.5 text-[11px] font-bold text-emerald-300 hover:bg-emerald-400/10 transition-colors lg:hidden">Diagnóstico</Link>
+            <Link href="/diagnostico-pj" className="hidden sm:inline-flex rounded-xl border border-emerald-400/30 px-2.5 py-1.5 text-[11px] font-bold text-emerald-300 hover:bg-emerald-400/10 transition-colors lg:hidden">Diagnóstico PJ</Link>
             <a
               href={waUrl}
               target="_blank"
