@@ -10,6 +10,7 @@ import {
 
 // Componentes BPO
 import HeroSection from '@/components/bpo/HeroSection';
+import CostComparisonSection from '@/components/bpo/CostComparisonSection';
 import ReportShowcase from '@/components/bpo/ReportShowcase';
 import PricingSection from '@/components/bpo/PricingSection';
 import TrustSection from '@/components/bpo/TrustSection';
@@ -116,6 +117,9 @@ export default function BpoLandingPage() {
 
       {/* ── HERO + NAVBAR ── */}
       <HeroSection waUrl={WA_DIAGNOSTICO} scrolled={scrolled} />
+
+      {/* ── COMPARATIVO CLT vs BPO ── */}
+      <CostComparisonSection />
 
       {/* ── NÚMEROS DE IMPACTO ── */}
       <div className="border-y border-slate-800/60 bg-slate-900/30">
