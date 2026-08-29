@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import DashboardShowcase from '@/components/DashboardShowcase';
 import { WHATSAPP, CONTACT_EMAIL } from '@/lib/contact';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -191,6 +192,41 @@ export default function BpoLandingMain() {
               <div className="mt-7 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4"><p className="text-xs font-bold uppercase tracking-[.12em] text-amber-300">Primeiro passo</p><p className="mt-2 text-sm leading-6 text-slate-300">Conte o que hoje trava sua rotina financeira. A gente mostra onde começar.</p></div>
             </div>
           </aside>
+        </div>
+      </section>
+
+      {/* ── SEÇÃO VITRINE DO PAINEL ── */}
+      <section id="painel" className="relative overflow-hidden py-20 sm:py-28">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_0%,rgba(16,185,129,0.07),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-grid opacity-20" />
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[.14em] text-emerald-300 mb-5">
+              <Sparkles className="h-3.5 w-3.5" /> Painel Executivo BPO
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black text-white mb-5 leading-tight">
+              Seus números, organizados e{' '}
+              <span className="text-shimmer-emerald">interpretados para você</span>
+            </h2>
+            <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+              Cada cliente Solucione tem acesso a um painel gerencial completo — DRE, indicadores de margem, fluxo de caixa e alertas automáticos — tudo em tempo real, sem precisar entender de contabilidade.
+            </p>
+          </div>
+          <DashboardShowcase />
+          <div className="mt-10 flex flex-col items-center gap-4">
+            <p className="text-sm text-slate-500 text-center max-w-lg">
+              Demonstração com dados simulados. O seu painel reflete os dados reais da sua empresa, atualizados pelo nosso time de BPO.
+            </p>
+            <a
+              href={WA_DIAGNOSTICO_DIRETO}
+              target="_blank"
+              rel="noopener noreferrer"
+              id="showcase-cta-whatsapp"
+              className="inline-flex items-center gap-2.5 rounded-2xl bg-emerald-400 px-7 py-3.5 text-sm font-extrabold text-slate-950 shadow-xl shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-300"
+            >
+              <Calendar className="h-4 w-4" /> Quero um painel assim para minha empresa
+            </a>
+          </div>
         </div>
       </section>
 

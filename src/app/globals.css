@@ -119,6 +119,15 @@ html {
   background-clip: text;
   animation: shimmer-amber 3s linear infinite;
 }
+/* alias verde (igual ao text-shimmer) */
+.text-shimmer-emerald {
+  background: linear-gradient(90deg, #34d399 0%, #a7f3d0 50%, #34d399 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer-emerald 3s linear infinite;
+}
 
 /* ── Typing cursor ── */
 .typing-cursor::after {
