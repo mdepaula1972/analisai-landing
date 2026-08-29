@@ -30,11 +30,11 @@ const FAIXAS_FATURAMENTO = [
 ];
 
 const GARGALOS_PJ = [
-  { id: 'mistura', label: 'Misturo contas pessoais com as da empresa', icon: '💳' },
-  { id: 'lucro_cego', label: 'Vendo bem, mas não sei quanto realmente sobra no final', icon: '❓' },
-  { id: 'caixa_apertado', label: 'Falta de capital de giro e surpresas no fim do mês', icon: '⚠️' },
-  { id: 'tempo_perdido', label: 'Perco horas preciosas pagando contas e conciliando planilhas', icon: '⏳' },
-  { id: 'inadimplencia', label: 'Cobrança desorganizada e clientes inadimplentes', icon: '📉' },
+  { id: 'fluxo_caixa', label: 'Falta de previsibilidade no fluxo de caixa e capital de giro', icon: '⚠️' },
+  { id: 'lucro_cego', label: 'Não tenho clareza da margem de lucro real e do ponto de equilíbrio', icon: '❓' },
+  { id: 'tempo_perdido', label: 'Sobrecarga operacional: perco horas com contas a pagar e conciliação', icon: '⏳' },
+  { id: 'inadimplencia', label: 'Cobrança desorganizada e inadimplência recorrente de clientes', icon: '📉' },
+  { id: 'fornecedores', label: 'Dificuldade para controlar custos de fornecedores e compras', icon: '📦' },
 ];
 
 export default function DiagnosticoPjPage() {
@@ -98,40 +98,40 @@ export default function DiagnosticoPjPage() {
     setLoading(true);
     setErrorMsg('');
 
-    // Cálculo do Score
+    // Cálculo do Score PJ
     let score = 70;
-    if (gargalo === 'mistura') score -= 25;
+    if (gargalo === 'fluxo_caixa') score -= 25;
     if (gargalo === 'lucro_cego') score -= 20;
-    if (gargalo === 'caixa_apertado') score -= 30;
     if (gargalo === 'tempo_perdido') score -= 15;
     if (gargalo === 'inadimplencia') score -= 20;
+    if (gargalo === 'fornecedores') score -= 15;
 
-    let nivel = 'Saúde Operacional Moderada';
+    let nivel = 'Eficiência Operacional Moderada';
     let cor = 'text-amber-400';
-    let diagnostico = 'Sua empresa possui volume de faturamento, mas há vazamento de eficiência financeira e falta de visibilidade nos números gerenciais.';
+    let diagnostico = 'Sua empresa possui volume de faturamento, mas há vazamento de margem e falta de previsibilidade na rotina financeira gerencial.';
     let recomendacoes = [
-      'Separar imediatamente a conta bancária física da jurídica.',
-      'Implantar rotina diária de conciliação para eliminar despesas fantasmas.',
-      'Estruturar DRE Gerencial mensal para enxergar a margem líquida real.',
+      'Implantar projeção contínua de fluxo de caixa para 30, 60 e 90 dias.',
+      'Estruturar DRE Gerencial mensal para acompanhar margem bruta, operacional e EBITDA.',
+      'Padronizar a rotina de conciliação diária para eliminar despesas operacionais ocultas.',
     ];
 
     if (score < 50) {
-      nivel = 'Zona de Alerta Crítico';
+      nivel = 'Zona de Alerta Operacional';
       cor = 'text-red-400';
-      diagnostico = 'Seus gargalos atuais indicam risco iminente de asfixia de caixa e sobrecarga de gestão. É urgente estancar os vazamentos.';
+      diagnostico = 'Os gargalos operacionais indicam risco iminente de asfixia de caixa e sobrecarga de gestão. É fundamental profissionalizar a rotina financeira.';
       recomendacoes = [
-        'Auditoria emergencial de contas a pagar e contratos recorrentes.',
-        'Renegociação de despesas fixas para recompor margem.',
-        'Terceirização da operação de contas para focar em vendas e clientes.',
+        'Auditoria emergencial de contas a pagar e despesas recorrentes com fornecedores.',
+        'Renegociação de prazos médios de pagamento (PMP) e recebimento (PMR).',
+        'Delegação da operação financeira (BPO) para que a diretoria foque em vendas.',
       ];
     } else if (score >= 75) {
-      nivel = 'Boa Estrutura com Potencial de Escala';
+      nivel = 'Boa Estrutura com Potencial de Expansão';
       cor = 'text-emerald-400';
-      diagnostico = 'Sua empresa opera com boa base, mas pode acelerar o lucro e liberar tempo da diretoria profissionalizando a rotina com BPO.';
+      diagnostico = 'Sua empresa opera com boa consistência, mas pode destravar mais lucro e escala profissionalizando o controle de caixa com BPO.';
       recomendacoes = [
-        'Elaborar projeção de fluxo de caixa futuro de 90 dias.',
-        'Monitorar EBITDA e FCL mensalmente com painel digital.',
-        'Eliminar tarefas braçais de pagamentos para focar na expansão.',
+        'Implantar painel executivo digital com indicadores de margem e FCL em tempo real.',
+        'Otimizar o ciclo financeiro para aumentar a geração de caixa operacional.',
+        'Automatizar emissão de boletos, notas e cobrança preventiva de clientes.',
       ];
     }
 
@@ -329,10 +329,10 @@ export default function DiagnosticoPjPage() {
             <form onSubmit={handleAvancarPasso2} className="space-y-6">
               <div>
                 <label className="block text-sm font-bold text-slate-200 mb-2">
-                  4. Quanto a empresa gasta por mês em Custos Fixos aproximados?
+                  4. Quanto a empresa gasta por mês em Custos Fixos e Despesas Operacionais?
                 </label>
                 <p className="text-xs text-slate-400 mb-3">
-                  (Inclui aluguel, salários, pró-labore, ferramentas, contabilidade, luz, internet, etc.)
+                  (Folha de pagamento da equipe, aluguel comercial, sistemas, contabilidade, fornecedores e despesas administrativas)
                 </p>
                 <div className="relative">
                   <span className="absolute left-4 top-3.5 text-slate-500 font-bold text-sm">R$</span>
