@@ -125,16 +125,16 @@ export default function BpoLandingPage() {
       {/* ── NÚMEROS DE IMPACTO ── */}
       <div className="border-y border-slate-800/60 bg-slate-900/30">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
             {[
-              { valor: '+120',  label: 'Empresas atendidas'         },
-              { valor: 'R$ 2M+', label: 'Gerenciados mensalmente'  },
-              { valor: '95%',  label: 'Clientes com renovação'     },
-              { valor: '< 48h', label: 'Para primeira entrega'     },
+              { valor: 'Até R$ 43k', label: 'Economia anual vs. CLT' },
+              { valor: 'R$ 397', label: 'Planos a partir de /mês' },
+              { valor: '+120', label: 'Empresas e MEIs atendidos' },
+              { valor: '< 48h', label: 'Para primeira entrega' },
             ].map((stat) => (
               <div key={stat.label}>
                 <p className="text-3xl sm:text-4xl font-black text-amber-300 mb-1">{stat.valor}</p>
-                <p className="text-sm text-slate-400">{stat.label}</p>
+                <p className="text-xs sm:text-sm text-slate-400">{stat.label}</p>
               </div>
             ))}
           </div>

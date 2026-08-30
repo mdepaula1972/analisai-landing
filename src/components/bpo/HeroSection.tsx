@@ -3,7 +3,10 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Calendar, ArrowRight, Clock, Shield, Zap, ChevronDown } from 'lucide-react';
+import {
+  Calendar, ArrowRight, Clock, Shield, Zap, ChevronDown,
+  TrendingDown, PiggyBank, Sparkles, CheckCircle2
+} from 'lucide-react';
 import DashboardMockup from './DashboardMockup';
 
 interface HeroSectionProps {
@@ -26,7 +29,8 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
 
           {/* Nav principal */}
           <nav className="hidden items-center gap-3 xl:gap-4 text-xs font-semibold text-slate-300 lg:flex" aria-label="Navegação principal">
-            <a href="#planos" className="whitespace-nowrap text-amber-300 hover:text-amber-200 transition-colors">Planos</a>
+            <a href="#planos" className="whitespace-nowrap text-amber-300 hover:text-amber-200 transition-colors">Planos (a partir de R$ 397)</a>
+            <a href="#comparativo" className="whitespace-nowrap hover:text-amber-300 transition-colors">Economia vs CLT</a>
             <a href="#entregamos" className="whitespace-nowrap hover:text-amber-300 transition-colors">Como Funciona</a>
             <a href="#setores" className="whitespace-nowrap hover:text-amber-300 transition-colors">Setores</a>
             <a href="#faq" className="whitespace-nowrap hover:text-amber-300 transition-colors">FAQ</a>
@@ -58,7 +62,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
       </header>
 
       {/* ── HERO ── */}
-      <section id="top" className="relative overflow-hidden pt-32 pb-16 sm:pt-44 sm:pb-24 lg:pb-28">
+      <section id="top" className="relative overflow-hidden pt-32 pb-16 sm:pt-40 sm:pb-24 lg:pb-28">
 
         {/* Fundos decorativos */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_15%_-5%,rgba(245,158,11,0.16),transparent),radial-gradient(circle_at_85%_35%,rgba(16,185,129,0.09),transparent_38%)]" />
@@ -67,36 +71,72 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
         <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 rounded-full bg-emerald-500/6 blur-3xl" />
 
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-[1fr_1.1fr] gap-10 lg:gap-16 items-center">
+          <div className="grid lg:grid-cols-[1fr_1.08fr] gap-10 lg:gap-14 items-center">
 
             {/* Coluna de texto */}
             <div className="max-w-2xl">
-              {/* Badge de urgência */}
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[.14em] text-amber-300">
-                <Zap className="h-3.5 w-3.5 shrink-0" />
-                BPO Financeiro · Apenas 5 vagas/mês
+              {/* Badge de urgência e valor */}
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-amber-300">
+                  <Zap className="h-3.5 w-3.5 shrink-0" />
+                  BPO Financeiro Especializado
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-bold text-emerald-300">
+                  <TrendingDown className="h-3.5 w-3.5 shrink-0" />
+                  Até R$ 43.200 de economia/ano vs CLT
+                </span>
               </div>
 
               {/* Headline */}
-              <h1 className="text-4xl font-black leading-[.96] tracking-[-0.05em] text-white sm:text-5xl lg:text-[3.6rem] xl:text-[4rem]">
-                Você sabe quanto{' '}
-                <span className="text-shimmer-amber">sobra no final</span>{' '}
-                do mês?
+              <h1 className="text-4xl font-black leading-[.98] tracking-[-0.05em] text-white sm:text-5xl lg:text-[3.5rem] xl:text-[3.9rem]">
+                Seu financeiro no piloto automático por{' '}
+                <span className="text-shimmer-amber">menos de 1/3 do custo</span> de um funcionário.
               </h1>
 
               {/* Subheadline */}
-              <p className="mt-6 text-lg leading-8 text-slate-300 sm:text-xl max-w-xl">
-                A Solucione cuida de toda a rotina financeira da sua empresa — contas, conciliação e relatórios gerenciais — para você ter <strong className="text-white font-bold">clareza de caixa</strong> e tempo para crescer.
+              <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-300 max-w-xl">
+                A Solucione cuida de toda a rotina — contas a pagar/receber, conciliação diária, DRE e relatórios — com planos a partir de <strong className="text-white font-black">R$ 397/mês</strong>. Sem encargos, sem faltas e com a segurança de um contrato PJ.
               </p>
 
+              {/* Card Destaque: Potencial de Economia Imediata */}
+              <div className="mt-6 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-slate-900/90 to-slate-900/90 p-4 sm:p-5 backdrop-blur-md shadow-xl shadow-emerald-500/5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <PiggyBank className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs sm:text-sm font-black text-white">
+                          Pensando em contratar para o financeiro?
+                        </span>
+                        <span className="text-[10px] font-extrabold bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Economia Real
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1 leading-snug">
+                        CLT Médio: <span className="line-through text-red-400 font-semibold">R$ 5.000/mês</span> → BPO Solucione: <strong className="text-emerald-300 font-bold">R$ 397 a R$ 1.397/mês</strong>.
+                        Economia média de <strong className="text-emerald-400 font-black">R$ 43.236 no primeiro ano</strong>.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="#comparativo"
+                    className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/10 px-3 py-2 rounded-xl shrink-0 transition-colors whitespace-nowrap self-start sm:self-center"
+                  >
+                    Ver comparativo <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
               {/* Bullet points de valor */}
-              <ul className="mt-6 space-y-2.5">
+              <ul className="mt-5 space-y-2">
                 {[
-                  { icon: '✓', text: 'DRE Gerencial mensal com análise de margens' },
-                  { icon: '✓', text: 'Fluxo de caixa atualizado sem você tocar em nada' },
-                  { icon: '✓', text: 'Dashboard executivo com alertas automáticos' },
+                  { icon: '✓', text: 'Planos inclusivos para MEIs, autônomos e PMEs em expansão' },
+                  { icon: '✓', text: 'DRE Gerencial e fluxo de caixa sem você perder horas no operacional' },
+                  { icon: '✓', text: 'Dashboard executivo digital em tempo real com parecer mensal' },
                 ].map((item) => (
-                  <li key={item.text} className="flex items-start gap-2.5 text-sm text-slate-300">
+                  <li key={item.text} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-300">
                     <span className="mt-0.5 shrink-0 text-emerald-400 font-black">{item.icon}</span>
                     {item.text}
                   </li>
@@ -104,7 +144,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
               </ul>
 
               {/* CTAs */}
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <a
                   href={waUrl}
                   target="_blank"
@@ -117,16 +157,16 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
                   <ArrowRight className="h-5 w-5" />
                 </a>
                 <a
-                  href="#entregamos"
+                  href="#planos"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 px-6 py-4 font-bold text-slate-200 transition hover:border-amber-300/50 hover:text-amber-200"
                 >
-                  Ver como funciona
+                  Ver planos e preços
                   <ChevronDown className="h-4 w-4" />
                 </a>
               </div>
 
               {/* Garantias */}
-              <div className="mt-5 flex flex-wrap gap-4">
+              <div className="mt-4 flex flex-wrap gap-4">
                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
                   <Clock className="h-3.5 w-3.5 text-slate-400" />
                   Diagnóstico em 30–45 min
@@ -138,23 +178,23 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
               </div>
             </div>
 
-            {/* Coluna do mockup */}
+            {/* Coluna do mockup com callouts de economia */}
             <div className="relative">
-              {/* Callout: Margem EBITDA */}
-              <div className="absolute -top-4 -right-2 sm:right-0 z-20 hidden sm:flex items-center gap-2 bg-amber-500 text-slate-950 rounded-xl px-3 py-2 shadow-xl shadow-amber-500/30 pointer-events-none">
-                <span className="text-base font-black leading-none">📈</span>
+              {/* Callout: Economia anual */}
+              <div className="absolute -top-3 -right-2 sm:right-2 z-20 hidden sm:flex items-center gap-2 bg-emerald-500 text-slate-950 rounded-xl px-3.5 py-2 shadow-xl shadow-emerald-500/30 pointer-events-none animate-pulse">
+                <TrendingDown className="w-4 h-4 font-black shrink-0" />
                 <div>
-                  <p className="text-[9px] font-bold leading-none uppercase tracking-wide">Margem EBITDA</p>
-                  <p className="text-sm font-black leading-none mt-0.5">10,7% <span className="text-[10px] font-bold">↑ jul/26</span></p>
+                  <p className="text-[9px] font-bold leading-none uppercase tracking-wide">Economia vs CLT</p>
+                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">R$ 43.236 / ano</p>
                 </div>
               </div>
 
-              {/* Callout: Previsão de Caixa */}
-              <div className="absolute -bottom-4 -left-2 sm:left-0 z-20 hidden sm:flex items-center gap-2 bg-emerald-500 text-slate-950 rounded-xl px-3 py-2 shadow-xl shadow-emerald-500/30 pointer-events-none">
-                <span className="text-base font-black leading-none">💰</span>
+              {/* Callout: Entrada Acessível */}
+              <div className="absolute -bottom-3 -left-2 sm:left-2 z-20 hidden sm:flex items-center gap-2 bg-amber-500 text-slate-950 rounded-xl px-3.5 py-2 shadow-xl shadow-amber-500/30 pointer-events-none">
+                <Sparkles className="w-4 h-4 font-black shrink-0" />
                 <div>
-                  <p className="text-[9px] font-bold leading-none uppercase tracking-wide">FCL — Fluxo Livre</p>
-                  <p className="text-sm font-black leading-none mt-0.5">R$ 1,3M <span className="text-[10px] font-bold">acumulado</span></p>
+                  <p className="text-[9px] font-bold leading-none uppercase tracking-wide">Planos Inclusivos</p>
+                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">A partir de R$ 397/mês</p>
                 </div>
               </div>
 
