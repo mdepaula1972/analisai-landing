@@ -80,13 +80,13 @@ export default function ReportShowcase() {
           <div className="space-y-4">
 
             {/* Card: DRE Sintética */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="flex items-center justify-between mb-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                 <div>
                   <h3 className="text-sm font-black text-white">DRE Sintética — Consolidado</h3>
                   <p className="text-[10px] text-slate-500 mt-0.5">Painel Executivo · Empresa Modelo · Jan–Jul/26</p>
                 </div>
-                <div className="flex flex-col items-end gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">Gerado por IA</span>
                   <span className="text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full">Revisado por Especialista</span>
                 </div>
