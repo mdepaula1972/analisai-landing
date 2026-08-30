@@ -19,7 +19,7 @@ const LINHAS = [
       negativo: true,
     },
     bpo: {
-      valor: 'A partir de R$ 990/mês',
+      valor: 'A partir de R$ 397/mês',
       detalhe: 'Previsível, fixo e sem encargos ou surpresas',
       positivo: true,
     },
@@ -233,12 +233,12 @@ export default function CostComparisonSection() {
             <div>
               <p className="text-sm font-black text-white">Economia potencial no primeiro ano</p>
               <p className="text-xs text-slate-400 mt-0.5">
-                Comparando custo CLT médio (R$ 5.000/mês) vs. Plano Gestão BPO (R$ 1.890/mês)
+                Comparando custo CLT médio (R$ 5.000/mês) vs. Plano Gestão BPO (R$ 1.397/mês)
               </p>
             </div>
           </div>
           <div className="text-center shrink-0">
-            <p className="text-3xl font-black text-amber-300">R$ 37.320</p>
+            <p className="text-3xl font-black text-amber-300">R$ 43.236</p>
             <p className="text-xs text-amber-400/70 font-semibold">de economia estimada/ano</p>
           </div>
         </div>
