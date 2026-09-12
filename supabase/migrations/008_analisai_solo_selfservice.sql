@@ -185,7 +185,7 @@ INSERT INTO public.partner_products (code, name, display_price_cents, redirect_u
 VALUES (
     'certificado_digital_a1',
     'Certificado Digital A1 (e-CNPJ / e-CPF)',
-    11799,
+    17000,
     'https://parceiro.analisai.me/certificado-a1',
     'fiscal',
     'missing_nf_cert'
