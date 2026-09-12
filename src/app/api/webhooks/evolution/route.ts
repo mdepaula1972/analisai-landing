@@ -37,7 +37,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
 
-    if (body.data?.key?.fromMe) {
+    const message = body.data?.message;
+    const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
+    const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
+
+    // Ignora fromMe apenas se NÃO for um comando de administração explícito
+    if (body.data?.key?.fromMe && !isCommand) {
       return NextResponse.json({ ignored: true, reason: 'from_me' }, { status: 200 });
     }
 
@@ -63,12 +68,25 @@ export async function POST(req: NextRequest) {
 async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const supabase = createServiceRoleClient();
 
+  // Normaliza o número para buscar com e sem o 9º dígito e com/sem 55
+  let cleanPhone = phone.replace(/\D/g, '');
+  if (!cleanPhone.startsWith('55') && cleanPhone.length >= 10) {
+    cleanPhone = '55' + cleanPhone;
+  }
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
   // 1. Localiza cliente pelo número de WhatsApp
   const { data: client } = await supabase
     .from('clients')
     .select('id, name, whatsapp_number, status, is_admin')
-    .or(`whatsapp_number.eq.${phone},whatsapp_number.eq.55${phone}`)
-    .single();
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .limit(1)
+    .maybeSingle();
 
   if (!client) {
     await sendEvolutionText({
