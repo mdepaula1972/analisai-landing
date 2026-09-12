@@ -62,7 +62,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Aguarda o processamento para que a Vercel Serverless não congele a execução antes da resposta
-    await processMessageAsync(phone, body);
+    try {
+      await processMessageAsync(phone, body);
+    } catch (procErr: unknown) {
+      console.error('[Evolution Webhook] Erro durante processMessageAsync:', procErr);
+    }
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error: unknown) {

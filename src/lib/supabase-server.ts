@@ -1,6 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+// Polyfill para evitar erro "native WebSocket not found" no Node.js 20
+if (typeof global !== 'undefined' && !(global as any).WebSocket) {
+  (global as any).WebSocket = class DummyWebSocket {};
+}
+
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
 
