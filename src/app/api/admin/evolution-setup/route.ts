@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
 
-    // Disparo de teste
+    // Disparo de teste simples
     if (action === 'test_send') {
       const testMsg = await sendEvolutionText({
         phone: '551331500987',
@@ -246,6 +246,42 @@ Envie *!ajuda* para ver todos os comandos de teste do modo administrador.`,
       });
 
       return NextResponse.json(testMsg);
+    }
+
+    // Diagnóstico completo fim-a-fim de processamento de comando
+    if (action === 'test_process') {
+      const phoneParam = searchParams.get('phone') || '5514930855878';
+      const textParam = searchParams.get('text') || '!ajuda';
+
+      const { createServiceRoleClient } = await import('@/lib/supabase-server');
+      const { handleAdminCommands } = await import('@/lib/solo/admin');
+
+      const supabase = createServiceRoleClient();
+      const { data: client, error: clientErr } = await supabase
+        .from('clients')
+        .select('id, name, whatsapp_number, status, is_admin')
+        .or(`whatsapp_number.eq.${phoneParam}`)
+        .maybeSingle();
+
+      let adminRes: unknown = null;
+      let sendRes: unknown = null;
+
+      if (client && client.is_admin) {
+        adminRes = await handleAdminCommands(client.id, textParam);
+        const typedAdminRes = adminRes as { handled?: boolean; message?: string };
+        if (typedAdminRes.handled && typedAdminRes.message) {
+          sendRes = await sendEvolutionText({ phone: phoneParam, text: typedAdminRes.message });
+        }
+      }
+
+      return NextResponse.json({
+        phoneParam,
+        textParam,
+        client,
+        clientErr: clientErr ? String(clientErr) : null,
+        adminRes,
+        sendRes,
+      });
     }
 
     const body = await req.json().catch(() => ({}));
