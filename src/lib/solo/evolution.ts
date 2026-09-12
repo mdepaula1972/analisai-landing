@@ -3,9 +3,22 @@
  * Gerencia envio de mensagens, documentos, mídias e áudios nativos.
  */
 
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://localhost:8080';
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'analisai';
+const EVOLUTION_API_URL =
+  process.env.EVOLUTION_API_URL ||
+  process.env.WHATSAPP_API_URL ||
+  'https://opening-consumers-advertisement-dan.trycloudflare.com';
+
+const EVOLUTION_API_KEY =
+  process.env.EVOLUTION_API_KEY ||
+  process.env.WHATSAPP_API_TOKEN ||
+  process.env.WHATSAPP_KEY ||
+  'analisai_secret_2026';
+
+const EVOLUTION_INSTANCE =
+  process.env.EVOLUTION_INSTANCE_NAME ||
+  process.env.WHATSAPP_INSTANCE_ID ||
+  process.env.WHATSAPP_INSTANCE ||
+  'analisai_solo';
 
 export function formatWhatsAppNumber(phone: string): string {
   const digits = phone.replace(/\D/g, '');

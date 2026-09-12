@@ -53,10 +53,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ignored: true, reason: 'no_phone' }, { status: 200 });
     }
 
-    // Processamento desacoplado assíncrono para responder em <1s à Evolution API
-    processMessageAsync(phone, body).catch((err) => {
-      console.error('[Evolution Webhook] Erro no processamento assíncrono:', err);
-    });
+    // Aguarda o processamento para que a Vercel Serverless não congele a execução antes da resposta
+    await processMessageAsync(phone, body);
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error: unknown) {
