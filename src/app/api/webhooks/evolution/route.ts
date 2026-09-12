@@ -542,6 +542,13 @@ Relatório completo em PDF por apenas **${INFINITE_PAY_ONE_OFF.supplierXray.pric
     return;
   }
 
+  // Escalonamento para Consultoria Humana (Marcos)
+  if (cleanText.includes('consultoria') || cleanText.includes('marcos') || cleanText.includes('especialista') || cleanText.includes('humano')) {
+    const { escalateToHumanConsultant } = await import('@/lib/solo/consultant-escalation');
+    await escalateToHumanConsultant(client.id, 'whatsapp_chat');
+    return;
+  }
+
   await sendEvolutionText({
     phone,
     text: `Olá, ${client.name.split(' ')[0]}! 😊

@@ -116,12 +116,10 @@ Você já pode me enviar um áudio ou perguntar:
         paid_at: new Date().toISOString(),
       });
 
-      await sendEvolutionText({
-        phone: client.whatsapp_number,
-        text: `🎉 *Pagamento Confirmado! (Raio-X de Fornecedores)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Nossa IA já iniciou o mapeamento e pesquisa regional de fornecedores para o seu negócio.
-O relatório completo com a marca AnalisAí será enviado em PDF aqui no WhatsApp em instantes!`,
+      // Dispara a geração assíncrona do Raio-X em PDF e envio no WhatsApp
+      const { executeAndSendSupplierXRay } = await import('@/lib/solo/supplier-xray');
+      executeAndSendSupplierXRay(client.id).catch((err) => {
+        console.error('[InfinitePay Webhook] Erro ao gerar Raio-X:', err);
       });
 
       return NextResponse.json({ success: true, processed: 'supplier_xray' });

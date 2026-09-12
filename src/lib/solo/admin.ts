@@ -1,5 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { PlanCode } from '@/types/solo';
+import { executeAndSendSupplierXRay } from './supplier-xray';
+import { escalateToHumanConsultant } from './consultant-escalation';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -33,7 +35,7 @@ export async function handleAdminCommands(
     .single();
 
   if (!client || !client.is_admin) {
-    return { handled: false }; // Usuários comuns não recebem resposta de comando admin
+    return { handled: false };
   }
 
   const parts = clean.replace(/^[!/]/, '').split(' ');
@@ -56,6 +58,8 @@ Comandos disponíveis para você testar todas as opções:
 • *!estourar doc* → Simula que você estourou a cota de documentos
 • *!estourar analise* → Simula que você gastou todas análises de caixa
 • *!gerar contas teste* → Cria 4 contas a pagar fictícias para testar o consultor
+• *!raio-x* → Dispara a geração e envio imediato do **Raio-X de Fornecedores em PDF**
+• *!escalar* → Simula o **Escalonamento Humano**, disparando o lead no seu WhatsApp
 • *!bypass on* → Ativa modo sem limites (tudo liberado)
 • *!bypass off* → Desativa bypass (vivencia a experiência de cliente normal)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -258,14 +262,40 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
       handled: true,
       message: `🧾 *4 Contas a Pagar Fictícias Criadas!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Copel (R$ 348,50) - Vence amanhã (Criticidade 5 - Luz)
-2. Vivo Fibra (R$ 129,90) - Vence em 2 dias (Criticidade 5 - Internet)
-3. Fornecedor Embalagens (R$ 1.850,00) - Vence em 3 dias (Criticidade 2 - Flexível)
-4. Aluguel Comercial (R$ 2.500,00) - Vence em 5 dias (Criticidade 4 - Multa 10%)
+1. Copel (R$ 348,50) - Vence amanhã (Luz - Não adiar)
+2. Vivo Fibra (R$ 129,90) - Vence em 2 dias (Internet - Não adiar)
+3. Fornecedor Embalagens (R$ 1.850,00) - Vence em 3 dias (Flexível - Recomendado adiar)
+4. Aluguel Comercial (R$ 2.500,00) - Vence em 5 dias (Multa 10%)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 Agora você pode:
-• Perguntar *"qual conta devo adiar?"* para ver o raciocínio do Consultor de Caixa.
-• Enviar um áudio dizendo *"mude o vencimento do fornecedor de embalagens para dia 25"* para testar a confirmação de 2 etapas!`,
+💡 Experimente agora:
+• Pergunte *"qual conta devo adiar?"*
+• Grave um áudio: *"mude o vencimento do fornecedor de embalagens para dia 25"*`,
+    };
+  }
+
+  // ── !raio-x / !testar raio-x ───────────────────────────────────────────────
+  if (action === 'raio-x' || action === 'raiox') {
+    executeAndSendSupplierXRay(clientId).catch((err) => {
+      console.error('[Admin Raio-X Test Error]:', err);
+    });
+
+    return {
+      handled: true,
+      message: `🚀 *Iniciando Geração de Teste do Raio-X de Fornecedores!*
+O Gemini está realizando a pesquisa via Google Search Grounding e gerando o PDF com a marca AnalisAí. O arquivo será enviado aqui no seu WhatsApp em instantes!`,
+    };
+  }
+
+  // ── !escalar / !testar consultoria ─────────────────────────────────────────
+  if (action === 'escalar' || action === 'consultoria') {
+    escalateToHumanConsultant(clientId, 'admin_test').catch((err) => {
+      console.error('[Admin Escalate Test Error]:', err);
+    });
+
+    return {
+      handled: true,
+      message: `📲 *Testando Escalonamento para Consultoria Humana!*
+A ficha estruturada do lead qualificado está sendo despachada agora para o seu WhatsApp (+551331500987).`,
     };
   }
 
