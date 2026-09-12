@@ -80,6 +80,6 @@ export const INFINITE_PAY_ONE_OFF = {
     name: 'Certificado Digital A1',
     priceCents: 17000,
     priceFormatted: 'R$ 170,00',
-    checkoutUrl: 'https://link.infinitepay.io/solucione-0s1/Ri0x-qV8KaaMU9p-117,99',
+    checkoutUrl: 'https://link.infinitepay.io/solucione-0s1/Ri0x-5MPmTUeivc-170,00',
   },
 } as const;
