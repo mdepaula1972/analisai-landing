@@ -47,7 +47,15 @@ export async function POST(req: NextRequest) {
     }
 
     const remoteJid = body.data?.key?.remoteJid || '';
-    const phone = remoteJid.replace('@s.whatsapp.net', '');
+    const remoteJidAlt = (body.data?.key as any)?.remoteJidAlt || '';
+    const sender = (body as any)?.sender || '';
+
+    // Se remoteJid for um dispositivo vinculado (@lid), usa remoteJidAlt ou sender com o número real
+    let rawPhone = remoteJid;
+    if (remoteJid.includes('@lid')) {
+      rawPhone = remoteJidAlt || sender || remoteJid;
+    }
+    const phone = rawPhone.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
 
     if (!phone) {
       return NextResponse.json({ ignored: true, reason: 'no_phone' }, { status: 200 });
