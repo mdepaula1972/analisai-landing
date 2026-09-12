@@ -128,7 +128,7 @@ export default function BpoLandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
             {[
               { valor: 'Até R$ 43k', label: 'Economia anual vs. CLT' },
-              { valor: 'R$ 397', label: 'Planos a partir de /mês' },
+              { valor: 'R$ 67', label: 'Planos a partir de /mês' },
               { valor: '+120', label: 'Empresas e MEIs atendidos' },
               { valor: '< 48h', label: 'Para primeira entrega' },
             ].map((stat) => (

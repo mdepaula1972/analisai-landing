@@ -29,7 +29,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
 
           {/* Nav principal */}
           <nav className="hidden items-center gap-3 xl:gap-4 text-xs font-semibold text-slate-300 lg:flex" aria-label="Navegação principal">
-            <a href="#planos" className="whitespace-nowrap text-amber-300 hover:text-amber-200 transition-colors">Planos (a partir de R$ 397)</a>
+            <a href="#planos" className="whitespace-nowrap text-amber-300 hover:text-amber-200 transition-colors">Planos (a partir de R$ 67)</a>
             <a href="#comparativo" className="whitespace-nowrap hover:text-amber-300 transition-colors">Economia vs CLT</a>
             <a href="#entregamos" className="whitespace-nowrap hover:text-amber-300 transition-colors">Como Funciona</a>
             <a href="#setores" className="whitespace-nowrap hover:text-amber-300 transition-colors">Setores</a>
@@ -95,7 +95,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
 
               {/* Subheadline */}
               <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-300 max-w-xl">
-                A Solucione cuida de toda a rotina — contas a pagar/receber, conciliação diária, DRE e relatórios — com planos a partir de <strong className="text-white font-black">R$ 397/mês</strong>. Sem encargos, sem faltas e com a segurança de um contrato PJ.
+                A Solucione cuida de toda a rotina — contas a pagar/receber, conciliação diária, DRE e relatórios — com planos a partir de <strong className="text-white font-black">R$ 67/mês</strong> (Solo com IA) e BPO com consultor dedicado. Sem encargos, sem faltas e com a segurança de um contrato PJ.
               </p>
 
               {/* Card Destaque: Potencial de Economia Imediata */}
@@ -194,7 +194,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
                 <Sparkles className="w-4 h-4 font-black shrink-0" />
                 <div>
                   <p className="text-[9px] font-bold leading-none uppercase tracking-wide">Planos Inclusivos</p>
-                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">A partir de R$ 397/mês</p>
+                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">A partir de R$ 67/mês</p>
                 </div>
               </div>
 
