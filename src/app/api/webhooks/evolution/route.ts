@@ -350,7 +350,7 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Você ainda tem *${quotaCh
   const isAudio = !!message?.audioMessage;
 
   if (isAudio) {
-    if (plan && !plan.has_voice_commands && !client.is_admin) {
+    if (plan && !plan.has_voice_commands) {
       await sendEvolutionText({
         phone,
         text: `🎙️ *Comandos por voz são exclusivos do AnalisAí Solo!*
@@ -487,7 +487,7 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.c
 
   // Consultor de Caixa por Texto
   if (cleanText.includes('atrasar') || cleanText.includes('postergar') || cleanText.includes('sem dinheiro') || cleanText.includes('qual conta')) {
-    if (plan && !plan.has_cash_flow_advisor && !client.is_admin) {
+    if (plan && !plan.has_cash_flow_advisor) {
       await sendEvolutionText({
         phone,
         text: `💡 *O Consultor de Fluxo de Caixa é exclusivo dos planos AnalisAí Solo e Solo Plus!*
