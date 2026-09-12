@@ -3,6 +3,8 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { extractDocumentWithGemini, processVoiceCommandWithGemini } from '@/lib/solo/gemini';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
+import { handleAdminCommands } from '@/lib/solo/admin';
+import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
 import { INFINITE_PAY_PLANS, INFINITE_PAY_ONE_OFF } from '@/lib/solo/constants';
 import { addMinutes } from 'date-fns';
 
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ignored: true, reason: 'no_phone' }, { status: 200 });
     }
 
-    // Processa a mensagem de forma desacoplada para responder em <1s à Evolution API
+    // Processamento desacoplado assíncrono para responder em <1s à Evolution API
     processMessageAsync(phone, body).catch((err) => {
       console.error('[Evolution Webhook] Erro no processamento assíncrono:', err);
     });
@@ -64,7 +66,7 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   // 1. Localiza cliente pelo número de WhatsApp
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, whatsapp_number, status')
+    .select('id, name, whatsapp_number, status, is_admin')
     .or(`whatsapp_number.eq.${phone},whatsapp_number.eq.55${phone}`)
     .single();
 
@@ -86,7 +88,16 @@ Escolha seu plano e ative seu assistente contábil self-service agora mesmo:
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
   const cleanText = rawText.trim().toLowerCase();
 
-  // 2. Verifica se o cliente possui uma ação pendente de confirmação (TTL 10 min)
+  // 2. Intercepta Comandos de Administração e Teste (!ajuda, !reset, !simular, !estourar, !gerar contas)
+  if (client.is_admin && (cleanText.startsWith('!') || cleanText.startsWith('/'))) {
+    const adminResponse = await handleAdminCommands(client.id, rawText);
+    if (adminResponse.handled && adminResponse.message) {
+      await sendEvolutionText({ phone, text: adminResponse.message });
+      return;
+    }
+  }
+
+  // 3. Verifica se o cliente possui uma ação pendente de confirmação (TTL 10 min)
   const { data: pendingAction } = await supabase
     .from('bot_action_confirmations')
     .select('*')
@@ -107,6 +118,7 @@ Escolha seu plano e ative seu assistente contábil self-service agora mesmo:
         .update({ status: 'confirmed' })
         .eq('id', pendingAction.id);
 
+      // Confirmação de Leitura de Documento com Baixa Certeza
       if (pendingAction.action_type === 'confirm_low_confidence_doc') {
         const payload = pendingAction.proposed_payload as any;
 
@@ -140,9 +152,34 @@ Escolha seu plano e ative seu assistente contábil self-service agora mesmo:
           text: `✅ *Lançamento confirmado com sucesso!*
 O valor de *R$ ${Number(payload.total_amount).toFixed(2)}* referente a *${payload.counterparty_name}* já foi registrado no seu Livro Caixa.`,
         });
+        return;
       }
 
-      return;
+      // Confirmação de Alteração de Vencimento
+      if (pendingAction.action_type === 'update_due_date') {
+        const payload = pendingAction.proposed_payload as any;
+
+        await supabase
+          .from('payables_receivables')
+          .update({
+            current_due_date: payload.new_due_date,
+            status: 'postponed',
+            notes: `Vencimento prorrogado de ${payload.old_due_date} para ${payload.new_due_date} via comando de voz em ${new Date().toLocaleDateString('pt-BR')}`,
+          })
+          .eq('id', payload.bill_id);
+
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Vencimento Alterado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Conta: *${payload.supplier}*
+• Valor: *R$ ${Number(payload.amount).toFixed(2)}*
+• Nova data de vencimento: *${payload.new_due_date}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
+        });
+        return;
+      }
     } else if (isNegative) {
       await supabase
         .from('bot_action_confirmations')
@@ -151,23 +188,23 @@ O valor de *R$ ${Number(payload.total_amount).toFixed(2)}* referente a *${payloa
 
       await sendEvolutionText({
         phone,
-        text: `🚫 *Ação cancelada.* Os dados não foram salvos no seu Livro Caixa. Você pode reenviar uma foto mais nítida a qualquer momento.`,
+        text: `🚫 *Ação cancelada.* Nenhuma alteração foi realizada nos seus registros.`,
       });
       return;
     }
   }
 
-  // 3. Obtém Plano e Consumo do Ciclo
+  // 4. Obtém Plano e Consumo do Ciclo
   const { plan, cycle } = await getClientPlanAndCurrentCycle(client.id);
 
-  // 4. Ingestão de Documentos (Imagem ou PDF)
+  // 5. Ingestão de Documentos (Imagem ou PDF)
   const isImage = !!message?.imageMessage;
   const isDoc = !!message?.documentMessage;
 
   if (isImage || isDoc) {
     const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
 
-    if (!quotaCheck.allowed) {
+    if (!quotaCheck.allowed && !client.is_admin) {
       await sendEvolutionText({
         phone,
         text: `⚠️ *Limite de Documentos Atingido!*
@@ -268,7 +305,7 @@ Os dados estão corretos?
 • *Vencimento:* ${extracted.due_date || 'À vista'}
 • *Classificação:* ${extracted.category_suggestion}
 ━━━━━━━━━━━━━━━━━━━━
-Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`,
+${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`}`,
       });
       return;
     } catch (err) {
@@ -281,11 +318,11 @@ Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`,
     }
   }
 
-  // 5. Ingestão de Áudio (Comandos por Voz)
+  // 6. Ingestão de Áudio (Comandos por Voz)
   const isAudio = !!message?.audioMessage;
 
   if (isAudio) {
-    if (plan && !plan.has_voice_commands) {
+    if (plan && !plan.has_voice_commands && !client.is_admin) {
       await sendEvolutionText({
         phone,
         text: `🎙️ *Comandos por voz são exclusivos do AnalisAí Solo!*
@@ -302,7 +339,7 @@ Deseja migrar para o Solo agora?
     }
 
     const quotaCheck = await checkAndIncrementQuota(client.id, 'bot', 1);
-    if (!quotaCheck.allowed) {
+    if (!quotaCheck.allowed && !client.is_admin) {
       await sendEvolutionText({
         phone,
         text: `⚠️ *Limite de interações atingido!* Você utilizou todas as ${quotaCheck.limit} interações de bot do mês. Seu ciclo reseta em breve.`,
@@ -316,17 +353,68 @@ Deseja migrar para o Solo agora?
     if (audioResult.functionCalls.length > 0) {
       const call = audioResult.functionCalls[0];
 
-      if (call.name === 'get_plan_consumption') {
-        const summary = formatConsumptionSummary(cycle, plan);
-        await sendEvolutionText({ phone, text: summary });
-        return;
+      // A) Function Call: Alterar Vencimento por Voz
+      if (call.name === 'propose_due_date_change') {
+        const args = call.args as any;
+        const supplierQuery = args.supplier_name || '';
+        const targetDate = args.target_date;
+
+        // Busca conta em aberto compatível
+        const { data: matchedBill } = await supabase
+          .from('payables_receivables')
+          .select('*')
+          .eq('client_id', client.id)
+          .eq('status', 'open')
+          .ilike('counterparty_name', `%${supplierQuery}%`)
+          .order('current_due_date', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (matchedBill) {
+          await supabase.from('bot_action_confirmations').insert({
+            client_id: client.id,
+            action_type: 'update_due_date',
+            target_entity_id: matchedBill.id,
+            proposed_payload: {
+              bill_id: matchedBill.id,
+              supplier: matchedBill.counterparty_name,
+              amount: matchedBill.amount,
+              old_due_date: matchedBill.current_due_date,
+              new_due_date: targetDate,
+            },
+            status: 'pending',
+            expires_at: addMinutes(new Date(), 10).toISOString(),
+          });
+
+          await sendEvolutionText({
+            phone,
+            text: `⚠️ *Confirmação de Alteração de Vencimento*
+Identifiquei a seguinte conta agendada:
+
+• *Fornecedor:* ${matchedBill.counterparty_name}
+• *Valor:* R$ ${Number(matchedBill.amount).toFixed(2)}
+• *Vencimento Atual:* ${matchedBill.current_due_date}
+• *Novo Vencimento Solicitado:* ${targetDate}
+
+Você confirma adiar esta conta?
+👉 Responda *Sim* para confirmar ou *Não* para manter como está.`,
+          });
+          return;
+        } else {
+          await sendEvolutionText({
+            phone,
+            text: `Não localizei nenhuma conta em aberto com o fornecedor "${supplierQuery}".
+Deseja digitar o nome correto ou consultar seu livro caixa?`,
+          });
+          return;
+        }
       }
 
+      // B) Function Call: Consultor de Fluxo de Caixa (Qual conta atrasar)
       if (call.name === 'request_cash_flow_postpone_advice') {
-        // Valida cota de análise de caixa
         const analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
 
-        if (!analysisCheck.allowed) {
+        if (!analysisCheck.allowed && !client.is_admin) {
           await sendEvolutionText({
             phone,
             text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
@@ -337,13 +425,25 @@ Para liberar uma nova análise estratégica detalhada de postergação de contas
           return;
         }
 
+        const args = call.args as any;
+        const availableCash = args?.available_cash ? Number(args.available_cash) : undefined;
+        const advice = await generateCashFlowPostponeAdvice(client.id, availableCash);
+
         await sendEvolutionText({
           phone,
-          text: `📊 *Consultor de Caixa (Análise ${analysisCheck.current} de ${analysisCheck.limit}):*
-Analisando suas contas em aberto:
-1. **Prioridade Máxima:** Serviços essenciais (energia, internet) não devem ser atrasados para não suspender a operação.
-2. **Recomendação de Postergação:** Renegociar o boleto de maior valor com prazo flexível junto ao fornecedor comercial para preservar o caixa imediato.`,
+          text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${advice}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.current} de ${analysisCheck.limit} utilizadas no mês.`}`,
         });
+        return;
+      }
+
+      // C) Function Call: Consumo
+      if (call.name === 'get_plan_consumption') {
+        const summary = formatConsumptionSummary(cycle, plan);
+        await sendEvolutionText({ phone, text: summary });
         return;
       }
     }
@@ -355,7 +455,49 @@ Analisando suas contas em aberto:
     return;
   }
 
-  // 6. Mensagens de Texto
+  // 7. Mensagens de Texto
+
+  // Consultor de Caixa por Texto
+  if (cleanText.includes('atrasar') || cleanText.includes('postergar') || cleanText.includes('sem dinheiro') || cleanText.includes('qual conta')) {
+    if (plan && !plan.has_cash_flow_advisor && !client.is_admin) {
+      await sendEvolutionText({
+        phone,
+        text: `💡 *O Consultor de Fluxo de Caixa é exclusivo dos planos AnalisAí Solo e Solo Plus!*
+
+No **AnalisAí Solo**, nossa IA analisa suas contas e te recomenda exatamente qual boleto postergar com o menor risco operacional.
+
+Migre para o Solo por R$ 87,99/mês:
+👉 ${INFINITE_PAY_PLANS.monthly.solo.checkoutUrl}`,
+      });
+      return;
+    }
+
+    const analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
+
+    if (!analysisCheck.allowed && !client.is_admin) {
+      await sendEvolutionText({
+        phone,
+        text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
+
+Para liberar uma nova análise estratégica detalhada por apenas **R$ 14,90**, pague pelo link seguro:
+👉 ${INFINITE_PAY_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
+      });
+      return;
+    }
+
+    const advice = await generateCashFlowPostponeAdvice(client.id);
+
+    await sendEvolutionText({
+      phone,
+      text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${advice}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.current} de ${analysisCheck.limit} utilizadas no mês.`}`,
+    });
+    return;
+  }
+
   if (cleanText.includes('consumo') || cleanText.includes('limite') || cleanText.includes('plano')) {
     const summary = formatConsumptionSummary(cycle, plan);
     await sendEvolutionText({ phone, text: summary });
@@ -400,29 +542,14 @@ Relatório completo em PDF por apenas **${INFINITE_PAY_ONE_OFF.supplierXray.pric
     return;
   }
 
-  // Se cliente do Start perguntar sobre qual conta atrasar
-  if (cleanText.includes('atrasar') || cleanText.includes('postergar') || cleanText.includes('sem dinheiro')) {
-    if (plan && !plan.has_cash_flow_advisor) {
-      await sendEvolutionText({
-        phone,
-        text: `💡 *O Consultor de Fluxo de Caixa é exclusivo dos planos AnalisAí Solo e Solo Plus!*
-
-No **AnalisAí Solo**, nossa IA analisa suas contas e te recomenda exatamente qual boleto postergar com o menor risco operacional.
-
-Migre para o Solo por R$ 87,99/mês:
-👉 ${INFINITE_PAY_PLANS.monthly.solo.checkoutUrl}`,
-      });
-      return;
-    }
-  }
-
   await sendEvolutionText({
     phone,
     text: `Olá, ${client.name.split(' ')[0]}! 😊
 Como posso te ajudar hoje?
 • Envie uma **foto ou PDF de boleto/nota** para eu lançar no seu Livro Caixa
+• Envie um **áudio** alterando vencimento de uma conta ou pedindo conselho de caixa
+• Pergunte *"qual conta devo atrasar?"* para analisar seu aperto de caixa
 • Digite *consumo* para ver o uso do seu plano no mês
-• Digite *raio x* para contratar uma consultoria de fornecedores (${INFINITE_PAY_ONE_OFF.supplierXray.priceFormatted})
-• Digite *indicar* para conhecer o programa de indicação com mensalidade grátis`,
+${client.is_admin ? '• Digite *!ajuda* para ver o painel de comandos de teste' : ''}`,
   });
 }

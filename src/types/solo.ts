@@ -11,6 +11,8 @@ export interface Plan {
   cash_flow_analysis_limit: number;
   has_voice_commands: boolean;
   has_cash_flow_advisor: boolean;
+  infinitepay_monthly_slug?: string | null;
+  infinitepay_annual_slug?: string | null;
   features_config?: Record<string, unknown>;
   is_active: boolean;
 }
@@ -23,6 +25,7 @@ export interface Client {
   tax_id: string;
   tax_type: 'CPF' | 'CNPJ';
   whatsapp_number: string;
+  is_admin: boolean;
   status: 'active' | 'suspended' | 'canceled';
   created_at: string;
 }
