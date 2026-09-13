@@ -43,7 +43,7 @@ Com esses boletos agendados, quando você perguntar *"qual conta devo atrasar?"*
   
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       systemInstruction: `Você é o Consultor Sênior de Fluxo de Caixa do AnalisAí Solo.
 Seu trabalho é apoiar autônomos, MEIs e microempresários que estão enfrentando aperto temporário de caixa, indicando exatamente qual conta pagar e qual postergar com o menor risco.
 

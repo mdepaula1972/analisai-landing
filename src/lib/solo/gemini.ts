@@ -20,7 +20,7 @@ export async function extractDocumentWithGemini(
 ): Promise<ExtractedDocumentData> {
   const genAI = getGeminiClient();
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -185,8 +185,8 @@ Data de referência: 2026-09-13. ${contextText}`;
   const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
-  // Lista resiliente de modelos em cascata (suportando qualquer versão ativa na conta)
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+  // Lista de modelos oficiais ativos na conta Google AI Studio
+  const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
   let transcribedText = '';
   let lastError: any = null;
 
@@ -280,7 +280,7 @@ Data de referência: 2026-09-13. ${contextText}`;
   // Regra C: Se nenhuma regra heurística direta disparou, usa o Gemini de texto com Function Calling
   try {
     const textModel = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       tools: [{ functionDeclarations }],
       systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
 Classifique o comando do usuário e acione a ferramenta correta.
