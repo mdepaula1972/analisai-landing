@@ -4,7 +4,7 @@
  */
 
 export const ASAAS_WEBHOOK_AUTH_TOKEN =
-  process.env.ASAAS_WEBHOOK_TOKEN || 'whsec_A6nET6eQeKLt21yUqmOqK0qyqGtclj-vNPGxl3BaR7g';
+  process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_AUTH_TOKEN || '';
 
 export const ASAAS_PLANS = {
   monthly: {
