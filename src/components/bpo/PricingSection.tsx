@@ -6,7 +6,7 @@ import {
   ArrowRight, AlertCircle, Zap, Shield, Bot, Users, ExternalLink,
 } from 'lucide-react';
 import { WHATSAPP } from '@/lib/contact';
-import { INFINITE_PAY_PLANS, INFINITE_PAY_ONE_OFF } from '@/lib/solo/constants';
+import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 
 // ── Planos BPO Humano Tradicional ──────────────────────────────────────────
 const PLANOS_BPO = [
@@ -226,7 +226,7 @@ export default function PricingSection() {
                 </div>
 
                 <a
-                  href={frequencia === 'mensal' ? INFINITE_PAY_PLANS.monthly.start.checkoutUrl : INFINITE_PAY_PLANS.annual.start.checkoutUrl}
+                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.start.checkoutUrl : ASAAS_PLANS.annual.start.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-4 font-extrabold text-xs sm:text-sm border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-200 bg-slate-800/60 transition-all hover:-translate-y-0.5"
@@ -285,7 +285,7 @@ export default function PricingSection() {
                 </div>
 
                 <a
-                  href={frequencia === 'mensal' ? INFINITE_PAY_PLANS.monthly.solo.checkoutUrl : INFINITE_PAY_PLANS.annual.solo.checkoutUrl}
+                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.solo.checkoutUrl : ASAAS_PLANS.annual.solo.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-4 font-extrabold text-xs sm:text-sm bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5"
@@ -340,7 +340,7 @@ export default function PricingSection() {
                 </div>
 
                 <a
-                  href={frequencia === 'mensal' ? INFINITE_PAY_PLANS.monthly.solo_plus.checkoutUrl : INFINITE_PAY_PLANS.annual.solo_plus.checkoutUrl}
+                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.solo_plus.checkoutUrl : ASAAS_PLANS.annual.solo_plus.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-4 font-extrabold text-xs sm:text-sm border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-200 bg-slate-800/60 transition-all hover:-translate-y-0.5"
@@ -370,9 +370,9 @@ export default function PricingSection() {
                     <p className="text-xs text-slate-400 mb-3">Recomendação estratégica de qual conta postergar com segurança.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="text-base font-black text-white">{INFINITE_PAY_ONE_OFF.cashFlowAnalysis.priceFormatted}</span>
+                    <span className="text-base font-black text-white">{ASAAS_ONE_OFF.cashFlowAnalysis.priceFormatted}</span>
                     <a
-                      href={INFINITE_PAY_ONE_OFF.cashFlowAnalysis.checkoutUrl}
+                      href={ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300"
@@ -392,9 +392,9 @@ export default function PricingSection() {
                     <p className="text-xs text-slate-400 mb-3">Mapeamento regional via IA com relatório comparativo em PDF.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="text-base font-black text-white">{INFINITE_PAY_ONE_OFF.supplierXray.priceFormatted}</span>
+                    <span className="text-base font-black text-white">{ASAAS_ONE_OFF.supplierXray.priceFormatted}</span>
                     <a
-                      href={INFINITE_PAY_ONE_OFF.supplierXray.checkoutUrl}
+                      href={ASAAS_ONE_OFF.supplierXray.checkoutUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300"
@@ -414,9 +414,9 @@ export default function PricingSection() {
                     <p className="text-xs text-slate-400 mb-3">Emissão rápida de e-CNPJ ou e-CPF por videoconferência.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-                    <span className="text-base font-black text-white">{INFINITE_PAY_ONE_OFF.digitalCertificateA1.priceFormatted}</span>
+                    <span className="text-base font-black text-white">{ASAAS_ONE_OFF.digitalCertificateA1.priceFormatted}</span>
                     <a
-                      href={INFINITE_PAY_ONE_OFF.digitalCertificateA1.checkoutUrl}
+                      href={ASAAS_ONE_OFF.digitalCertificateA1.checkoutUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300"
