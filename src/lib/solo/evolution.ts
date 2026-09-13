@@ -122,6 +122,9 @@ export async function sendEvolutionMedia({
 
 export async function fetchMediaBase64FromEvolution(messageData: any): Promise<string | null> {
   try {
+    const key = messageData?.key || (messageData?.id ? messageData : null);
+    const payloadMessage = key ? { key } : messageData;
+
     const res = await fetch(`${EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
       headers: {
@@ -129,7 +132,7 @@ export async function fetchMediaBase64FromEvolution(messageData: any): Promise<s
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message: messageData,
+        message: payloadMessage,
         convertToMp4: false,
       }),
     });

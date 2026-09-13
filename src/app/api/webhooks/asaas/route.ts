@@ -446,6 +446,16 @@ Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
         );
       }
 
+      // Transiciona o lead em degustação para cliente pagante ativo
+      if (clientPhone) {
+        const cleanDigits = clientPhone.replace(/\D/g, '');
+        const phoneNoCountry = cleanDigits.replace(/^55/, '');
+        await supabase
+          .from('trial_leads')
+          .update({ converted_to_client: true })
+          .or(`whatsapp_number.eq.${cleanDigits},whatsapp_number.eq.${phoneNoCountry}`);
+      }
+
       if (clientPhone) {
         const firstName = (clientName || 'Cliente').split(' ')[0];
         await sendEvolutionText({

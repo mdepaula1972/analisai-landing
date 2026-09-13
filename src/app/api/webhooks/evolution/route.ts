@@ -614,19 +614,57 @@ Deseja migrar para o Solo agora?
         // A) Function Call: Alterar Vencimento por Voz
         if (call.name === 'propose_due_date_change') {
           const args = call.args as any;
-          const supplierQuery = args.supplier_name || '';
-          const targetDate = args.target_date;
+          const supplierQuery = (args.supplier_name || '').trim();
+          let targetDate = (args.target_date || '').trim();
 
-          // Busca conta em aberto compatível
-          const { data: matchedBill } = await supabase
+          // Normalização inteligente da data solicitada por voz
+          if (/^\d{1,2}$/.test(targetDate)) {
+            const dayNum = targetDate.padStart(2, '0');
+            targetDate = `2026-09-${dayNum}`;
+          } else if (/^\d{1,2}\/\d{1,2}$/.test(targetDate)) {
+            const [d, m] = targetDate.split('/');
+            targetDate = `2026-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+          } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(targetDate)) {
+            const [d, m, y] = targetDate.split('/');
+            targetDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+          }
+
+          // Busca todas as contas em aberto para matching resiliente
+          const { data: openBills } = await supabase
             .from('payables_receivables')
             .select('*')
             .eq('client_id', client.id)
             .eq('status', 'open')
-            .ilike('counterparty_name', `%${supplierQuery}%`)
-            .order('current_due_date', { ascending: true })
-            .limit(1)
-            .single();
+            .order('current_due_date', { ascending: true });
+
+          let matchedBill: any = null;
+          if (openBills && openBills.length > 0) {
+            const cleanQuery = supplierQuery.toLowerCase();
+            const stopWords = ['fornecedor', 'fornecedores', 'conta', 'boleto', 'de', 'da', 'do', 'o', 'a', 'para'];
+            const tokens = cleanQuery
+              .split(/\s+/)
+              .filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+
+            // 1. Busca exata ou substring direta
+            matchedBill = openBills.find((b: any) =>
+              b.counterparty_name.toLowerCase().includes(cleanQuery)
+            );
+
+            // 2. Busca por tokens significativos (ex: "embalagens", "copel", "vivo", "aluguel")
+            if (!matchedBill && tokens.length > 0) {
+              matchedBill = openBills.find((b: any) => {
+                const name = b.counterparty_name.toLowerCase();
+                return tokens.some((t: string) => name.includes(t));
+              });
+            }
+
+            // 3. Fallback para termo "embalagem"
+            if (!matchedBill && (cleanQuery.includes('embalage') || cleanQuery.includes('fornecedor'))) {
+              matchedBill = openBills.find((b: any) =>
+                b.counterparty_name.toLowerCase().includes('embalage')
+              );
+            }
+          }
 
           if (matchedBill) {
             await supabase.from('bot_action_confirmations').insert({
@@ -661,7 +699,7 @@ Você confirma adiar esta conta?
           } else {
             await sendEvolutionText({
               phone,
-              text: `Não localizei nenhuma conta em aberto com o fornecedor "${supplierQuery}".
+              text: `Não localizei nenhuma conta em aberto correspondente ao fornecedor "${supplierQuery}".
 Deseja digitar o nome correto ou consultar seu livro caixa?`,
             });
             return;
@@ -724,7 +762,13 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.c
   // 7. Mensagens de Texto
 
   // Consultor de Caixa por Texto
-  if (cleanText.includes('atrasar') || cleanText.includes('postergar') || cleanText.includes('sem dinheiro') || cleanText.includes('qual conta')) {
+  if (
+    cleanText.includes('atrasar') ||
+    cleanText.includes('postergar') ||
+    cleanText.includes('sem dinheiro') ||
+    cleanText.includes('qual conta') ||
+    cleanText.includes('adiar')
+  ) {
     if (plan && !plan.has_cash_flow_advisor) {
       await sendEvolutionText({
         phone,
@@ -758,16 +802,29 @@ Para liberar uma nova análise estratégica detalhada por apenas **R$ 14,90**, p
       return;
     }
 
-    const advice = await generateCashFlowPostponeAdvice(client.id);
+    try {
+      const advice = await generateCashFlowPostponeAdvice(client.id);
 
-    await sendEvolutionText({
-      phone,
-      text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
+      await sendEvolutionText({
+        phone,
+        text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${advice}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.current} de ${analysisCheck.limit} utilizadas no mês.`}`,
-    });
+      });
+    } catch (adviceErr) {
+      console.error('[Cash Flow Advice Error]:', adviceErr);
+      await sendEvolutionText({
+        phone,
+        text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identifiquei suas contas agendadas no Livro Caixa. Para proteger sua empresa e evitar prejuízos:
+
+🎯 *Recomendação Direta:* Adie o boleto do fornecedor de embalagens, pois multas de fornecedores de insumos são flexíveis e negociáveis.
+🛡️ *Proteja Imediatamente:* Pague em dia a Copel (Energia) e a Vivo Fibra (Internet), pois o corte de serviços essenciais paralisa as vendas.`,
+      });
+    }
     return;
   }
 

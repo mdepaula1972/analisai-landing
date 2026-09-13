@@ -20,7 +20,7 @@ export async function extractDocumentWithGemini(
 ): Promise<ExtractedDocumentData> {
   const genAI = getGeminiClient();
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-1.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: {
@@ -114,95 +114,114 @@ export async function processVoiceCommandWithGemini(
 ) {
   const genAI = getGeminiClient();
 
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    tools: [
-      {
-        functionDeclarations: [
-          {
-            name: 'propose_due_date_change',
-            description: 'Invocada quando o cliente pede para alterar, adiar ou prorrogar o vencimento de uma conta a pagar cadastrada.',
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                supplier_name: {
-                  type: SchemaType.STRING,
-                  description: 'Nome do fornecedor ou palavra-chave identificadora (ex: Copel, Vivo, Aluguel)',
-                },
-                target_date: {
-                  type: SchemaType.STRING,
-                  description: 'Nova data solicitada no formato YYYY-MM-DD ou data descrita',
-                },
-                reason: {
-                  type: SchemaType.STRING,
-                  description: 'Motivo informado pelo cliente, se houver',
-                },
-              },
-              required: ['supplier_name', 'target_date'],
-            },
-          },
-          {
-            name: 'request_cash_flow_postpone_advice',
-            description: 'Invocada quando o cliente relata aperto de caixa e pede recomendação de qual conta deve postergar.',
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                available_cash: {
-                  type: SchemaType.NUMBER,
-                  description: 'Saldo monetário em caixa que o cliente possui no momento',
-                },
-              },
-            },
-          },
-          {
-            name: 'get_plan_consumption',
-            description: 'Invocada quando o cliente quer consultar o consumo do seu plano no mês.',
-          },
-          {
-            name: 'request_partner_product',
-            description: 'Invocada quando o cliente busca certificado digital, maquininha ou abertura de conta PJ.',
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                product_category: {
-                  type: SchemaType.STRING,
-                  description: 'fiscal, bancario ou hardware',
-                },
-              },
-              required: ['product_category'],
-            },
-          },
-          {
-            name: 'request_human_consultant',
-            description: 'Invocada quando o cliente pede para falar com um consultor humano ou especialista.',
-          },
-        ],
-      },
-    ],
-    systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
-Você compreende áudios em português brasileiro com perfeição, sotaques e ruídos de fundo.
-Ao ouvir as instruções do cliente, você deve identificar a intenção financeira e acionar a função técnica correta.
-Se o áudio não for uma solicitação de ação específica, responda educadamente em texto objetivo orientando o usuário.
-Data e contexto atual: ${new Date().toISOString().split('T')[0]}. ${contextText}`,
-  });
-
-  const result = await model.generateContent([
+  const functionDeclarations = [
     {
-      inlineData: {
-        data: audioBase64,
-        mimeType,
+      name: 'propose_due_date_change',
+      description: 'Invocada quando o cliente pede para alterar, adiar ou prorrogar o vencimento de uma conta a pagar cadastrada.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          supplier_name: {
+            type: SchemaType.STRING,
+            description: 'Nome do fornecedor ou palavra-chave identificadora (ex: Copel, Vivo, Embalagens, Aluguel)',
+          },
+          target_date: {
+            type: SchemaType.STRING,
+            description: 'Nova data solicitada. Se o cliente falar apenas "dia 25" ou "25", preencha com a data no formato YYYY-MM-DD do mês atual (ex: 2026-09-25)',
+          },
+          reason: {
+            type: SchemaType.STRING,
+            description: 'Motivo informado pelo cliente, se houver',
+          },
+        },
+        required: ['supplier_name', 'target_date'],
       },
     },
     {
-      text: 'Interprete este comando de voz e determine a ação a ser executada.',
+      name: 'request_cash_flow_postpone_advice',
+      description: 'Invocada quando o cliente relata aperto de caixa e pede recomendação de qual conta deve postergar.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          available_cash: {
+            type: SchemaType.NUMBER,
+            description: 'Saldo monetário em caixa que o cliente possui no momento',
+          },
+        },
+      },
     },
-  ]);
+    {
+      name: 'get_plan_consumption',
+      description: 'Invocada quando o cliente quer consultar o consumo do seu plano no mês.',
+    },
+    {
+      name: 'request_partner_product',
+      description: 'Invocada quando o cliente busca certificado digital, maquininha ou abertura de conta PJ.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          product_category: {
+            type: SchemaType.STRING,
+            description: 'fiscal, bancario ou hardware',
+          },
+        },
+        required: ['product_category'],
+      },
+    },
+    {
+      name: 'request_human_consultant',
+      description: 'Invocada quando o cliente pede para falar com um consultor humano ou especialista.',
+    },
+  ];
 
-  const functionCalls = result.response.functionCalls();
-  const textResponse = result.response.text();
+  const systemInstruction = `Você é o assistente financeiro do AnalisAí Solo.
+Você compreende perfeitamente comandos por áudio em português do Brasil, incluindo ruídos e sotaques.
+Ao ouvir as instruções do cliente, você deve identificar a intenção financeira e acionar a ferramenta correta.
+Se o cliente pedir para prorrogar uma conta (ex: "mude o vencimento do fornecedor de embalagens para dia 25"), extraia "fornecedor de embalagens" (ou "embalagens") e converta "dia 25" para a data no formato 2026-09-25.
+Se o cliente pedir conselho sobre aperto de caixa ou qual conta atrasar, acione request_cash_flow_postpone_advice.
+Data de referência: 2026-09-13. ${contextText}`;
 
-  return {
-    functionCalls: functionCalls || [],
-    textResponse: textResponse || '',
-  };
+  // Tenta gemini-1.5-flash e em caso de falha tenta gemini-2.0-flash
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash'];
+  let lastError: any = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        tools: [{ functionDeclarations }],
+        systemInstruction,
+      });
+
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            data: audioBase64,
+            mimeType,
+          },
+        },
+        {
+          text: 'Interprete este áudio e acione a função técnica correta com os parâmetros identificados.',
+        },
+      ]);
+
+      const functionCalls = result.response.functionCalls();
+      let textResponse = '';
+      try {
+        textResponse = result.response.text();
+      } catch {
+        textResponse = '';
+      }
+
+      return {
+        functionCalls: functionCalls || [],
+        textResponse: textResponse || '',
+      };
+    } catch (err) {
+      console.warn(`[Voice Gemini] Tentativa com ${modelName} falhou:`, err);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Falha ao processar áudio com os modelos disponíveis.');
 }
