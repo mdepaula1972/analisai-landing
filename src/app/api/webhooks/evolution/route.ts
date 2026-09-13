@@ -72,7 +72,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const phone = candidateJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
+    // Remove qualquer domínio (@s.whatsapp.net, @lid, etc.) e sufixo de dispositivo (:1, :19, etc.)
+    const userPart = candidateJid.split('@')[0].split(':')[0];
+    const phone = userPart.replace(/\D/g, '');
 
     if (!phone) {
       return NextResponse.json({ ignored: true, reason: 'no_phone' }, { status: 200 });
@@ -117,7 +119,7 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
 
   // Se o cliente foi localizado e a mensagem veio com LID, sincroniza automaticamente
   if (client && body.data?.key?.remoteJid?.includes('@lid') && !client.whatsapp_lid) {
-    const lidDigits = body.data.key.remoteJid.replace(/\D/g, '');
+    const lidDigits = body.data.key.remoteJid.split('@')[0].split(':')[0].replace(/\D/g, '');
     if (lidDigits) {
       await supabase.from('clients').update({ whatsapp_lid: lidDigits }).eq('id', client.id);
     }
