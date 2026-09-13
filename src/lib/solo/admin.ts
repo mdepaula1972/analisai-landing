@@ -152,11 +152,33 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
         .update({ plan_id: plan.id })
         .eq('client_id', clientId);
 
+      let detailMsg = '';
+      if (targetCode === 'start') {
+        detailMsg = `• 📄 *Documentos:* Até 15 notas/boletos por mês (por texto ou foto)
+• 💬 *WhatsApp:* Registro contábil e lembretes diários
+• 🎙️ *Comandos por Voz:* Indisponíveis (gera convite de upgrade para o Solo)
+• 💡 *Consultor de Caixa:* Indisponível (oferece análise avulsa por R$ 14,90 ou upgrade para o Solo)`;
+      } else if (targetCode === 'solo') {
+        detailMsg = `• 📄 *Documentos:* Até 30 notas/boletos por mês
+• 🎙️ *Comandos por Voz:* 100% Liberados (altere vencimentos e envie áudios)
+• 💡 *Consultor de Caixa:* 2 análises estratégicas inclusas por mês
+• 📊 *Livro Caixa & DRE:* Automatizados
+
+💡 *Próximos testes recomendados:*
+1. Envie uma foto ou PDF de boleto/nota para leitura com IA.
+2. Pergunte *"estou sem dinheiro, qual conta devo atrasar?"*`;
+      } else {
+        detailMsg = `• 📄 *Documentos:* Até 60 notas/boletos por mês (o dobro do Solo)
+• 💬 *Interações de Bot:* Até 100 por mês
+• 💡 *Consultor de Caixa:* 4 análises estratégicas inclusas por mês
+• 🎙️ *Voz & IA:* Ilimitados com suporte prioritário`;
+      }
+
       return {
         handled: true,
         message: `🎭 *Simulação Ativada:* Seu perfil agora está operando sob as regras do plano *${plan.name}*.
-• Se testar voz no Start: receberá o gatilho de upsell.
-• Se testar análise de caixa no Start: receberá o convite para o Solo.`,
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${detailMsg}`,
       };
     }
   }
@@ -197,7 +219,7 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
 
       return {
         handled: true,
-        message: `💥 *Cota de Análises de Caixa Estourada!* Agora, envie uma mensagem ou áudio perguntando *"qual conta devo adiar?"* para testar a oferta de R$ 14,90 da InfinitePay.`,
+        message: `💥 *Cota de Análises de Caixa Estourada!* Agora, envie uma mensagem ou áudio perguntando *"qual conta devo adiar?"* para testar a oferta de R$ 14,90 do Asaas.`,
       };
     }
   }

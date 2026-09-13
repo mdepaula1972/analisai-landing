@@ -19,8 +19,13 @@ export async function generateCashFlowPostponeAdvice(
     .order('current_due_date', { ascending: true });
 
   if (error || !openBills || openBills.length === 0) {
-    return `Não identifiquei nenhuma conta a pagar em aberto cadastrada no momento para analisar.
-Envie fotos ou PDFs dos seus boletos para que eu possa avaliar quais têm menor impacto no seu caixa!`;
+    return `Não identifiquei nenhuma conta a pagar em aberto no seu Livro Caixa no momento.
+
+📝 *Como funciona o Consultor de Caixa:*
+Assim que você envia fotos ou PDFs dos seus boletos (energia, fornecedores, aluguel), o AnalisAí registra os valores e vencimentos automaticamente.
+Com esses boletos agendados, quando você perguntar *"qual conta devo atrasar?"*, eu calculo os juros de cada uma e indico a melhor decisão para proteger seu fluxo de caixa!
+
+👉 Envie uma foto ou PDF de boleto agora para começarmos!`;
   }
 
   const totalOpen = openBills.reduce((acc, b) => acc + Number(b.amount), 0);

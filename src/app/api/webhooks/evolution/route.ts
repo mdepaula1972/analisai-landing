@@ -5,7 +5,7 @@ import { extractDocumentWithGemini, processVoiceCommandWithGemini } from '@/lib/
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
-import { INFINITE_PAY_PLANS, INFINITE_PAY_ONE_OFF } from '@/lib/solo/constants';
+import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -105,9 +105,9 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
 Não encontramos uma assinatura ativa vinculada a este número de WhatsApp.
 
 Escolha seu plano e ative seu assistente contábil self-service agora mesmo:
-• *AnalisAí Start* (R$ 39,90/mês): ${INFINITE_PAY_PLANS.monthly.start.checkoutUrl}
-• *AnalisAí Solo* (R$ 87,99/mês): ${INFINITE_PAY_PLANS.monthly.solo.checkoutUrl}
-• *AnalisAí Solo Plus* (R$ 157,99/mês): ${INFINITE_PAY_PLANS.monthly.solo_plus.checkoutUrl}`,
+• *AnalisAí Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
+• *AnalisAí Solo* (R$ 87,99/mês): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
+• *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
     });
     return;
   }
@@ -239,7 +239,7 @@ Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
 Você já processou todos os ${quotaCheck.limit} documentos inclusos no seu ciclo deste mês.
 
 Para continuar lançando sem interrupções, faça o upgrade para o **AnalisAí Solo Plus** (60 documentos/mês):
-👉 ${INFINITE_PAY_PLANS.monthly.solo_plus.checkoutUrl}`,
+👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
       });
       return;
     }
@@ -355,13 +355,14 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Você ainda tem *${quotaCh
         phone,
         text: `🎙️ *Comandos por voz são exclusivos do AnalisAí Solo!*
 
-No seu plano atual (*AnalisAí Start*), você gerencia suas finanças por texto e envio de documentos. 
-No plano **AnalisAí Solo** (R$ 87,99/mês), você pode:
-• Gravar áudios para adiar vencimentos de contas;
-• Pedir conselhos de fluxo de caixa quando o dinheiro apertar.
+No seu plano atual (*AnalisAí Start*), o controle é realizado por mensagens de texto e envio de fotos/PDFs de comprovantes.
+
+No **AnalisAí Solo** (R$ 87,99/mês), você tem a praticidade de enviar áudios no WhatsApp para:
+• Prorrogar ou alterar vencimento de boletos na correria do dia a dia;
+• Pedir conselhos estratégicos de fluxo de caixa diretamente por voz.
 
 Deseja migrar para o Solo agora? 
-👉 Link de adesão direta: ${INFINITE_PAY_PLANS.monthly.solo.checkoutUrl}`,
+👉 Link de adesão direta: ${ASAAS_PLANS.monthly.solo.checkoutUrl}`,
       });
       return;
     }
@@ -448,7 +449,7 @@ Deseja digitar o nome correto ou consultar seu livro caixa?`,
             text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
 
 Para liberar uma nova análise estratégica detalhada de postergação de contas imediatamente por apenas **R$ 14,90**, conclua o pagamento no link seguro:
-👉 ${INFINITE_PAY_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
+👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
           });
           return;
         }
@@ -490,12 +491,19 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.c
     if (plan && !plan.has_cash_flow_advisor) {
       await sendEvolutionText({
         phone,
-        text: `💡 *O Consultor de Fluxo de Caixa é exclusivo dos planos AnalisAí Solo e Solo Plus!*
+        text: `💡 *Consultor de Fluxo de Caixa AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Compreendo o momento de aperto! No seu plano atual (*AnalisAí Start*), o consultor de postergação inteligente não está incluso na mensalidade.
 
-No **AnalisAí Solo**, nossa IA analisa suas contas e te recomenda exatamente qual boleto postergar com o menor risco operacional.
+Você tem duas alternativas rápidas para resolver isso agora:
 
-Migre para o Solo por R$ 87,99/mês:
-👉 ${INFINITE_PAY_PLANS.monthly.solo.checkoutUrl}`,
+1️⃣ *Análise de Caixa Avulsa (R$ 14,90)*:
+Nossa IA analisa suas contas agendadas e te indica na hora qual boleto adiar com o menor custo de juros e menor risco ao seu negócio:
+👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}
+
+2️⃣ *Upgrade para o AnalisAí Solo (R$ 87,99/mês)*:
+Garante 2 análises de caixa por mês, comandos por áudio e 30 documentos mensais:
+👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}`,
       });
       return;
     }
@@ -508,7 +516,7 @@ Migre para o Solo por R$ 87,99/mês:
         text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
 
 Para liberar uma nova análise estratégica detalhada por apenas **R$ 14,90**, pague pelo link seguro:
-👉 ${INFINITE_PAY_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
+👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
       });
       return;
     }
@@ -550,9 +558,9 @@ Seu link exclusivo de indicação:
       phone,
       text: `🔐 *Certificado Digital A1 com Desconto Especial*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Nosso parceiro oficial emite o Certificado Digital A1 (e-CNPJ ou e-CPF) com validação online rápida por apenas **${INFINITE_PAY_ONE_OFF.digitalCertificateA1.priceFormatted}**:
+Nosso parceiro oficial emite o Certificado Digital A1 (e-CNPJ ou e-CPF) com validação online rápida por apenas **${ASAAS_ONE_OFF.digitalCertificateA1.priceFormatted}**:
 
-👉 ${INFINITE_PAY_ONE_OFF.digitalCertificateA1.checkoutUrl}`,
+👉 ${ASAAS_ONE_OFF.digitalCertificateA1.checkoutUrl}`,
     });
     return;
   }
@@ -564,8 +572,8 @@ Nosso parceiro oficial emite o Certificado Digital A1 (e-CNPJ ou e-CPF) com vali
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Nosso sistema de IA realiza um mapeamento avançado de alternativas de fornecedores na sua região para reduzir seus custos e aumentar sua margem.
 
-Relatório completo em PDF por apenas **${INFINITE_PAY_ONE_OFF.supplierXray.priceFormatted}**:
-👉 ${INFINITE_PAY_ONE_OFF.supplierXray.checkoutUrl}`,
+Relatório completo em PDF por apenas **${ASAAS_ONE_OFF.supplierXray.priceFormatted}**:
+👉 ${ASAAS_ONE_OFF.supplierXray.checkoutUrl}`,
     });
     return;
   }
