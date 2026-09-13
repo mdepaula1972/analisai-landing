@@ -1,6 +1,7 @@
+import fs from 'fs';
+import path from 'path';
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { formatDueDateDetails } from './date-utils';
 import { ASAAS_ONE_OFF, ASAAS_PLANS } from './constants';
 import { sendEvolutionMedia } from './evolution';
 
@@ -9,7 +10,9 @@ export interface GenerateLedgerPdfOptions {
 }
 
 /**
- * Sanitiza o texto para garantir compatibilidade 100% com WinAnsiEncoding da Helvetica no pdf-lib
+ * Sanitiza o texto para compatibilidade com WinAnsiEncoding (Windows-1252)
+ * Preserva 100% dos acentos da língua portuguesa (á, é, í, ó, ú, ç, ã, õ, à, ê, ô, etc.)
+ * e substitui apenas emojis e caracteres fora da tabela ANSI.
  */
 function sanitizeWinAnsi(text: string): string {
   if (!text) return '';
@@ -25,18 +28,46 @@ function sanitizeWinAnsi(text: string): string {
     .replace(/[✅✔️]/g, '[OK]')
     .replace(/[❌✖️]/g, '[X]')
     .replace(/[🤝💼🏢💰📄🔍👑🎙️💡🚀]/g, '')
-    // Remove qualquer caractere fora do conjunto Windows-1252 / ASCII seguro
+    // Mantém caracteres imprimíveis ASCII (0x20-0x7E) e Latin-1/Windows-1252 (0xA0-0xFF, que são os acentos em português)
     .replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
     .trim();
 }
 
 /**
- * Wrapper seguro para desenhar texto sem risco de erro WinAnsi
+ * Wrapper seguro para desenhar texto no PDF garantindo acentuação e segurança WinAnsi
  */
 function drawSafeText(page: PDFPage, text: string, options: any) {
   const clean = sanitizeWinAnsi(text);
   if (!clean) return;
   page.drawText(clean, options);
+}
+
+/**
+ * Tenta carregar a imagem do logotipo oficial do AnalisAí
+ */
+async function loadAnalisaiLogo(pdfDoc: PDFDocument) {
+  try {
+    const candidates = [
+      path.join(process.cwd(), 'public', 'logo-horizontal.jpg'),
+      path.resolve('./public/logo-horizontal.jpg'),
+      path.join(process.cwd(), 'public', 'logo.png'),
+      path.resolve('./public/logo.png'),
+    ];
+
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const fileBytes = fs.readFileSync(p);
+        if (p.endsWith('.jpg') || p.endsWith('.jpeg')) {
+          return await pdfDoc.embedJpg(fileBytes);
+        } else if (p.endsWith('.png')) {
+          return await pdfDoc.embedPng(fileBytes);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[PDF Logo] Não foi possível carregar logotipo do disco:', err);
+  }
+  return null;
 }
 
 /**
@@ -47,6 +78,19 @@ function getDaysDifference(dateStr1: string, dateStr2: string): number {
   const d2 = new Date(dateStr2);
   const diffTime = d1.getTime() - d2.getTime();
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Formata data curta com dia da semana em português correto
+ */
+function formatPortugueseDate(dateStr: string): string {
+  if (!dateStr) return 'Não informada';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts;
+  const dObj = new Date(Number(y), Number(m) - 1, Number(d));
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  return `${d}/${m}/${y} (${weekDays[dObj.getDay()]})`;
 }
 
 /**
@@ -69,12 +113,12 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     .eq('id', clientId)
     .single();
 
-  const companyName = client?.company_name || client?.name || 'Cliente AnalisAi';
+  const companyName = client?.company_name || client?.name || 'Cliente AnalisAí';
   const taxType = client?.tax_type || 'CNPJ';
-  const taxId = client?.tax_id || 'Nao informado';
+  const taxId = client?.tax_id || 'Não informado';
   const email = client?.email || 'contato@suaempresa.com.br';
-  const phone = client?.whatsapp_number ? `+${client.whatsapp_number}` : 'Nao informado';
-  const address = client?.address || 'Endereco comercial em atualizacao cadastral';
+  const phone = client?.whatsapp_number ? `+${client.whatsapp_number}` : 'Não informado';
+  const address = client?.address || 'Endereço comercial em atualização cadastral';
   const hasCustomLogo = Boolean(client?.logo_url);
 
   // 2. Busca contas a pagar em aberto
@@ -114,50 +158,82 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   const redAlertText = rgb(0.75, 0.11, 0.11); // texto alerta vermelho
   const textDark = rgb(0.12, 0.15, 0.2);
 
-  // ── CABEÇALHO SUPERIOR (Marca AnalisAí) ────────────────────────────────────
+  // Carrega logotipo oficial
+  const logoImage = await loadAnalisaiLogo(pdfDoc);
+
+  // ── CABEÇALHO SUPERIOR COM LOGOTIPO OFICIAL ───────────────────────────────
+  const headerHeight = 88;
   page.drawRectangle({
     x: 0,
-    y: height - 80,
+    y: height - headerHeight,
     width,
-    height: 80,
+    height: headerHeight,
     color: navyDark,
   });
 
-  drawSafeText(page, 'ANALISAI.ME', {
-    x: 35,
-    y: height - 38,
-    size: 20,
-    font: fontBold,
-    color: amberGold,
-  });
+  if (logoImage) {
+    // Proporção de logo-horizontal.jpg: 880 x 233 (~ 3.77)
+    const logoWidth = 142;
+    const logoHeight = logoWidth / (880 / 233);
+    page.drawImage(logoImage, {
+      x: 35,
+      y: height - 50,
+      width: logoWidth,
+      height: logoHeight,
+    });
 
-  drawSafeText(page, 'Relatorio Oficial de Livro Caixa e Gestao Financeira', {
-    x: 35,
-    y: height - 56,
-    size: 8.5,
-    font: fontRegular,
-    color: rgb(0.85, 0.9, 0.95),
-  });
+    drawSafeText(page, 'Relatório Oficial de Livro Caixa & Gestão Financeira', {
+      x: 35,
+      y: height - 68,
+      size: 8.5,
+      font: fontRegular,
+      color: rgb(0.85, 0.9, 0.95),
+    });
+  } else {
+    drawSafeText(page, 'ANALISAÍ.ME', {
+      x: 35,
+      y: height - 40,
+      size: 20,
+      font: fontBold,
+      color: amberGold,
+    });
+
+    drawSafeText(page, 'Relatório Oficial de Livro Caixa & Gestão Financeira', {
+      x: 35,
+      y: height - 58,
+      size: 8.5,
+      font: fontRegular,
+      color: rgb(0.85, 0.9, 0.95),
+    });
+  }
 
   const emissaoDate = new Date().toLocaleDateString('pt-BR');
   const emissaoHora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  drawSafeText(page, `EMISSAO: ${emissaoDate} as ${emissaoHora}`, {
-    x: width - 210,
+  drawSafeText(page, `EMISSÃO: ${emissaoDate} às ${emissaoHora}`, {
+    x: width - 215,
     y: height - 38,
     size: 8,
     font: fontBold,
     color: rgb(0.9, 0.95, 1.0),
   });
 
-  drawSafeText(page, 'AUTENTICACAO: IA-SOLO-2026', {
-    x: width - 210,
-    y: height - 54,
+  drawSafeText(page, 'AUTENTICAÇÃO: IA-SOLO-2026', {
+    x: width - 215,
+    y: height - 52,
     size: 7.5,
     font: fontRegular,
     color: rgb(0.7, 0.75, 0.8),
   });
 
-  let currentY = height - 95;
+  drawSafeText(page, 'AUDITORIA CONTÁBIL DIGITAL', {
+    x: width - 215,
+    y: height - 66,
+    size: 7,
+    font: fontBold,
+    color: amberGold,
+  });
+
+  let currentY = height - 100;
 
   // ── QUADRO DE IDENTIFICAÇÃO CADASTRAL DA EMPRESA ──────────────────────────
   const clientBoxHeight = 78;
@@ -189,8 +265,8 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     color: slate600,
   });
 
-  // Endereço Comercial
-  drawSafeText(page, `Endereco: ${address}`, {
+  // Endereço Comercial com Acentuação Correta
+  drawSafeText(page, `Endereço: ${address}`, {
     x: 48,
     y: currentY - 47,
     size: 8,
@@ -208,7 +284,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
       color: rgb(0.1, 0.5, 0.2),
     });
   } else {
-    drawSafeText(page, '[*] Personalize este relatorio com o LOGOTIPO da sua empresa (Solo Plus ou Compra Avulsa por R$ 29,90)', {
+    drawSafeText(page, '[*] Personalize este relatório com o LOGOTIPO da sua empresa (Solo Plus ou Compra Avulsa por R$ 29,90)', {
       x: 48,
       y: currentY - 63,
       size: 7.5,
@@ -291,7 +367,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
       height: 20,
       color: redAlertBg,
     });
-    drawSafeText(page, '[!] CONTAS VENCIDAS - RISCO DE CORTE, PROTESTO E JUROS DIARIOS DE MORA', {
+    drawSafeText(page, '[!] CONTAS VENCIDAS - RISCO DE CORTE, PROTESTO E JUROS DIÁRIOS DE MORA', {
       x: 45,
       y: currentY - 14,
       size: 8,
@@ -331,7 +407,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     height: 20,
     color: navyDark,
   });
-  drawSafeText(page, 'CRONOGRAMA DE PROXIMOS VENCIMENTOS (LIVRO CAIXA)', {
+  drawSafeText(page, 'CRONOGRAMA DE PRÓXIMOS VENCIMENTOS (LIVRO CAIXA)', {
     x: 45,
     y: currentY - 14,
     size: 8,
@@ -340,9 +416,9 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   });
   currentY -= 25;
 
-  drawSafeText(page, 'FORNECEDOR / BENEFICIARIO', { x: 45, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+  drawSafeText(page, 'FORNECEDOR / BENEFICIÁRIO', { x: 45, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
   drawSafeText(page, 'DATA DE VENCIMENTO', { x: 230, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-  drawSafeText(page, 'SITUACAO', { x: 360, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+  drawSafeText(page, 'SITUAÇÃO', { x: 360, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
   drawSafeText(page, 'VALOR (R$)', { x: width - 90, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
   currentY -= 15;
 
@@ -365,17 +441,8 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
       const statusLabel = b.status === 'postponed' ? 'Prorrogada' : 'No Prazo';
       const statusColor = b.status === 'postponed' ? amberGold : rgb(0.1, 0.5, 0.2);
 
-      const parts = b.current_due_date.split('-');
-      let dateLabel = b.current_due_date;
-      if (parts.length === 3) {
-        const [y, m, d] = parts;
-        const dObj = new Date(Number(y), Number(m) - 1, Number(d));
-        const wDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
-        dateLabel = `${d}/${m}/${y} (${wDays[dObj.getDay()]})`;
-      }
-
       drawSafeText(page, supName, { x: 45, y: currentY - 8, size: 8, font: fontRegular, color: textDark });
-      drawSafeText(page, dateLabel, { x: 230, y: currentY - 8, size: 7.5, font: fontRegular, color: slate600 });
+      drawSafeText(page, formatPortugueseDate(b.current_due_date), { x: 230, y: currentY - 8, size: 7.5, font: fontRegular, color: slate600 });
       drawSafeText(page, statusLabel, { x: 360, y: currentY - 8, size: 7.5, font: fontBold, color: statusColor });
       drawSafeText(page, `R$ ${Number(b.amount).toFixed(2)}`, { x: width - 90, y: currentY - 8, size: 8, font: fontBold, color: textDark });
       currentY -= 17;
@@ -396,7 +463,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     borderWidth: 1.5,
   });
 
-  drawSafeText(page, 'APERTO TEMPORARIO OU CONTAS EM ATRASO? PROTEJA SEU CAIXA AGORA', {
+  drawSafeText(page, 'APERTO TEMPORÁRIO OU CONTAS EM ATRASO? PROTEJA SEU CAIXA AGORA', {
     x: 48,
     y: currentY - 16,
     size: 8.5,
@@ -404,14 +471,14 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     color: navyDark,
   });
 
-  drawSafeText(page, 'Contrate nossa Analise Estrategica de Fluxo de Caixa individual por apenas R$ 14,90. Nossa IA contabil', {
+  drawSafeText(page, 'Contrate nossa Análise Estratégica de Fluxo de Caixa individual por apenas R$ 14,90. Nossa IA contábil', {
     x: 48,
     y: currentY - 29,
     size: 7.5,
     font: fontRegular,
     color: textDark,
   });
-  drawSafeText(page, 'calcula as multas de cada boleto e entrega uma recomendacao exata de qual conta adiar com menor custo.', {
+  drawSafeText(page, 'calcula as multas de cada boleto e entrega uma recomendação exata de qual conta adiar com menor custo financeiro.', {
     x: 48,
     y: currentY - 40,
     size: 7.5,
@@ -419,7 +486,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     color: textDark,
   });
 
-  drawSafeText(page, `> Ativacao imediata via Asaas (R$ 14,90): ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`, {
+  drawSafeText(page, `> Ativação imediata via Asaas (R$ 14,90): ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`, {
     x: 48,
     y: currentY - 54,
     size: 8,
@@ -427,7 +494,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     color: rgb(0.8, 0.3, 0.0),
   });
 
-  // ── RODAPÉ E CERTIFICAÇÃO BANCÁRIA ─────────────────────────────────────────
+  // ── RODAPÉ E CERTIFICAÇÃO BANCÁRIA COM ACENTUAÇÃO OFICIAL ──────────────────
   page.drawLine({
     start: { x: 35, y: 55 },
     end: { x: width - 35, y: 55 },
@@ -435,14 +502,14 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     thickness: 0.5,
   });
 
-  drawSafeText(page, 'Seguranca Bancaria: Este relatorio e um demonstrativo contabil de controle gerencial emitido pela tecnologia AnalisAi.', {
+  drawSafeText(page, 'Segurança Bancária: Este relatório é um demonstrativo contábil de controle gerencial emitido pela tecnologia AnalisAí.', {
     x: 35,
     y: 42,
     size: 6.8,
     font: fontRegular,
     color: slate600,
   });
-  drawSafeText(page, 'A conferencia de dados, autenticacao de codigo de barras e liquidacao de pagamentos cabem exclusivamente ao pagador junto ao seu banco.', {
+  drawSafeText(page, 'A conferência de dados, autenticação de código de barras e liquidação de pagamentos cabem exclusivamente ao pagador junto ao seu banco.', {
     x: 35,
     y: 32,
     size: 6.8,
@@ -450,7 +517,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     color: slate600,
   });
 
-  drawSafeText(page, 'ANALISAI.ME (C) 2026 - TECNOLOGIA EM GESTAO FINANCEIRA INTELIGENTE - TODOS OS DIREITOS RESERVADOS', {
+  drawSafeText(page, 'ANALISAÍ.ME (C) 2026 - TECNOLOGIA EM GESTÃO FINANCEIRA INTELIGENTE - TODOS OS DIREITOS RESERVADOS', {
     x: 35,
     y: 20,
     size: 6.2,
@@ -494,34 +561,55 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
   const lightBg = rgb(0.97, 0.98, 0.99);      // #f8fafc
   const textDark = rgb(0.12, 0.15, 0.2);
 
+  const logoImage = await loadAnalisaiLogo(pdfDoc);
+
   // Cabeçalho
   page.drawRectangle({
     x: 0,
-    y: height - 80,
+    y: height - 88,
     width,
-    height: 80,
+    height: 88,
     color: navyDark,
   });
 
-  drawSafeText(page, 'ANALISAI.ME', {
-    x: 35,
-    y: height - 38,
-    size: 20,
-    font: fontBold,
-    color: amberGold,
-  });
+  if (logoImage) {
+    const logoWidth = 142;
+    const logoHeight = logoWidth / (880 / 233);
+    page.drawImage(logoImage, {
+      x: 35,
+      y: height - 50,
+      width: logoWidth,
+      height: logoHeight,
+    });
 
-  drawSafeText(page, 'Demonstracao Contabil e Leitura Inteligente de Documento', {
-    x: 35,
-    y: height - 56,
-    size: 8.5,
-    font: fontRegular,
-    color: rgb(0.85, 0.9, 0.95),
-  });
+    drawSafeText(page, 'Demonstração Contábil & Leitura Inteligente de Documento', {
+      x: 35,
+      y: height - 68,
+      size: 8.5,
+      font: fontRegular,
+      color: rgb(0.85, 0.9, 0.95),
+    });
+  } else {
+    drawSafeText(page, 'ANALISAÍ.ME', {
+      x: 35,
+      y: height - 40,
+      size: 20,
+      font: fontBold,
+      color: amberGold,
+    });
+
+    drawSafeText(page, 'Demonstração Contábil & Leitura Inteligente de Documento', {
+      x: 35,
+      y: height - 58,
+      size: 8.5,
+      font: fontRegular,
+      color: rgb(0.85, 0.9, 0.95),
+    });
+  }
 
   const emissaoDate = new Date().toLocaleDateString('pt-BR');
-  drawSafeText(page, `DEGUSTACAO: ${emissaoDate}`, {
-    x: width - 180,
+  drawSafeText(page, `DEGUSTAÇÃO: ${emissaoDate}`, {
+    x: width - 185,
     y: height - 38,
     size: 8,
     font: fontBold,
@@ -541,7 +629,7 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
     borderWidth: 1,
   });
 
-  drawSafeText(page, 'DADOS EXTRAIDOS DO SEU DOCUMENTO PELA NOSSA IA', {
+  drawSafeText(page, 'DADOS EXTRAÍDOS DO SEU DOCUMENTO PELA NOSSA IA', {
     x: 48,
     y: currentY - 20,
     size: 9.5,
@@ -551,13 +639,13 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
 
   const sup = extraction.counterparty_name || 'Fornecedor identificado';
   const val = Number(extraction.total_amount || 0).toFixed(2);
-  const due = extraction.due_date ? formatDueDateDetails(extraction.due_date) : 'A vista';
+  const due = extraction.due_date ? formatPortugueseDate(extraction.due_date) : 'À vista';
   const cat = extraction.category_suggestion || 'Despesa Operacional';
 
   drawSafeText(page, `* Favorecido / Cedente: ${sup}`, { x: 48, y: currentY - 40, size: 8.5, font: fontRegular, color: textDark });
   drawSafeText(page, `* Valor Reconhecido: R$ ${val}`, { x: 48, y: currentY - 55, size: 8.5, font: fontBold, color: navyDark });
   drawSafeText(page, `* Vencimento Oficial: ${due}`, { x: 48, y: currentY - 70, size: 8.5, font: fontRegular, color: textDark });
-  drawSafeText(page, `* Classificacao Contabil DRE: ${cat}`, { x: 48, y: currentY - 85, size: 8.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, `* Classificação Contábil DRE: ${cat}`, { x: 48, y: currentY - 85, size: 8.5, font: fontRegular, color: slate600 });
   drawSafeText(page, `* Status: Registrado como modelo demonstrativo no seu Livro Caixa`, { x: 48, y: currentY - 100, size: 8, font: fontBold, color: rgb(0.1, 0.5, 0.2) });
 
   currentY -= 130;
@@ -570,7 +658,7 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
     height: 20,
     color: navyDark,
   });
-  drawSafeText(page, 'ESCOLHA O PLANO IDEAL PARA A GESTAO FINANCEIRA DA SUA EMPRESA', {
+  drawSafeText(page, 'ESCOLHA O PLANO IDEAL PARA A GESTÃO FINANCEIRA DA SUA EMPRESA', {
     x: 45,
     y: currentY - 14,
     size: 8,
@@ -585,31 +673,31 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
   // Start
   page.drawRectangle({ x: 35, y: currentY - 120, width: planWidth, height: 120, color: lightBg, borderColor: slate200, borderWidth: 1 });
   drawSafeText(page, 'START', { x: 45, y: currentY - 20, size: 10, font: fontBold, color: navyDark });
-  drawSafeText(page, 'R$ 39,90 /mes', { x: 45, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
-  drawSafeText(page, '* 15 documentos/mes', { x: 45, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, 'R$ 39,90 /mês', { x: 45, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
+  drawSafeText(page, '* 15 documentos/mês', { x: 45, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Lembretes de vencimento', { x: 45, y: currentY - 64, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Livro caixa digital', { x: 45, y: currentY - 76, size: 7.5, font: fontRegular, color: slate600 });
-  drawSafeText(page, '* Relatorio em PDF', { x: 45, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* Relatório em PDF', { x: 45, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '> assinar start', { x: 45, y: currentY - 108, size: 8, font: fontBold, color: navyDark });
 
   // Solo
   page.drawRectangle({ x: 35 + planWidth + 10, y: currentY - 120, width: planWidth, height: 120, color: rgb(0.99, 0.98, 0.93), borderColor: amberGold, borderWidth: 1.5 });
   drawSafeText(page, 'SOLO (Mais Escolhido)', { x: 35 + planWidth + 18, y: currentY - 20, size: 9, font: fontBold, color: amberGold });
-  drawSafeText(page, 'R$ 87,99 /mes', { x: 35 + planWidth + 18, y: currentY - 36, size: 11, font: fontBold, color: navyDark });
-  drawSafeText(page, '* 30 documentos/mes', { x: 35 + planWidth + 18, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
-  drawSafeText(page, '* Comandos por Audio/Voz', { x: 35 + planWidth + 18, y: currentY - 64, size: 7.5, font: fontBold, color: navyDark });
+  drawSafeText(page, 'R$ 87,99 /mês', { x: 35 + planWidth + 18, y: currentY - 36, size: 11, font: fontBold, color: navyDark });
+  drawSafeText(page, '* 30 documentos/mês', { x: 35 + planWidth + 18, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* Comandos por Áudio/Voz', { x: 35 + planWidth + 18, y: currentY - 64, size: 7.5, font: fontBold, color: navyDark });
   drawSafeText(page, '* Consultor de Caixa IA', { x: 35 + planWidth + 18, y: currentY - 76, size: 7.5, font: fontBold, color: navyDark });
-  drawSafeText(page, '* Prorrogacao no WhatsApp', { x: 35 + planWidth + 18, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* Prorrogação no WhatsApp', { x: 35 + planWidth + 18, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '> assinar solo', { x: 35 + planWidth + 18, y: currentY - 108, size: 8, font: fontBold, color: rgb(0.8, 0.3, 0.0) });
 
   // Solo Plus
   page.drawRectangle({ x: 35 + (planWidth + 10) * 2, y: currentY - 120, width: planWidth, height: 120, color: lightBg, borderColor: slate200, borderWidth: 1 });
   drawSafeText(page, 'SOLO PLUS', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 20, size: 10, font: fontBold, color: navyDark });
-  drawSafeText(page, 'R$ 147,99 /mes', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
-  drawSafeText(page, '* 60 documentos/mes', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
-  drawSafeText(page, '* Logotipo nos relatorios', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 64, size: 7.5, font: fontBold, color: navyDark });
-  drawSafeText(page, '* Suporte contabil prioritario', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 76, size: 7.5, font: fontRegular, color: slate600 });
-  drawSafeText(page, '* 4 analises de caixa/mes', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, 'R$ 147,99 /mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
+  drawSafeText(page, '* 60 documentos/mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* Logotipo nos relatórios', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 64, size: 7.5, font: fontBold, color: navyDark });
+  drawSafeText(page, '* Suporte contábil prioritário', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 76, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* 4 análises de caixa/mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '> assinar plus', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 108, size: 8, font: fontBold, color: navyDark });
 
   currentY -= 140;
@@ -649,7 +737,7 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
     thickness: 0.5,
   });
 
-  drawSafeText(page, 'AnalisAi.me - Inteligencia Artificial Financeira para Empresas. Central WhatsApp Oficial.', {
+  drawSafeText(page, 'AnalisAí.me — Inteligência Artificial Financeira para Empresas. Central WhatsApp Oficial.', {
     x: 35,
     y: 30,
     size: 7,
