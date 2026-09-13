@@ -112,6 +112,7 @@ export async function sendEvolutionMedia({
     if (!res.ok) {
       console.error('[Evolution API] Erro ao enviar mídia:', data);
       return { success: false, error: data };
+    }
     return { success: true, data };
   } catch (err: unknown) {
     console.error('[Evolution API] Falha ao enviar mídia:', err);
