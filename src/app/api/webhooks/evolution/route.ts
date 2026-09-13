@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { sendEvolutionText } from '@/lib/solo/evolution';
+import { sendEvolutionText, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
 import { extractDocumentWithGemini, processVoiceCommandWithGemini } from '@/lib/solo/gemini';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
@@ -257,7 +257,10 @@ Se o volume da sua empresa aumentou e você deseja uma cota maior todo mês:
       text: `📄 *Recebi seu documento!* Estou processando a leitura contábil com inteligência artificial, aguarde um instante...`,
     });
 
-    const base64Media = body.data?.base64 || '';
+    let base64Media = body.data?.base64 || '';
+    if (!base64Media) {
+      base64Media = (await fetchMediaBase64FromEvolution(body.data)) || '';
+    }
     const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
 
     try {
@@ -400,13 +403,16 @@ Deseja migrar para o Solo agora?
       return;
     }
 
-    const audioBase64 = body.data?.base64 || '';
+    let audioBase64 = body.data?.base64 || '';
+    if (!audioBase64) {
+      audioBase64 = (await fetchMediaBase64FromEvolution(body.data)) || '';
+    }
 
     if (!audioBase64) {
-      console.warn('[Evolution Webhook] Áudio recebido sem base64 no payload.');
+      console.warn('[Evolution Webhook] Áudio recebido sem base64 no payload e fallback.');
       await sendEvolutionText({
         phone,
-        text: `🎙️ Recebi seu áudio, mas o áudio não foi carregado a tempo. Por favor, envie novamente agora que o canal de voz foi calibrado!`,
+        text: `🎙️ Recebi seu áudio, mas o arquivo de voz não pôde ser baixado pelo WhatsApp. Por favor, envie novamente ou digite seu comando por texto.`,
       });
       return;
     }

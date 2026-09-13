@@ -112,11 +112,36 @@ export async function sendEvolutionMedia({
     if (!res.ok) {
       console.error('[Evolution API] Erro ao enviar mídia:', data);
       return { success: false, error: data };
-    }
-
     return { success: true, data };
   } catch (err: unknown) {
     console.error('[Evolution API] Falha ao enviar mídia:', err);
     return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function fetchMediaBase64FromEvolution(messageData: any): Promise<string | null> {
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${EVOLUTION_INSTANCE}`, {
+      method: 'POST',
+      headers: {
+        'apikey': EVOLUTION_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: messageData,
+        convertToMp4: false,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('[Evolution API] Falha ao buscar base64 da mídia:', await res.text());
+      return null;
+    }
+
+    const json = await res.json();
+    return json.base64 || null;
+  } catch (err) {
+    console.error('[Evolution API] Erro na requisição de getBase64FromMediaMessage:', err);
+    return null;
   }
 }
