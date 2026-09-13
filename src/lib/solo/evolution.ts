@@ -85,6 +85,13 @@ export async function sendEvolutionMedia({
   caption,
 }: SendEvolutionMediaParams) {
   const formattedPhone = formatWhatsAppNumber(phone);
+  const resolvedFileName = fileName || (mediaType === 'document' ? 'documento.pdf' : 'arquivo');
+  const mimeType = mediaType === 'document' ? 'application/pdf' : (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream');
+
+  let cleanMedia = mediaBase64 || mediaUrl || '';
+  if (cleanMedia && !cleanMedia.startsWith('http') && !cleanMedia.startsWith('data:')) {
+    cleanMedia = `data:${mimeType};base64,${cleanMedia}`;
+  }
 
   try {
     const res = await fetch(`${EVOLUTION_API_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
@@ -95,11 +102,17 @@ export async function sendEvolutionMedia({
       },
       body: JSON.stringify({
         number: formattedPhone,
+        mediatype: mediaType,
+        mimetype: mimeType,
+        caption: caption || '',
+        media: cleanMedia,
+        fileName: resolvedFileName,
         mediaMessage: {
           mediatype: mediaType,
-          fileName: fileName || (mediaType === 'document' ? 'documento.pdf' : 'arquivo'),
+          mimetype: mimeType,
+          fileName: resolvedFileName,
           caption: caption || '',
-          media: mediaBase64 || mediaUrl,
+          media: cleanMedia,
         },
         options: {
           delay: 1200,
