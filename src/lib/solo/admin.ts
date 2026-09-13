@@ -3,6 +3,7 @@ import { PlanCode } from '@/types/solo';
 import { executeAndSendSupplierXRay } from './supplier-xray';
 import { escalateToHumanConsultant } from './consultant-escalation';
 import { formatDueDateDetails } from './date-utils';
+import { getEveReminderMessage, getDueReminderMessage } from './trial';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -59,6 +60,8 @@ Comandos disponíveis para você testar todas as opções:
 • *!estourar doc* → Simula que você estourou a cota de documentos
 • *!estourar analise* → Simula que você gastou todas análises de caixa
 • *!gerar contas teste* → Cria 4 contas a pagar fictícias para testar o consultor
+• *!simular lembrete vespera* → Dispara o aviso de véspera da degustação (10h)
+• *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!raio-x* → Dispara a geração e envio imediato do **Raio-X de Fornecedores em PDF**
 • *!escalar* → Simula o **Escalonamento Humano**, disparando o lead no seu WhatsApp
 • *!bypass on* → Ativa modo sem limites (tudo liberado)
@@ -324,6 +327,28 @@ O Gemini está realizando a pesquisa via Google Search Grounding e gerando o PDF
       message: `📲 *Testando Escalonamento para Consultoria Humana!*
 A ficha estruturada do lead qualificado está sendo despachada agora para o seu WhatsApp (+551331500987).`,
     };
+  }
+
+  // ── !simular lembrete vespera / !simular lembrete vencimento ────────────────
+  if (action === 'simular' && arg1 === 'lembrete') {
+    const subType = parts[2] || 'vencimento';
+    const mockLead = {
+      supplier_name: 'Distribuidora de Embalagens Vale',
+      amount: 1450.00,
+      barcode_or_pix: '34191090080000123456789012345678901234567890',
+    };
+
+    if (subType === 'vespera') {
+      return {
+        handled: true,
+        message: getEveReminderMessage(mockLead),
+      };
+    } else {
+      return {
+        handled: true,
+        message: getDueReminderMessage(mockLead),
+      };
+    }
   }
 
   // ── !bypass on / !bypass off ────────────────────────────────────────────────
