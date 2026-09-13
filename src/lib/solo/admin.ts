@@ -304,6 +304,8 @@ ${detailMsg}`,
       },
     ];
 
+    // Limpa contas anteriores do cliente para não duplicar
+    await supabase.from('payables_receivables').delete().eq('client_id', clientId);
     await supabase.from('payables_receivables').insert(contasFicticias);
 
     return {

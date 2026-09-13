@@ -51,9 +51,10 @@ export async function POST(req: NextRequest) {
     const message = body.data?.message;
     const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
     const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
+    const isAudio = body.data?.messageType === 'audioMessage' || !!message?.audioMessage;
 
-    // Ignora fromMe apenas se NÃO for um comando de administração explícito
-    if (body.data?.key?.fromMe && !isCommand) {
+    // Ignora fromMe apenas se NÃO for um comando de administração explícito e NÃO for áudio gravado
+    if (body.data?.key?.fromMe && !isCommand && !isAudio) {
       return NextResponse.json({ ignored: true, reason: 'from_me' }, { status: 200 });
     }
 
@@ -562,7 +563,7 @@ ${BANK_SAFETY_NOTICE}`,
   }
 
   // 6. Ingestão de Áudio (Comandos por Voz)
-  const isAudio = !!message?.audioMessage;
+  const isAudio = !!message?.audioMessage || body.data?.messageType === 'audioMessage';
 
   if (isAudio) {
     if (plan && !plan.has_voice_commands) {
