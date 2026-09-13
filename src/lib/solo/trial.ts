@@ -161,6 +161,8 @@ Imagine nunca mais digitar um código de barras, receber avisos diários no seu 
 💬 *Precisa de ajuda ou tem dúvidas? Pode responder aqui mesmo!*`;
 }
 
+export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de confirmar o pagamento no aplicativo do seu banco, confira sempre se o nome do favorecido, CNPJ e o valor na tela de confirmação correspondem exatamente ao seu credor/fornecedor. O AnalisAí realiza a leitura digital automatizada dos dados, cabendo exclusivamente ao pagador a conferência final e autorização da operação junto à sua instituição financeira.`;
+
 /**
  * Mensagem da Véspera do Vencimento (disparo às 10h)
  */
@@ -183,6 +185,7 @@ export function getEveReminderMessage(lead: {
     txt += `${lead.barcode_or_pix.trim()}\n\n`;
   }
 
+  txt += `${BANK_SAFETY_NOTICE}\n\n`;
   txt += `💡 *Essa tranquilidade para todas as contas da sua empresa custa a partir de R$ 1,33/dia no AnalisAí.*\n`;
   txt += `👉 *Escolha seu plano e ative seu assistente:* ${ASAAS_PLANS.monthly.solo.checkoutUrl}`;
 
@@ -211,6 +214,7 @@ export function getDueReminderMessage(lead: {
     txt += `${lead.barcode_or_pix.trim()}\n\n`;
   }
 
+  txt += `${BANK_SAFETY_NOTICE}\n\n`;
   txt += `🤝 *Sem dinheiro no caixa para liquidar a conta hoje?*\n`;
   txt += `Não tome decisões no escuro nem pague juros desnecessários. Contrate a nossa **Análise de Fluxo de Caixa** avulsa por apenas R$ 14,90 para receber uma recomendação personalizada de qual conta adiar e como reequilibrar seus pagamentos:\n`;
   txt += `👉 *Análise de Caixa Avulsa (R$ 14,90):* ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}\n\n`;

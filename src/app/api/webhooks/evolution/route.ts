@@ -15,6 +15,7 @@ import {
   getTrialLimitReachedMessage,
   formatTrialDocSummary,
   getTrialConversionMenu,
+  BANK_SAFETY_NOTICE,
 } from '@/lib/solo/trial';
 import { addMinutes } from 'date-fns';
 
@@ -106,13 +107,21 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
   }
 
-  // 1. Localiza cliente pelo número de WhatsApp
+  // 1. Localiza cliente pelo número de WhatsApp ou WhatsApp LID
   const { data: client } = await supabase
     .from('clients')
-    .select('id, name, whatsapp_number, status, is_admin')
-    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .select('id, name, whatsapp_number, status, is_admin, whatsapp_lid')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone},whatsapp_lid.eq.${cleanPhone}`)
     .limit(1)
     .maybeSingle();
+
+  // Se o cliente foi localizado e a mensagem veio com LID, sincroniza automaticamente
+  if (client && body.data?.key?.remoteJid?.includes('@lid') && !client.whatsapp_lid) {
+    const lidDigits = body.data.key.remoteJid.replace(/\D/g, '');
+    if (lidDigits) {
+      await supabase.from('clients').update({ whatsapp_lid: lidDigits }).eq('id', client.id);
+    }
+  }
 
   const message = body.data?.message;
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
@@ -268,11 +277,10 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
       if (extraction.barcode_or_pix) {
         await sendEvolutionText({
           phone,
-          text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*`,
-        });
-        await sendEvolutionText({
-          phone,
-          text: extraction.barcode_or_pix.trim(),
+          text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
+${extraction.barcode_or_pix.trim()}
+
+${BANK_SAFETY_NOTICE}`,
         });
       }
 
@@ -533,7 +541,10 @@ ${quotaFootnote}`,
       if (extracted.barcode_or_pix && extracted.barcode_or_pix.length >= 20) {
         await sendEvolutionText({
           phone,
-          text: `${extracted.barcode_or_pix}`,
+          text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
+${extracted.barcode_or_pix.trim()}
+
+${BANK_SAFETY_NOTICE}`,
         });
       }
 

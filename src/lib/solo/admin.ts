@@ -141,7 +141,7 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
         barcode_or_pix: '34191090080000123456789012345678901234567890',
       };
 
-      if (subType === 'vespera') {
+      if (subType === 'vespera' || subType === 'véspera') {
         return {
           handled: true,
           message: getEveReminderMessage(mockLead),
