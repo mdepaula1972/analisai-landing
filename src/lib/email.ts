@@ -270,3 +270,163 @@ export async function notificarAdminLeadDiagnostico(lead: NotificacaoLeadDiagnos
     return { sucesso: false, erro: err.message };
   }
 }
+
+export interface EnviarCodigo2FAParams {
+  emailDestino: string;
+  nomeCliente: string;
+  codigoOtp: string;
+  novoTelefone: string;
+}
+
+export async function enviarCodigo2FATrocaNumero(params: EnviarCodigo2FAParams) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('[Resend Email] RESEND_API_KEY não configurada.');
+    return { sucesso: false, erro: 'API Key do Resend ausente.' };
+  }
+
+  const cleanPhone = params.novoTelefone.replace(/\D/g, '');
+  const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 24px; }
+        .card { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; max-width: 540px; margin: 0 auto; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .header { background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(245,158,11,0.05)); padding: 24px; border-bottom: 1px solid #334155; text-align: center; }
+        .badge { display: inline-block; background-color: #ef4444; color: #ffffff; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 8px; }
+        .title { margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; }
+        .content { padding: 24px; text-align: center; }
+        .otp-box { background-color: #020617; border: 2px dashed #f59e0b; border-radius: 12px; padding: 20px; margin: 24px 0; }
+        .otp-code { font-family: monospace; font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #f59e0b; margin: 0; }
+        .warning-text { font-size: 13px; color: #94a3b8; line-height: 1.6; text-align: left; background-color: #1e293b; padding: 14px; border-radius: 8px; margin-top: 20px; }
+        .footer { background-color: #020617; padding: 16px 24px; border-top: 1px solid #1e293b; text-align: center; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <span class="badge">🔒 Segurança & LGPD</span>
+          <h1 class="title">Verificação em 2 Etapas</h1>
+        </div>
+        <div class="content">
+          <p style="margin-top: 0; color: #cbd5e1; font-size: 15px;">
+            Olá, <strong>${params.nomeCliente}</strong>!
+          </p>
+          <p style="color: #94a3b8; font-size: 14px; margin-bottom: 0;">
+            Recebemos uma solicitação para vincular sua conta do <strong>AnalisAí</strong> ao número de WhatsApp:
+          </p>
+          <p style="color: #38bdf8; font-weight: 700; font-size: 16px; margin-top: 4px;">
+            +${cleanPhone}
+          </p>
+
+          <div class="otp-box">
+            <span style="font-size: 12px; color: #94a3b8; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 6px;">Seu Código de Confirmação</span>
+            <h2 class="otp-code">${params.codigoOtp}</h2>
+            <span style="font-size: 12px; color: #64748b; margin-top: 6px; display: block;">Válido por 10 minutos</span>
+          </div>
+
+          <div class="warning-text">
+            ⚠️ <strong>Atenção à Segurança dos seus Dados:</strong><br>
+            • Digite este código diretamente no WhatsApp para autorizar a troca.<br>
+            • Se você <strong>NÃO</strong> solicitou essa alteração, ignore este e-mail imediatamente. Nenhum acesso será concedido sem este código.<br>
+            • Nunca compartilhe este código com terceiros ou ex-colaboradores.
+          </div>
+        </div>
+        <div class="footer">
+          AnalisAI.me — Sistema de Inteligência Financeira & Proteção de Dados
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'AnalisAI Segurança <onboarding@resend.dev>',
+        to: [params.emailDestino],
+        subject: `🔒 [Código 2FA: ${params.codigoOtp}] Confirmação de Troca de WhatsApp — AnalisAí`,
+        html: html,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('[Resend 2FA Email] Erro no envio:', data);
+      return { sucesso: false, erro: data.message || 'Erro ao enviar e-mail' };
+    }
+
+    return { sucesso: true, id: data.id };
+  } catch (err: any) {
+    console.error('[Resend 2FA Email] Falha de conexão:', err);
+    return { sucesso: false, erro: err.message };
+  }
+}
+
+export async function notificarTrocaNumeroConcluida(params: { emailDestino: string; nomeCliente: string; novoTelefone: string }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { sucesso: false };
+
+  const cleanPhone = params.novoTelefone.replace(/\D/g, '');
+  const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 24px; }
+        .card { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; max-width: 540px; margin: 0 auto; overflow: hidden; }
+        .header { background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05)); padding: 24px; border-bottom: 1px solid #334155; text-align: center; }
+        .badge { display: inline-block; background-color: #10b981; color: #020617; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 8px; }
+        .title { margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; }
+        .content { padding: 24px; font-size: 14px; color: #cbd5e1; line-height: 1.6; }
+        .footer { background-color: #020617; padding: 16px 24px; border-top: 1px solid #1e293b; text-align: center; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <span class="badge">Auditoria de Segurança</span>
+          <h1 class="title">WhatsApp Atualizado com Sucesso</h1>
+        </div>
+        <div class="content">
+          <p>Olá, <strong>${params.nomeCliente}</strong>!</p>
+          <p>Confirmamos que a sua conta do <strong>AnalisAí</strong> foi vinculada com sucesso ao número de WhatsApp <strong>+${cleanPhone}</strong> em ${new Date().toLocaleString('pt-BR')}.</p>
+          <p>Se você reconhece essa alteração, não é necessário fazer nada.</p>
+          <p style="color: #ef4444; font-weight: 600;">Caso não tenha sido você, entre em contato imediatamente com a equipe de suporte para revogar o acesso.</p>
+        </div>
+        <div class="footer">
+          AnalisAI.me — Sistema de Inteligência Financeira
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'AnalisAI Segurança <onboarding@resend.dev>',
+        to: [params.emailDestino],
+        subject: `✅ [Segurança] Seu WhatsApp do AnalisAí foi atualizado`,
+        html: html,
+      }),
+    });
+    return { sucesso: true };
+  } catch (err: any) {
+    return { sucesso: false, erro: err.message };
+  }
+}
+

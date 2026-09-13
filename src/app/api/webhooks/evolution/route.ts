@@ -7,6 +7,15 @@ import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
 import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
+import { solicitarTrocaNumeroCom2FA, validarCodigo2FATrocaNumero } from '@/lib/solo/phone-change';
+import {
+  checkTrialStatus,
+  recordTrialUsage,
+  getTrialWelcomeMessage,
+  getTrialLimitReachedMessage,
+  formatTrialDocSummary,
+  getTrialConversionMenu,
+} from '@/lib/solo/trial';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -105,46 +114,174 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const digitsOnly = rawText.replace(/\D/g, '');
 
   if (!client) {
-    // 1.1 Se o cliente enviou CPF (11 dígitos) ou CNPJ (14 dígitos), vincula o novo número à conta dele
-    if (digitsOnly.length === 11 || digitsOnly.length === 14) {
-      const { data: matchedClient } = await supabase
-        .from('clients')
-        .select('id, name, whatsapp_number, tax_id')
-        .eq('tax_id', digitsOnly)
-        .single();
-
-      if (matchedClient) {
-        await supabase
-          .from('clients')
-          .update({ whatsapp_number: cleanPhone })
-          .eq('id', matchedClient.id);
-
-        const firstName = matchedClient.name.split(' ')[0];
+    // 1.1 Se o usuário enviou exatamente 6 dígitos numéricos, verifica se é o código 2FA para vincular número
+    if (digitsOnly.length === 6 && rawText.trim().length <= 10) {
+      const validacao = await validarCodigo2FATrocaNumero(phone, digitsOnly);
+      if (validacao.valido) {
+        const firstName = validacao.clientName?.split(' ')[0] || 'Cliente';
         await sendEvolutionText({
           phone,
-          text: `✅ *Número de WhatsApp atualizado com sucesso!*
+          text: `✅ *Autenticação em 2 Etapas Confirmada!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Bem-vindo de volta, ${firstName}! Sua conta foi vinculada a este novo número com segurança.
+Bem-vindo de volta, ${firstName}! Sua conta foi vinculada a este novo número com total segurança e conformidade LGPD.
 
-Você já pode enviar comprovantes, notas fiscais ou consultar o resumo do seu mês com o comando *!status*.`,
+Você já pode enviar comprovantes, notas fiscais ou consultar o resumo financeiro com o comando *!status*.`,
+        });
+        return;
+      } else if (validacao.motivo === 'codigo_incorreto') {
+        await sendEvolutionText({
+          phone,
+          text: `❌ *Código de Segurança Incorreto.*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O código informado não confere com o enviado ao seu e-mail.
+Restam *${validacao.tentativasRestantes} tentativa(s)* antes do bloqueio desta solicitação.
+
+Por favor, verifique sua caixa de entrada (ou spam) e digite novamente os 6 dígitos.`,
+        });
+        return;
+      } else if (validacao.motivo === 'bloqueado_tentativas') {
+        await sendEvolutionText({
+          phone,
+          text: `⛔ *Limite de tentativas excedido.*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Por medidas de segurança (LGPD), esta solicitação foi bloqueada.
+Para tentar novamente, envie o seu CPF ou CNPJ cadastrado para receber um novo código.`,
+        });
+        return;
+      } else if (validacao.motivo === 'expirado') {
+        await sendEvolutionText({
+          phone,
+          text: `⏳ *Código expirado.*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O código de 6 dígitos expirou (validade de 10 minutos).
+Envie novamente o seu CPF ou CNPJ para gerar um novo código de segurança.`,
+        });
+        return;
+      }
+      // Se não houver solicitação ativa, segue para o fluxo abaixo
+    }
+
+    // 1.2 Se o cliente enviou CPF (11 dígitos) ou CNPJ (14 dígitos), dispara 2FA com e-mail seguro
+    if (digitsOnly.length === 11 || digitsOnly.length === 14) {
+      const solicitacao = await solicitarTrocaNumeroCom2FA(cleanPhone, digitsOnly);
+      if (solicitacao.sucesso) {
+        await sendEvolutionText({
+          phone,
+          text: `🔒 *Proteção de Dados & LGPD (Segurança em 2 Etapas)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos a conta de *${solicitacao.clientName}*.
+
+Para sua segurança e proteção contra acessos indevidos aos dados financeiros da sua empresa, acabamos de enviar um código de confirmação de 6 dígitos para o seu e-mail cadastrado:
+📧 *${solicitacao.maskedEmail}*
+
+👉 Digite apenas os **6 dígitos numéricos** aqui nesta conversa para autorizar a vinculação deste novo número.
+_(O código expira em 10 minutos)_`,
+        });
+        return;
+      } else if (solicitacao.motivo === 'sem_email_cadastrado') {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Atenção à Segurança da sua Conta (LGPD)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Localizamos o cadastro de *${solicitacao.clientName}*, porém *não há um e-mail válido vinculado* à sua assinatura.
+
+Por exigência de segurança da Lei Geral de Proteção de Dados (LGPD), a alteração do número de acesso financeiro exige a confirmação por e-mail para evitar acessos não autorizados por terceiros ou ex-funcionários.
+
+Por favor, entre em contato com nosso suporte oficial ou atualize seu cadastro para registrar um e-mail seguro e acessível.`,
+        });
+        return;
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `❌ *Cadastro não localizado.*
+Não encontramos nenhuma assinatura ativa com o CPF/CNPJ informado (*${digitsOnly}*).
+
+Verifique se digitou corretamente ou escolha um dos nossos planos para começar agora mesmo:
+• *Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
+• *Solo* (R$ 87,99/mês): ${ASAAS_PLANS.monthly.solo.checkoutUrl}`,
         });
         return;
       }
     }
 
+    // 1.3 Degustação Gratuita (Trial) - Verifica se o usuário enviou uma MÍDIA (imagem ou documento PDF)
+    const isMedia = Boolean(message?.imageMessage || message?.documentMessage);
+    if (isMedia) {
+      const trialStatus = await checkTrialStatus(cleanPhone);
+      if (trialStatus.hasUsedTrial) {
+        await sendEvolutionText({
+          phone,
+          text: getTrialLimitReachedMessage(),
+        });
+        return;
+      }
+
+      // Processa o 1º documento na DEGUSTAÇÃO GRATUITA
+      await sendEvolutionText({
+        phone,
+        text: `⏳ *Recebido! Analisando seu documento em tempo real na degustação gratuita do AnalisAí...*
+Aguarde alguns segundos enquanto nossa inteligência artificial faz a leitura completa dos dados.`,
+      });
+
+      let base64 = body.data?.base64 || '';
+      const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
+      const messageId = body.data?.key?.id;
+
+      if (!base64 && messageId) {
+        base64 = (await fetchMediaBase64FromEvolution(messageId)) || '';
+      }
+
+      if (!base64) {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ Não foi possível baixar a imagem para a degustação. Por favor, envie o arquivo novamente ou tire uma foto mais nítida.`,
+        });
+        return;
+      }
+
+      const extraction = await extractDocumentWithGemini(base64, mimeType);
+      if (!extraction.is_financial_doc) {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Documento não identificado como financeiro.*
+O arquivo enviado não parece ser um boleto, conta de consumo ou nota fiscal.
+
+Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para ver o robô funcionando em tempo real!`,
+        });
+        return;
+      }
+
+      // Registra que a degustação foi realizada
+      await recordTrialUsage(cleanPhone, extraction);
+
+      // 1. Envia resumo executivo do documento
+      const summaryText = formatTrialDocSummary(extraction);
+      await sendEvolutionText({ phone, text: summaryText });
+
+      // 2. Se houver código de barras / Pix / linha digitável, envia separado para cópia rápida
+      if (extraction.barcode_or_pix) {
+        await sendEvolutionText({
+          phone,
+          text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*`,
+        });
+        await sendEvolutionText({
+          phone,
+          text: extraction.barcode_or_pix.trim(),
+        });
+      }
+
+      // 3. Envia o Menu de Assinatura com Links Diretos do Asaas
+      await sendEvolutionText({
+        phone,
+        text: getTrialConversionMenu(),
+      });
+      return;
+    }
+
+    // 1.4 Se o usuário enviou texto comum, apresenta a mensagem de boas-vindas da Degustação
     await sendEvolutionText({
       phone,
-      text: `Olá! 👋 Bem-vindo ao *AnalisAí*.
-Não encontramos uma assinatura ativa vinculada a este número de WhatsApp.
-
-Escolha seu plano e ative seu assistente contábil self-service agora mesmo:
-• *AnalisAí Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
-• *AnalisAí Solo* (R$ 87,99/mês): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-• *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Já é cliente e trocou de número?*
-Envie seu **CPF ou CNPJ cadastrado** (apenas números) nesta conversa para transferir sua assinatura para este novo número imediatamente!`,
+      text: getTrialWelcomeMessage(),
     });
     return;
   }

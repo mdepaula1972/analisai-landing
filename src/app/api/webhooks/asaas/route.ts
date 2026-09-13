@@ -243,6 +243,7 @@ export async function POST(req: NextRequest) {
         const doc = payment.customerCpfCnpj ? payment.customerCpfCnpj.replace(/\D/g, '') : '00000000000';
         const phone = payment.customerPhone ? payment.customerPhone.replace(/\D/g, '') : '';
         const name = payment.customerName || 'Cliente Asaas';
+        const email = payment.customerEmail ? payment.customerEmail.trim().toLowerCase() : null;
 
         const { data: newClient } = await supabase
           .from('clients')
@@ -252,6 +253,7 @@ export async function POST(req: NextRequest) {
             tax_type: doc.length > 11 ? 'CNPJ' : 'CPF',
             whatsapp_number: phone.startsWith('55') ? phone : `55${phone}`,
             asaas_customer_id: payment.customer || null,
+            email: email,
             status: 'active',
           })
           .select('id, whatsapp_number, name')
@@ -278,6 +280,15 @@ export async function POST(req: NextRequest) {
           clientName = adminClient.name;
         }
       }
+    }
+
+    // Se o cliente já existia e recebemos o e-mail pelo Asaas, atualiza se estiver vazio
+    if (clientId && payment.customerEmail) {
+      await supabase
+        .from('clients')
+        .update({ email: payment.customerEmail.trim().toLowerCase() })
+        .eq('id', clientId)
+        .is('email', null);
     }
 
     if (!clientId) {
