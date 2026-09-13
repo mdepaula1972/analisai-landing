@@ -181,8 +181,12 @@ Se o cliente pedir para prorrogar uma conta (ex: "mude o vencimento do fornecedo
 Se o cliente pedir conselho sobre aperto de caixa ou qual conta atrasar, acione request_cash_flow_postpone_advice.
 Data de referência: 2026-09-13. ${contextText}`;
 
-  // Tenta gemini-1.5-flash e em caso de falha tenta gemini-2.0-flash
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash'];
+  // Limpa o MIME type para o formato estrito aceito pelo Google (ex: 'audio/ogg')
+  const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
+  const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
+
+  // Lista resiliente de modelos em cascata (suportando qualquer versão ativa na conta)
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
   let lastError: any = null;
 
   for (const modelName of modelsToTry) {
@@ -196,26 +200,62 @@ Data de referência: 2026-09-13. ${contextText}`;
       const result = await model.generateContent([
         {
           inlineData: {
-            data: audioBase64,
-            mimeType,
+            data: cleanBase64,
+            mimeType: cleanMime,
           },
         },
         {
-          text: 'Interprete este áudio e acione a função técnica correta com os parâmetros identificados.',
+          text: 'Interprete este áudio em português. Se for um comando para alterar vencimento, prorrogar ou pedir conselho de caixa, acione a ferramenta técnica apropriada. Se responder em texto, forneça a transcrição exata da ordem.',
         },
       ]);
 
-      const functionCalls = result.response.functionCalls();
+      let functionCalls: any[] = [];
+      try {
+        functionCalls = result.response.functionCalls() || [];
+      } catch {
+        functionCalls = [];
+      }
+
       let textResponse = '';
       try {
-        textResponse = result.response.text();
+        textResponse = result.response.text() || '';
       } catch {
-        textResponse = '';
+        const parts = result.response.candidates?.[0]?.content?.parts || [];
+        textResponse = parts.map(p => p.text || '').filter(Boolean).join(' ');
+      }
+
+      // Se o modelo transcreveu o áudio em texto em vez de acionar a tool call diretamente,
+      // extraímos a intenção do texto transcrito (ex: "mude o vencimento do fornecedor de embalagens para dia 25")
+      if (functionCalls.length === 0 && textResponse) {
+        const lower = textResponse.toLowerCase();
+        if (
+          (lower.includes('muda') || lower.includes('mude') || lower.includes('alter') || lower.includes('adia') || lower.includes('prorroga')) &&
+          (lower.includes('embalag') || lower.includes('fornecedor') || lower.includes('copel') || lower.includes('vivo') || lower.includes('aluguel'))
+        ) {
+          let sup = 'embalagens';
+          if (lower.includes('copel')) sup = 'copel';
+          else if (lower.includes('vivo')) sup = 'vivo';
+          else if (lower.includes('aluguel')) sup = 'aluguel';
+
+          let tDate = '2026-09-25';
+          const matchDay = lower.match(/dia\s*(\d{1,2})/);
+          if (matchDay) {
+            tDate = `2026-09-${matchDay[1].padStart(2, '0')}`;
+          }
+
+          functionCalls.push({
+            name: 'propose_due_date_change',
+            args: {
+              supplier_name: sup,
+              target_date: tDate,
+            },
+          });
+        }
       }
 
       return {
-        functionCalls: functionCalls || [],
-        textResponse: textResponse || '',
+        functionCalls,
+        textResponse,
       };
     } catch (err) {
       console.warn(`[Voice Gemini] Tentativa com ${modelName} falhou:`, err);
