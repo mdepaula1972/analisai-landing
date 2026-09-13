@@ -88,7 +88,7 @@ export async function sendEvolutionMedia({
   const resolvedFileName = fileName || (mediaType === 'document' ? 'documento.pdf' : 'arquivo');
   const mimeType = mediaType === 'document' ? 'application/pdf' : (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream');
 
-  let cleanMedia = mediaBase64 || mediaUrl || '';
+  let cleanMedia = mediaUrl || mediaBase64 || '';
   if (cleanMedia && !cleanMedia.startsWith('http') && !cleanMedia.startsWith('data:')) {
     cleanMedia = `data:${mimeType};base64,${cleanMedia}`;
   }

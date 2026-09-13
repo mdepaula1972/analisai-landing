@@ -685,6 +685,7 @@ export async function sendCashLedgerPdfToWhatsApp(clientId: string, phone: strin
 
   return await sendEvolutionMedia({
     phone,
+    mediaUrl: `https://analisai.me/api/solo/pdf-preview?clientId=${clientId}`,
     mediaBase64: base64,
     mediaType: 'document',
     fileName: result.fileName,
