@@ -377,47 +377,58 @@ Deseja migrar para o Solo agora?
     }
 
     const audioBase64 = body.data?.base64 || '';
-    const audioResult = await processVoiceCommandWithGemini(audioBase64);
 
-    if (audioResult.functionCalls.length > 0) {
-      const call = audioResult.functionCalls[0];
+    if (!audioBase64) {
+      console.warn('[Evolution Webhook] Áudio recebido sem base64 no payload.');
+      await sendEvolutionText({
+        phone,
+        text: `🎙️ Recebi seu áudio, mas o áudio não foi carregado a tempo. Por favor, envie novamente agora que o canal de voz foi calibrado!`,
+      });
+      return;
+    }
 
-      // A) Function Call: Alterar Vencimento por Voz
-      if (call.name === 'propose_due_date_change') {
-        const args = call.args as any;
-        const supplierQuery = args.supplier_name || '';
-        const targetDate = args.target_date;
+    try {
+      const audioResult = await processVoiceCommandWithGemini(audioBase64);
 
-        // Busca conta em aberto compatível
-        const { data: matchedBill } = await supabase
-          .from('payables_receivables')
-          .select('*')
-          .eq('client_id', client.id)
-          .eq('status', 'open')
-          .ilike('counterparty_name', `%${supplierQuery}%`)
-          .order('current_due_date', { ascending: true })
-          .limit(1)
-          .single();
+      if (audioResult.functionCalls.length > 0) {
+        const call = audioResult.functionCalls[0];
 
-        if (matchedBill) {
-          await supabase.from('bot_action_confirmations').insert({
-            client_id: client.id,
-            action_type: 'update_due_date',
-            target_entity_id: matchedBill.id,
-            proposed_payload: {
-              bill_id: matchedBill.id,
-              supplier: matchedBill.counterparty_name,
-              amount: matchedBill.amount,
-              old_due_date: matchedBill.current_due_date,
-              new_due_date: targetDate,
-            },
-            status: 'pending',
-            expires_at: addMinutes(new Date(), 10).toISOString(),
-          });
+        // A) Function Call: Alterar Vencimento por Voz
+        if (call.name === 'propose_due_date_change') {
+          const args = call.args as any;
+          const supplierQuery = args.supplier_name || '';
+          const targetDate = args.target_date;
 
-          await sendEvolutionText({
-            phone,
-            text: `⚠️ *Confirmação de Alteração de Vencimento*
+          // Busca conta em aberto compatível
+          const { data: matchedBill } = await supabase
+            .from('payables_receivables')
+            .select('*')
+            .eq('client_id', client.id)
+            .eq('status', 'open')
+            .ilike('counterparty_name', `%${supplierQuery}%`)
+            .order('current_due_date', { ascending: true })
+            .limit(1)
+            .single();
+
+          if (matchedBill) {
+            await supabase.from('bot_action_confirmations').insert({
+              client_id: client.id,
+              action_type: 'update_due_date',
+              target_entity_id: matchedBill.id,
+              proposed_payload: {
+                bill_id: matchedBill.id,
+                supplier: matchedBill.counterparty_name,
+                amount: matchedBill.amount,
+                old_due_date: matchedBill.current_due_date,
+                new_due_date: targetDate,
+              },
+              status: 'pending',
+              expires_at: addMinutes(new Date(), 10).toISOString(),
+            });
+
+            await sendEvolutionText({
+              phone,
+              text: `⚠️ *Confirmação de Alteração de Vencimento*
 Identifiquei a seguinte conta agendada:
 
 • *Fornecedor:* ${matchedBill.counterparty_name}
@@ -427,61 +438,69 @@ Identifiquei a seguinte conta agendada:
 
 Você confirma adiar esta conta?
 👉 Responda *Sim* para confirmar ou *Não* para manter como está.`,
-          });
-          return;
-        } else {
-          await sendEvolutionText({
-            phone,
-            text: `Não localizei nenhuma conta em aberto com o fornecedor "${supplierQuery}".
+            });
+            return;
+          } else {
+            await sendEvolutionText({
+              phone,
+              text: `Não localizei nenhuma conta em aberto com o fornecedor "${supplierQuery}".
 Deseja digitar o nome correto ou consultar seu livro caixa?`,
-          });
-          return;
+            });
+            return;
+          }
         }
-      }
 
-      // B) Function Call: Consultor de Fluxo de Caixa (Qual conta atrasar)
-      if (call.name === 'request_cash_flow_postpone_advice') {
-        const analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
+        // B) Function Call: Consultor de Fluxo de Caixa (Qual conta atrasar)
+        if (call.name === 'request_cash_flow_postpone_advice') {
+          const analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
 
-        if (!analysisCheck.allowed && !client.is_admin) {
-          await sendEvolutionText({
-            phone,
-            text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
+          if (!analysisCheck.allowed && !client.is_admin) {
+            await sendEvolutionText({
+              phone,
+              text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
 
 Para liberar uma nova análise estratégica detalhada de postergação de contas imediatamente por apenas **R$ 14,90**, conclua o pagamento no link seguro:
 👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
-          });
-          return;
-        }
+            });
+            return;
+          }
 
-        const args = call.args as any;
-        const availableCash = args?.available_cash ? Number(args.available_cash) : undefined;
-        const advice = await generateCashFlowPostponeAdvice(client.id, availableCash);
+          const args = call.args as any;
+          const availableCash = args?.available_cash ? Number(args.available_cash) : undefined;
+          const advice = await generateCashFlowPostponeAdvice(client.id, availableCash);
 
-        await sendEvolutionText({
-          phone,
-          text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
+          await sendEvolutionText({
+            phone,
+            text: `📊 *Consultor de Fluxo de Caixa AnalisAí*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${advice}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.current} de ${analysisCheck.limit} utilizadas no mês.`}`,
-        });
-        return;
+          });
+          return;
+        }
+
+        // C) Function Call: Consumo
+        if (call.name === 'get_plan_consumption') {
+          const summary = formatConsumptionSummary(cycle, plan);
+          await sendEvolutionText({ phone, text: summary });
+          return;
+        }
       }
 
-      // C) Function Call: Consumo
-      if (call.name === 'get_plan_consumption') {
-        const summary = formatConsumptionSummary(cycle, plan);
-        await sendEvolutionText({ phone, text: summary });
-        return;
-      }
+      await sendEvolutionText({
+        phone,
+        text: audioResult.textResponse || 'Entendi seu áudio! Como posso te ajudar com o financeiro hoje?',
+      });
+      return;
+    } catch (audioErr) {
+      console.error('[Gemini Voice Command Error]:', audioErr);
+      await sendEvolutionText({
+        phone,
+        text: `Não consegui decodificar nitidamente o áudio enviado. Por favor, envie novamente falando mais próximo ao microfone ou digite seu comando por texto.`,
+      });
+      return;
     }
-
-    await sendEvolutionText({
-      phone,
-      text: audioResult.textResponse || 'Entendi seu áudio! Como posso te ajudar com o financeiro hoje?',
-    });
-    return;
   }
 
   // 7. Mensagens de Texto
