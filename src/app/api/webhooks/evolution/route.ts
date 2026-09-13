@@ -287,7 +287,15 @@ ${BANK_SAFETY_NOTICE}`,
         });
       }
 
-      // 3. Envia o Menu de Assinatura com Links Diretos do Asaas
+      // 3. Envia Demonstrativo Contábil em PDF para causar forte impressão profissional (Fisgar o lead)
+      try {
+        const { sendTrialPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+        await sendTrialPdfToWhatsApp(cleanPhone, extraction);
+      } catch (trialPdfErr) {
+        console.warn('[Trial PDF Generation Warning]:', trialPdfErr);
+      }
+
+      // 4. Envia o Menu de Assinatura com Links Diretos do Asaas
       await sendEvolutionText({
         phone,
         text: getTrialConversionMenu(),
@@ -743,6 +751,21 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.c
           await sendEvolutionText({ phone, text: summary });
           return;
         }
+
+        // D) Function Call: Emissão de Relatório em PDF por Voz
+        if (call.name === 'request_cash_ledger_pdf') {
+          await sendEvolutionText({
+            phone,
+            text: `📄 *Gerando seu Relatório Oficial de Livro Caixa em PDF...*
+O documento executivo com seus dados cadastrais, contas em atraso e cronograma de pagamentos está sendo emitido e chegará em anexo em instantes.`,
+          });
+
+          const { sendCashLedgerPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+          sendCashLedgerPdfToWhatsApp(client.id, phone).catch((pdfErr) => {
+            console.error('[Voice PDF Generation Error]:', pdfErr);
+          });
+          return;
+        }
       }
 
       await sendEvolutionText({
@@ -883,12 +906,34 @@ Relatório completo em PDF por apenas **${ASAAS_ONE_OFF.supplierXray.priceFormat
     return;
   }
 
+  // Solicitação de Relatório / Livro Caixa em PDF por Texto
+  if (
+    cleanText.includes('pdf') ||
+    cleanText.includes('relatorio') ||
+    cleanText.includes('relatório') ||
+    cleanText.includes('livro caixa') ||
+    cleanText.includes('extrato')
+  ) {
+    await sendEvolutionText({
+      phone,
+      text: `📄 *Gerando seu Relatório Oficial de Livro Caixa em PDF...*
+O documento executivo com seus dados cadastrais, contas em atraso e cronograma de pagamentos está sendo processado e chegará em anexo em instantes.`,
+    });
+
+    const { sendCashLedgerPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+    sendCashLedgerPdfToWhatsApp(client.id, phone).catch((err) => {
+      console.error('[WhatsApp Text PDF Generation Error]:', err);
+    });
+    return;
+  }
+
   await sendEvolutionText({
     phone,
     text: `Olá, ${client.name.split(' ')[0]}! 😊
 Como posso te ajudar hoje?
 • Envie uma **foto ou PDF de boleto/nota** para eu lançar no seu Livro Caixa
 • Envie um **áudio** alterando vencimento de uma conta ou pedindo conselho de caixa
+• Digite *relatório* ou *PDF* para receber seu Livro Caixa oficial em anexo
 • Pergunte *"qual conta devo atrasar?"* para analisar seu aperto de caixa
 • Digite *consumo* para ver o uso do seu plano no mês
 ${client.is_admin ? '• Digite *!ajuda* para ver o painel de comandos de teste' : ''}`,

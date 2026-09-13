@@ -172,6 +172,10 @@ export async function processVoiceCommandWithGemini(
       name: 'request_human_consultant',
       description: 'Invocada quando o cliente pede para falar com um consultor humano ou especialista.',
     },
+    {
+      name: 'request_cash_ledger_pdf',
+      description: 'Invocada quando o cliente solicita o envio do relatório financeiro, livro caixa ou extrato em PDF.',
+    },
   ];
 
   const systemInstruction = `Você é o assistente financeiro do AnalisAí Solo.
@@ -277,7 +281,26 @@ Data de referência: 2026-09-13. ${contextText}`;
     };
   }
 
-  // Regra C: Se nenhuma regra heurística direta disparou, usa o Gemini de texto com Function Calling
+  // Regra C: Pedido de PDF / Livro Caixa por Voz
+  if (
+    lower.includes('pdf') ||
+    lower.includes('relatório') ||
+    lower.includes('relatorio') ||
+    lower.includes('livro caixa') ||
+    lower.includes('extrato')
+  ) {
+    functionCalls.push({
+      name: 'request_cash_ledger_pdf',
+      args: {},
+    });
+
+    return {
+      functionCalls,
+      textResponse: transcribedText,
+    };
+  }
+
+  // Regra D: Se nenhuma regra heurística direta disparou, usa o Gemini de texto com Function Calling
   try {
     const textModel = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',

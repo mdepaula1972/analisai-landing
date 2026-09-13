@@ -63,6 +63,7 @@ Comandos disponíveis para você testar todas as opções:
 • *!simular lembrete vespera* → Dispara o aviso de véspera da degustação (10h)
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!raio-x* → Dispara a geração e envio imediato do **Raio-X de Fornecedores em PDF**
+• *!pdf* ou *!relatorio* → Emite e envia o **Livro Caixa oficial em PDF**
 • *!escalar* → Simula o **Escalonamento Humano**, disparando o lead no seu WhatsApp
 • *!bypass on* → Ativa modo sem limites (tudo liberado)
 • *!bypass off* → Desativa bypass (vivencia a experiência de cliente normal)
@@ -256,6 +257,18 @@ ${detailMsg}`,
     const contasFicticias = [
       {
         client_id: clientId,
+        counterparty_name: 'Gráfica & Rótulos Express',
+        type: 'payable',
+        amount: 820.0,
+        original_due_date: addDays(today, -4).toISOString().split('T')[0],
+        current_due_date: addDays(today, -4).toISOString().split('T')[0],
+        status: 'open',
+        criticality_score: 3,
+        barcode_or_pix: '23793381286000008200012345678901234567',
+        notes: 'Vencida há 4 dias — Juros e multa de mora acumulando',
+      },
+      {
+        client_id: clientId,
         counterparty_name: 'Copel Energia Elétrica',
         type: 'payable',
         amount: 348.5,
@@ -310,18 +323,21 @@ ${detailMsg}`,
 
     return {
       handled: true,
-      message: `🧾 *4 Contas a Pagar Fictícias Criadas!*
+      message: `🧾 *5 Contas a Pagar Fictícias Criadas (Incluindo 1 Atrasada)!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+0. ⚠️ *Gráfica & Rótulos* (R$ 820,00)
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[0].current_due_date)} (*VENCIDA há 4 dias*)
 1. *Copel* (R$ 348,50) 
-   📅 Vencimento: ${formatDueDateDetails(contasFicticias[0].current_due_date)} (Luz - Não adiar)
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[1].current_due_date)} (Luz - Não adiar)
 2. *Vivo Fibra* (R$ 129,90) 
-   📅 Vencimento: ${formatDueDateDetails(contasFicticias[1].current_due_date)} (Internet - Não adiar)
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[2].current_due_date)} (Internet - Não adiar)
 3. *Fornecedor Embalagens* (R$ 1.850,00) 
-   📅 Vencimento: ${formatDueDateDetails(contasFicticias[2].current_due_date)} (Flexível - Recomendado adiar)
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[3].current_due_date)} (Flexível - Recomendado adiar)
 4. *Aluguel Comercial* (R$ 2.500,00) 
-   📅 Vencimento: ${formatDueDateDetails(contasFicticias[3].current_due_date)} (Multa 10%)
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[4].current_due_date)} (Multa 10%)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Experimente agora:
+• Digite *!pdf* ou *"me manda o relatório em PDF"*
 • Pergunte *"qual conta devo adiar?"*
 • Grave um áudio: *"mude o vencimento do fornecedor de embalagens para dia 25"*`,
     };
@@ -337,6 +353,23 @@ ${detailMsg}`,
       handled: true,
       message: `🚀 *Iniciando Geração de Teste do Raio-X de Fornecedores!*
 O Gemini está realizando a pesquisa via Google Search Grounding e gerando o PDF com a marca AnalisAí. O arquivo será enviado aqui no seu WhatsApp em instantes!`,
+    };
+  }
+
+  // ── !pdf / !relatorio ───────────────────────────────────────────────────────
+  if (action === 'pdf' || action === 'relatorio' || action === 'relatório') {
+    const { data: client } = await supabase.from('clients').select('whatsapp_number').eq('id', clientId).single();
+    if (client?.whatsapp_number) {
+      const { sendCashLedgerPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+      sendCashLedgerPdfToWhatsApp(clientId, client.whatsapp_number).catch((err) => {
+        console.error('[Admin PDF Generation Error]:', err);
+      });
+    }
+
+    return {
+      handled: true,
+      message: `📄 *Gerando seu Relatório Oficial de Livro Caixa em PDF...*
+O arquivo completo com suas contas agendadas, contas vencidas e parecer de caixa será enviado aqui em anexo em instantes!`,
     };
   }
 
