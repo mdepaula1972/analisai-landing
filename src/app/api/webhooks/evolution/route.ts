@@ -56,16 +56,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ignored: true, reason: 'from_me' }, { status: 200 });
     }
 
-    const remoteJid = body.data?.key?.remoteJid || '';
-    const remoteJidAlt = (body.data?.key as any)?.remoteJidAlt || '';
-    const sender = (body as any)?.sender || '';
+    const key = body.data?.key || ({} as any);
+    const remoteJid = key.remoteJid || '';
+    const remoteJidAlt = key.remoteJidAlt || (body.data as any)?.remoteJidAlt || '';
+    const participant = key.participant || (body.data as any)?.participant || '';
 
-    // Se remoteJid for um dispositivo vinculado (@lid), usa remoteJidAlt ou sender com o número real
-    let rawPhone = remoteJid;
-    if (remoteJid.includes('@lid')) {
-      rawPhone = remoteJidAlt || sender || remoteJid;
+    // Extrai o número do telefone de forma robusta
+    let candidateJid = remoteJid;
+    if (candidateJid.includes('@lid')) {
+      if (remoteJidAlt && !remoteJidAlt.includes('@lid')) {
+        candidateJid = remoteJidAlt;
+      } else if (participant && !participant.includes('@lid')) {
+        candidateJid = participant;
+      }
     }
-    const phone = rawPhone.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
+
+    const phone = candidateJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
 
     if (!phone) {
       return NextResponse.json({ ignored: true, reason: 'no_phone' }, { status: 200 });

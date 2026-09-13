@@ -131,8 +131,29 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
     };
   }
 
-  // ── !simular [start|solo|plus] ──────────────────────────────────────────────
+  // ── !simular [start|solo|plus|lembrete] ──────────────────────────────────────
   if (action === 'simular') {
+    if (arg1 === 'lembrete') {
+      const subType = parts[2] || 'vencimento';
+      const mockLead = {
+        supplier_name: 'Distribuidora de Embalagens Vale',
+        amount: 1450.00,
+        barcode_or_pix: '34191090080000123456789012345678901234567890',
+      };
+
+      if (subType === 'vespera') {
+        return {
+          handled: true,
+          message: getEveReminderMessage(mockLead),
+        };
+      } else {
+        return {
+          handled: true,
+          message: getDueReminderMessage(mockLead),
+        };
+      }
+    }
+
     let targetCode: PlanCode = 'solo_plus';
     if (arg1 === 'start') targetCode = 'start';
     else if (arg1 === 'solo') targetCode = 'solo';
@@ -140,7 +161,8 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
     else {
       return {
         handled: true,
-        message: 'Informe o plano a simular: `!simular start`, `!simular solo` ou `!simular plus`.',
+        message:
+          'Informe a simulação desejada:\n• `!simular start`\n• `!simular solo`\n• `!simular plus`\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`',
       };
     }
 
@@ -327,28 +349,6 @@ O Gemini está realizando a pesquisa via Google Search Grounding e gerando o PDF
       message: `📲 *Testando Escalonamento para Consultoria Humana!*
 A ficha estruturada do lead qualificado está sendo despachada agora para o seu WhatsApp (+551331500987).`,
     };
-  }
-
-  // ── !simular lembrete vespera / !simular lembrete vencimento ────────────────
-  if (action === 'simular' && arg1 === 'lembrete') {
-    const subType = parts[2] || 'vencimento';
-    const mockLead = {
-      supplier_name: 'Distribuidora de Embalagens Vale',
-      amount: 1450.00,
-      barcode_or_pix: '34191090080000123456789012345678901234567890',
-    };
-
-    if (subType === 'vespera') {
-      return {
-        handled: true,
-        message: getEveReminderMessage(mockLead),
-      };
-    } else {
-      return {
-        handled: true,
-        message: getDueReminderMessage(mockLead),
-      };
-    }
   }
 
   // ── !bypass on / !bypass off ────────────────────────────────────────────────
