@@ -302,20 +302,22 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
 
     // Cabeçalho da tabela de contas vencidas
     drawSafeText(page, 'FORNECEDOR / CREDOR', { x: 45, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-    drawSafeText(page, 'VENCIMENTO ORIGINAL', { x: 260, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-    drawSafeText(page, 'DIAS DE ATRASO', { x: 380, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-    drawSafeText(page, 'VALOR (R$)', { x: width - 95, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+    drawSafeText(page, 'VENCIMENTO', { x: 230, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+    drawSafeText(page, 'DIAS DE ATRASO', { x: 360, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+    drawSafeText(page, 'VALOR (R$)', { x: width - 90, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
     currentY -= 15;
 
     for (const b of overdueBills.slice(0, 4)) {
       page.drawLine({ start: { x: 35, y: currentY + 2 }, end: { x: width - 35, y: currentY + 2 }, color: slate200, thickness: 0.5 });
-      const supName = b.counterparty_name.length > 32 ? b.counterparty_name.slice(0, 32) + '...' : b.counterparty_name;
+      const supName = b.counterparty_name.length > 28 ? b.counterparty_name.slice(0, 28) + '...' : b.counterparty_name;
       const daysOverdue = getDaysDifference(todayStr, b.current_due_date);
+      const parts = b.current_due_date.split('-');
+      const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : b.current_due_date;
 
       drawSafeText(page, supName, { x: 45, y: currentY - 8, size: 8, font: fontRegular, color: textDark });
-      drawSafeText(page, formatDueDateDetails(b.current_due_date), { x: 260, y: currentY - 8, size: 7.5, font: fontRegular, color: slate600 });
-      drawSafeText(page, `+${daysOverdue} dias`, { x: 380, y: currentY - 8, size: 7.5, font: fontBold, color: redAlertText });
-      drawSafeText(page, `R$ ${Number(b.amount).toFixed(2)}`, { x: width - 95, y: currentY - 8, size: 8, font: fontBold, color: redAlertText });
+      drawSafeText(page, `${formattedDate} (Vencido)`, { x: 230, y: currentY - 8, size: 7.5, font: fontRegular, color: redAlertText });
+      drawSafeText(page, `+${daysOverdue} dias de mora`, { x: 360, y: currentY - 8, size: 7.5, font: fontBold, color: redAlertText });
+      drawSafeText(page, `R$ ${Number(b.amount).toFixed(2)}`, { x: width - 90, y: currentY - 8, size: 8, font: fontBold, color: redAlertText });
       currentY -= 17;
     }
     currentY -= 8;
@@ -339,9 +341,9 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   currentY -= 25;
 
   drawSafeText(page, 'FORNECEDOR / BENEFICIARIO', { x: 45, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-  drawSafeText(page, 'DATA DE VENCIMENTO EXATA', { x: 260, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-  drawSafeText(page, 'SITUACAO', { x: 380, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
-  drawSafeText(page, 'VALOR (R$)', { x: width - 95, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+  drawSafeText(page, 'DATA DE VENCIMENTO', { x: 230, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+  drawSafeText(page, 'SITUACAO', { x: 360, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
+  drawSafeText(page, 'VALOR (R$)', { x: width - 90, y: currentY - 10, size: 7.5, font: fontBold, color: slate600 });
   currentY -= 15;
 
   const maxUpcoming = overdueBills.length > 0 ? 5 : 7;
@@ -359,14 +361,23 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   } else {
     for (const b of listToShow) {
       page.drawLine({ start: { x: 35, y: currentY + 2 }, end: { x: width - 35, y: currentY + 2 }, color: slate200, thickness: 0.5 });
-      const supName = b.counterparty_name.length > 32 ? b.counterparty_name.slice(0, 32) + '...' : b.counterparty_name;
+      const supName = b.counterparty_name.length > 28 ? b.counterparty_name.slice(0, 28) + '...' : b.counterparty_name;
       const statusLabel = b.status === 'postponed' ? 'Prorrogada' : 'No Prazo';
       const statusColor = b.status === 'postponed' ? amberGold : rgb(0.1, 0.5, 0.2);
 
+      const parts = b.current_due_date.split('-');
+      let dateLabel = b.current_due_date;
+      if (parts.length === 3) {
+        const [y, m, d] = parts;
+        const dObj = new Date(Number(y), Number(m) - 1, Number(d));
+        const wDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+        dateLabel = `${d}/${m}/${y} (${wDays[dObj.getDay()]})`;
+      }
+
       drawSafeText(page, supName, { x: 45, y: currentY - 8, size: 8, font: fontRegular, color: textDark });
-      drawSafeText(page, formatDueDateDetails(b.current_due_date), { x: 260, y: currentY - 8, size: 7.5, font: fontRegular, color: slate600 });
-      drawSafeText(page, statusLabel, { x: 380, y: currentY - 8, size: 7.5, font: fontBold, color: statusColor });
-      drawSafeText(page, `R$ ${Number(b.amount).toFixed(2)}`, { x: width - 95, y: currentY - 8, size: 8, font: fontBold, color: textDark });
+      drawSafeText(page, dateLabel, { x: 230, y: currentY - 8, size: 7.5, font: fontRegular, color: slate600 });
+      drawSafeText(page, statusLabel, { x: 360, y: currentY - 8, size: 7.5, font: fontBold, color: statusColor });
+      drawSafeText(page, `R$ ${Number(b.amount).toFixed(2)}`, { x: width - 90, y: currentY - 8, size: 8, font: fontBold, color: textDark });
       currentY -= 17;
     }
   }
@@ -431,7 +442,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     font: fontRegular,
     color: slate600,
   });
-  drawSafeText(page, 'A conferencia de dados, autenticacao de codigo de barras e liquidacao de pagamentos cabem ao pagador junto ao seu banco.', {
+  drawSafeText(page, 'A conferencia de dados, autenticacao de codigo de barras e liquidacao de pagamentos cabem exclusivamente ao pagador junto ao seu banco.', {
     x: 35,
     y: 32,
     size: 6.8,
@@ -439,10 +450,10 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     color: slate600,
   });
 
-  drawSafeText(page, 'ANALISAI.ME (C) 2026 - TODOS OS DIREITOS RESERVADOS', {
-    x: width - 210,
-    y: 32,
-    size: 6.5,
+  drawSafeText(page, 'ANALISAI.ME (C) 2026 - TECNOLOGIA EM GESTAO FINANCEIRA INTELIGENTE - TODOS OS DIREITOS RESERVADOS', {
+    x: 35,
+    y: 20,
+    size: 6.2,
     font: fontBold,
     color: slate600,
   });
