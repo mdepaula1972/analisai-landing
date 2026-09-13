@@ -8,6 +8,8 @@ export interface CheckUsageResult {
   limit: number;
   remaining: number;
   reason?: string;
+  consumed_from_extra?: boolean;
+  extra_credits_remaining?: number;
 }
 
 export async function checkAndIncrementQuota(

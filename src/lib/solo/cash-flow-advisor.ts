@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createServiceRoleClient } from '@/lib/supabase-server';
+import { formatDueDateDetails } from './date-utils';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
 
@@ -30,11 +31,11 @@ Com esses boletos agendados, quando você perguntar *"qual conta devo atrasar?"*
 
   const totalOpen = openBills.reduce((acc, b) => acc + Number(b.amount), 0);
 
-  // 2. Monta o contexto para o raciocínio do Gemini
+  // 2. Monta o contexto para o raciocínio do Gemini com data exata e dia da semana
   const billsContext = openBills
     .map(
       (b, idx) =>
-        `${idx + 1}. Fornecedor: "${b.counterparty_name}" | Valor: R$ ${Number(b.amount).toFixed(2)} | Vencimento: ${b.current_due_date} | Criticidade (1-5): ${b.criticality_score || 3} | Notas: ${b.notes || 'Nenhuma'}`
+        `${idx + 1}. Fornecedor: "${b.counterparty_name}" | Valor: R$ ${Number(b.amount).toFixed(2)} | Vencimento: ${formatDueDateDetails(b.current_due_date)} | Criticidade (1-5): ${b.criticality_score || 3} | Notas: ${b.notes || 'Nenhuma'}`
     )
     .join('\n');
 
@@ -50,8 +51,11 @@ DIRETRIZES DE DECISÃO CONTÁBIL:
 3. FORNECEDORES DE INSUMOS/MERCADORIAS: Priorizar postergação daqueles com melhor relacionamento ou onde a multa de mora seja menor que o custo de capital de giro.
 4. FORNECEDORES DE SERVIÇOS NÃO CRÍTICOS: Podem ser postergados com aviso cordial.
 
+IMPORTANTE SOBRE DATAS:
+Sempre cite as contas mencionando a data de vencimento completa com o dia da semana (ex: 15/09/2026 - Terça-feira) para que o cliente saiba exatamente o dia sem precisar fazer contas mentais.
+
 ESTRUTURA DA RESPOSTA (Mantenha concisa, clara e empática no WhatsApp):
-- 🎯 **Recomendação Direta**: Qual boleto atrasar primeiro e por quê.
+- 🎯 **Recomendação Direta**: Qual boleto atrasar primeiro, mencionando o valor e o dia exato do vencimento com dia da semana.
 - 🛡️ **Proteja Imediatamente**: Quais contas NÃO devem ser atrasadas sob nenhuma hipótese.
 - 💬 **Texto Pronto de Negociação**: Um modelo curto de mensagem de WhatsApp para o cliente copiar e enviar ao fornecedor pedindo prorrogação sem atrito.`,
   });

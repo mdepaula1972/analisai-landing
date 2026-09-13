@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { ASAAS_WEBHOOK_AUTH_TOKEN, ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
-import { addDays } from 'date-fns';
+import { addDays, format } from 'date-fns';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,6 +69,9 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   }
   if (link.includes('mlxgbfsqmh4blf4j')) {
     return { type: 'one_off', orderType: 'certificado_digital_a1', name: 'Certificado Digital A1' };
+  }
+  if (link.includes('82tfkx0s9pu1vdd9') || desc.includes('pacote') || desc.includes('extra')) {
+    return { type: 'one_off', orderType: 'extra_docs_package', name: 'Pacote Extra (+20 Documentos)' };
   }
 
   // 2. Por Valor aproximado (fallback)
@@ -340,6 +343,31 @@ Recebemos a confirmação da sua solicitação. O seu relatório detalhado de in
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Recebemos a confirmação do seu Certificado Digital A1.
 Nossa equipe de validação entrará em contato para agendar sua videoconferência de emissão expressa!`,
+          });
+        }
+      } else if (product.orderType === 'extra_docs_package') {
+        const validityDays = 60;
+        const expiresAt = addDays(new Date(), validityDays).toISOString();
+        const docsAmount = 20;
+
+        await supabase.from('extra_document_credits').insert({
+          client_id: clientId,
+          amount_docs: docsAmount,
+          used_docs: 0,
+          asaas_payment_id: payment.id,
+          expires_at: expiresAt,
+        });
+
+        if (clientPhone) {
+          const expFormatted = format(addDays(new Date(), validityDays), 'dd/MM/yyyy');
+          await sendEvolutionText({
+            phone: clientPhone,
+            text: `🎉 *Pacote Extra de Documentos Confirmado!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
+
+📅 *Validade:* 60 dias (até ${expFormatted})
+💡 *Como funciona:* Seus documentos extras ficam guardados com segurança e só serão consumidos caso você ultrapasse a cota do seu plano mensal. Eles são independentes da sua mensalidade!`,
           });
         }
       }

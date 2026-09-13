@@ -6,6 +6,7 @@ import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumption
 import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
 import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
+import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -202,7 +203,7 @@ O valor de *R$ ${Number(payload.total_amount).toFixed(2)}* referente a *${payloa
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Conta: *${payload.supplier}*
 • Valor: *R$ ${Number(payload.amount).toFixed(2)}*
-• Nova data de vencimento: *${payload.new_due_date}*
+• Nova data de vencimento: *${formatDueDateDetails(payload.new_due_date)}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
         });
@@ -235,11 +236,18 @@ Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
     if (!quotaCheck.allowed && !client.is_admin) {
       await sendEvolutionText({
         phone,
-        text: `⚠️ *Limite de Documentos Atingido!*
-Você já processou todos os ${quotaCheck.limit} documentos inclusos no seu ciclo deste mês.
+        text: `⚠️ *Limite de Documentos do Mês Atingido!*
+Você já processou todos os ${quotaCheck.limit} documentos inclusos no seu plano este mês.
 
-Para continuar lançando sem interrupções, faça o upgrade para o **AnalisAí Solo Plus** (60 documentos/mês):
-👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
+Para continuar lançando sem travar sua rotina, escolha a melhor alternativa para você:
+
+1️⃣ *Pacote Extra (+20 Documentos) por R$ 14,90:*
+Ideal para eventualidades ou compras sazonais. Validade de 60 dias e não se mistura com a mensalidade:
+👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}
+
+2️⃣ *Upgrade para o próximo plano:*
+Se o volume da sua empresa aumentou e você deseja uma cota maior todo mês:
+👉 ${plan?.code === 'start' ? ASAAS_PLANS.monthly.solo.checkoutUrl : ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
       });
       return;
     }
@@ -324,17 +332,33 @@ Os dados estão corretos?
         });
       }
 
+      const formattedDueDate = extracted.due_date ? formatDueDateDetails(extracted.due_date) : 'À vista';
+      const quotaFootnote = client.is_admin
+        ? '👑 _Modo Admin Irrestrito_'
+        : quotaCheck.consumed_from_extra
+          ? `🎁 _Lançado utilizando sua carteira de documentos extras (restam ${quotaCheck.extra_credits_remaining} extras válidos)._`
+          : `Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`;
+
       await sendEvolutionText({
         phone,
         text: `✅ *Documento registrado no Livro Caixa!*
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *Fornecedor:* ${extracted.counterparty_name}
 • *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
-• *Vencimento:* ${extracted.due_date || 'À vista'}
+• *Vencimento:* ${formattedDueDate}
 • *Classificação:* ${extracted.category_suggestion}
-━━━━━━━━━━━━━━━━━━━━
-${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`}`,
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${quotaFootnote}`,
       });
+
+      // Se identificou código de barras / linha digitável / Pix, envia em mensagem separada para cópia imediata
+      if (extracted.barcode_or_pix && extracted.barcode_or_pix.length >= 20) {
+        await sendEvolutionText({
+          phone,
+          text: `${extracted.barcode_or_pix}`,
+        });
+      }
+
       return;
     } catch (err) {
       console.error('[Gemini Document OCR Error]:', err);
@@ -433,8 +457,8 @@ Identifiquei a seguinte conta agendada:
 
 • *Fornecedor:* ${matchedBill.counterparty_name}
 • *Valor:* R$ ${Number(matchedBill.amount).toFixed(2)}
-• *Vencimento Atual:* ${matchedBill.current_due_date}
-• *Novo Vencimento Solicitado:* ${targetDate}
+• *Vencimento Atual:* ${formatDueDateDetails(matchedBill.current_due_date)}
+• *Novo Vencimento Solicitado:* ${formatDueDateDetails(targetDate)}
 
 Você confirma adiar esta conta?
 👉 Responda *Sim* para confirmar ou *Não* para manter como está.`,

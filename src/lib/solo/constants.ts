@@ -83,6 +83,16 @@ export const ASAAS_ONE_OFF = {
     priceFormatted: 'R$ 170,00',
     checkoutUrl: 'https://www.asaas.com/c/mlxgbfsqmh4blf4j',
   },
+  extraDocsPackage: {
+    code: 'extra_docs_package',
+    name: 'Pacote Extra (+20 Documentos)',
+    priceCents: 1490,
+    priceFormatted: 'R$ 14,90',
+    checkoutUrl: 'https://www.asaas.com/c/82tfkx0s9pu1vdd9',
+    slug: '82tfkx0s9pu1vdd9',
+    docsAmount: 20,
+    validityDays: 60,
+  },
 } as const;
 
 // Aliases para compatibilidade total com o código legado

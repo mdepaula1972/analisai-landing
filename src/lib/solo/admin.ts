@@ -2,6 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { PlanCode } from '@/types/solo';
 import { executeAndSendSupplierXRay } from './supplier-xray';
 import { escalateToHumanConsultant } from './consultant-escalation';
+import { formatDueDateDetails } from './date-utils';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -284,10 +285,14 @@ ${detailMsg}`,
       handled: true,
       message: `🧾 *4 Contas a Pagar Fictícias Criadas!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Copel (R$ 348,50) - Vence amanhã (Luz - Não adiar)
-2. Vivo Fibra (R$ 129,90) - Vence em 2 dias (Internet - Não adiar)
-3. Fornecedor Embalagens (R$ 1.850,00) - Vence em 3 dias (Flexível - Recomendado adiar)
-4. Aluguel Comercial (R$ 2.500,00) - Vence em 5 dias (Multa 10%)
+1. *Copel* (R$ 348,50) 
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[0].current_due_date)} (Luz - Não adiar)
+2. *Vivo Fibra* (R$ 129,90) 
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[1].current_due_date)} (Internet - Não adiar)
+3. *Fornecedor Embalagens* (R$ 1.850,00) 
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[2].current_due_date)} (Flexível - Recomendado adiar)
+4. *Aluguel Comercial* (R$ 2.500,00) 
+   📅 Vencimento: ${formatDueDateDetails(contasFicticias[3].current_due_date)} (Multa 10%)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Experimente agora:
 • Pergunte *"qual conta devo adiar?"*
