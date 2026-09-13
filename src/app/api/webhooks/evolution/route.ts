@@ -99,7 +99,39 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     .limit(1)
     .maybeSingle();
 
+  const message = body.data?.message;
+  const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
+  const cleanText = rawText.trim().toLowerCase();
+  const digitsOnly = rawText.replace(/\D/g, '');
+
   if (!client) {
+    // 1.1 Se o cliente enviou CPF (11 dígitos) ou CNPJ (14 dígitos), vincula o novo número à conta dele
+    if (digitsOnly.length === 11 || digitsOnly.length === 14) {
+      const { data: matchedClient } = await supabase
+        .from('clients')
+        .select('id, name, whatsapp_number, tax_id')
+        .eq('tax_id', digitsOnly)
+        .single();
+
+      if (matchedClient) {
+        await supabase
+          .from('clients')
+          .update({ whatsapp_number: cleanPhone })
+          .eq('id', matchedClient.id);
+
+        const firstName = matchedClient.name.split(' ')[0];
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Número de WhatsApp atualizado com sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Bem-vindo de volta, ${firstName}! Sua conta foi vinculada a este novo número com segurança.
+
+Você já pode enviar comprovantes, notas fiscais ou consultar o resumo do seu mês com o comando *!status*.`,
+        });
+        return;
+      }
+    }
+
     await sendEvolutionText({
       phone,
       text: `Olá! 👋 Bem-vindo ao *AnalisAí*.
@@ -108,14 +140,14 @@ Não encontramos uma assinatura ativa vinculada a este número de WhatsApp.
 Escolha seu plano e ative seu assistente contábil self-service agora mesmo:
 • *AnalisAí Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
 • *AnalisAí Solo* (R$ 87,99/mês): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-• *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
+• *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *Já é cliente e trocou de número?*
+Envie seu **CPF ou CNPJ cadastrado** (apenas números) nesta conversa para transferir sua assinatura para este novo número imediatamente!`,
     });
     return;
   }
-
-  const message = body.data?.message;
-  const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
-  const cleanText = rawText.trim().toLowerCase();
 
   // 2. Intercepta Comandos de Administração e Teste (!ajuda, !reset, !simular, !estourar, !gerar contas)
   if (client.is_admin && (cleanText.startsWith('!') || cleanText.startsWith('/'))) {
