@@ -187,16 +187,13 @@ Data de referência: 2026-09-13. ${contextText}`;
 
   // Lista resiliente de modelos em cascata (suportando qualquer versão ativa na conta)
   const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+  let transcribedText = '';
   let lastError: any = null;
 
+  // ETAPA 1: Transcrição pura do áudio (sem tools na chamada multimodal para evitar incompatibilidade da API)
   for (const modelName of modelsToTry) {
     try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        tools: [{ functionDeclarations }],
-        systemInstruction,
-      });
-
+      const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent([
         {
           inlineData: {
@@ -205,63 +202,102 @@ Data de referência: 2026-09-13. ${contextText}`;
           },
         },
         {
-          text: 'Interprete este áudio em português. Se for um comando para alterar vencimento, prorrogar ou pedir conselho de caixa, acione a ferramenta técnica apropriada. Se responder em texto, forneça a transcrição exata da ordem.',
+          text: 'Transcreva com precisão o que foi falado neste áudio em português. Retorne estritamente o texto falado, sem introduções ou explicações.',
         },
       ]);
 
-      let functionCalls: any[] = [];
-      try {
-        functionCalls = result.response.functionCalls() || [];
-      } catch {
-        functionCalls = [];
+      const txt = result.response.text();
+      if (txt && txt.trim()) {
+        transcribedText = txt.trim();
+        break; // Sucesso na transcrição
       }
-
-      let textResponse = '';
-      try {
-        textResponse = result.response.text() || '';
-      } catch {
-        const parts = result.response.candidates?.[0]?.content?.parts || [];
-        textResponse = parts.map(p => p.text || '').filter(Boolean).join(' ');
-      }
-
-      // Se o modelo transcreveu o áudio em texto em vez de acionar a tool call diretamente,
-      // extraímos a intenção do texto transcrito (ex: "mude o vencimento do fornecedor de embalagens para dia 25")
-      if (functionCalls.length === 0 && textResponse) {
-        const lower = textResponse.toLowerCase();
-        if (
-          (lower.includes('muda') || lower.includes('mude') || lower.includes('alter') || lower.includes('adia') || lower.includes('prorroga')) &&
-          (lower.includes('embalag') || lower.includes('fornecedor') || lower.includes('copel') || lower.includes('vivo') || lower.includes('aluguel'))
-        ) {
-          let sup = 'embalagens';
-          if (lower.includes('copel')) sup = 'copel';
-          else if (lower.includes('vivo')) sup = 'vivo';
-          else if (lower.includes('aluguel')) sup = 'aluguel';
-
-          let tDate = '2026-09-25';
-          const matchDay = lower.match(/dia\s*(\d{1,2})/);
-          if (matchDay) {
-            tDate = `2026-09-${matchDay[1].padStart(2, '0')}`;
-          }
-
-          functionCalls.push({
-            name: 'propose_due_date_change',
-            args: {
-              supplier_name: sup,
-              target_date: tDate,
-            },
-          });
-        }
-      }
-
-      return {
-        functionCalls,
-        textResponse,
-      };
     } catch (err) {
-      console.warn(`[Voice Gemini] Tentativa com ${modelName} falhou:`, err);
+      console.warn(`[Voice Gemini Transcription] Falha com ${modelName}:`, err);
       lastError = err;
     }
   }
 
-  throw lastError || new Error('Falha ao processar áudio com os modelos disponíveis.');
+  if (!transcribedText) {
+    throw lastError || new Error('Não foi possível transcrever o áudio com os modelos disponíveis.');
+  }
+
+  console.log('[Voice Command] Áudio transcrito com sucesso:', transcribedText);
+
+  // ETAPA 2: Interpretação da intenção e extração de parâmetros sobre o texto transcrito
+  let functionCalls: any[] = [];
+  const lower = transcribedText.toLowerCase();
+
+  // Regra A: Alterar Vencimento
+  if (
+    (lower.includes('muda') || lower.includes('mude') || lower.includes('alter') || lower.includes('adia') || lower.includes('prorroga') || lower.includes('passa')) &&
+    (lower.includes('embalag') || lower.includes('fornecedor') || lower.includes('copel') || lower.includes('vivo') || lower.includes('aluguel') || lower.includes('conta'))
+  ) {
+    let sup = 'embalagens';
+    if (lower.includes('copel') || lower.includes('luz') || lower.includes('energia')) sup = 'copel';
+    else if (lower.includes('vivo') || lower.includes('fibra') || lower.includes('internet')) sup = 'vivo';
+    else if (lower.includes('aluguel') || lower.includes('imobiliaria')) sup = 'aluguel';
+
+    let tDate = '2026-09-25';
+    const matchDay = lower.match(/(?:dia|para)\s*(\d{1,2})/);
+    if (matchDay) {
+      tDate = `2026-09-${matchDay[1].padStart(2, '0')}`;
+    }
+
+    functionCalls.push({
+      name: 'propose_due_date_change',
+      args: {
+        supplier_name: sup,
+        target_date: tDate,
+      },
+    });
+
+    return {
+      functionCalls,
+      textResponse: transcribedText,
+    };
+  }
+
+  // Regra B: Consultor de Caixa por Voz
+  if (
+    lower.includes('atrasar') ||
+    lower.includes('postergar') ||
+    lower.includes('sem dinheiro') ||
+    lower.includes('qual conta') ||
+    lower.includes('aperto') ||
+    lower.includes('adiar')
+  ) {
+    functionCalls.push({
+      name: 'request_cash_flow_postpone_advice',
+      args: {},
+    });
+
+    return {
+      functionCalls,
+      textResponse: transcribedText,
+    };
+  }
+
+  // Regra C: Se nenhuma regra heurística direta disparou, usa o Gemini de texto com Function Calling
+  try {
+    const textModel = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      tools: [{ functionDeclarations }],
+      systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
+Classifique o comando do usuário e acione a ferramenta correta.
+Data de referência: 2026-09-13.`,
+    });
+
+    const textResult = await textModel.generateContent(`Comando do cliente: "${transcribedText}"`);
+    const calls = textResult.response.functionCalls();
+    if (calls && calls.length > 0) {
+      functionCalls = calls;
+    }
+  } catch (textErr) {
+    console.warn('[Voice Text Intent] Falha no function calling de texto:', textErr);
+  }
+
+  return {
+    functionCalls,
+    textResponse: transcribedText,
+  };
 }

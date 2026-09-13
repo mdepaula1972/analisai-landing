@@ -750,11 +750,14 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.c
         text: audioResult.textResponse || 'Entendi seu áudio! Como posso te ajudar com o financeiro hoje?',
       });
       return;
-    } catch (audioErr) {
+    } catch (audioErr: any) {
       console.error('[Gemini Voice Command Error]:', audioErr);
+      const errMsg = audioErr?.message || String(audioErr);
       await sendEvolutionText({
         phone,
-        text: `Não consegui decodificar nitidamente o áudio enviado. Por favor, envie novamente falando mais próximo ao microfone ou digite seu comando por texto.`,
+        text: client.is_admin
+          ? `🎙️ [Diagnóstico Admin de Voz]:\n${errMsg}`
+          : `Não consegui decodificar nitidamente o áudio enviado. Por favor, envie novamente falando mais próximo ao microfone ou digite seu comando por texto.`,
       });
       return;
     }
