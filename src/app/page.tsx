@@ -17,6 +17,7 @@ import TrustSection from '@/components/bpo/TrustSection';
 import DashboardShowcase from '@/components/DashboardShowcase';
 
 // ── Links de WA ──────────────────────────────────────────────────────────────
+const WA_SOLO        = WHATSAPP.soloTeste;
 const WA_DIAGNOSTICO = WHATSAPP.diagnostico;
 const WA_BETA        = WHATSAPP.beta;
 
@@ -71,32 +72,28 @@ export default function BpoLandingPage() {
 
   const faqs = [
     {
-      question: 'Vocês têm acesso ao saldo ou movimentação da minha conta bancária?',
-      answer: 'Para a conciliação bancária, trabalhamos com os extratos e saldos que você nos disponibiliza. Não realizamos pagamentos, transferências nem temos senha de acesso. Você aprova e executa 100% das movimentações. Essa separação é formalizada em cláusula contratual de confidencialidade e limitação de acesso.',
+      question: 'Como funciona o teste grátis no WhatsApp?',
+      answer: 'Você não precisa cadastrar cartão de crédito nem preencher formulários longos. Basta clicar em "Testar no WhatsApp", mandar um "Olá" e enviar a foto ou PDF de um boleto. Em 2 segundos a IA lê os dados, cadastra a conta e te dá as boas-vindas.',
     },
     {
-      question: 'Como funciona o Diagnóstico Financeiro Gratuito?',
-      answer: 'É uma reunião técnica de 30 a 45 minutos onde nosso especialista analisa a rotina atual da sua empresa, mapeia gargalos operacionais e dimensiona a solução exata para a sua realidade — sem compromisso.',
+      question: 'Quais tipos de documentos a inteligência artificial lê?',
+      answer: 'Boletos bancários (em PDF ou fotos mesmo que amassados), faturas de consumo (luz, água, telefone, internet), notas fiscais (NF-e, NFS-e) e recibos. Você também pode mandar áudios de voz gravados com gastos do dia a dia.',
     },
     {
-      question: 'O BPO Financeiro substitui a minha contabilidade?',
-      answer: 'Não. O BPO cuida da rotina diária (contas a pagar/receber, conciliação e DRE gerencial). A contabilidade trata de impostos, folha e obrigações fiscais. Trabalhamos em sintonia com seu contador atual.',
+      question: 'Vocês têm acesso à minha conta bancária ou realizam pagamentos?',
+      answer: 'Não! O AnalisAí organiza suas contas, monta seu Livro Caixa e te envia alertas de vencimento pelo WhatsApp. Quem autoriza e realiza 100% dos pagamentos no aplicativo do seu banco é você. Seus dados financeiros são estritamente confidenciais e criptografados.',
     },
     {
-      question: 'Qual é o prazo para começar após contratar?',
-      answer: 'Após a assinatura do contrato e onboarding (mapeamento da sua empresa), iniciamos a operação em até 10 dias úteis. O onboarding inclui a configuração dos processos, acesso às ferramentas e treinamento do ponto de contato da sua empresa.',
+      question: 'Como funciona a emissão do Relatório de Livro Caixa em PDF?',
+      answer: 'A qualquer momento você pode pedir no WhatsApp (por exemplo: "me manda o relatório em PDF"). A IA gera instantaneamente um documento A4 executivo com o logotipo da sua empresa, CNPJ, extrato cronológico e relação de contas atrasadas e a vencer.',
     },
     {
-      question: 'Como funciona a taxa de implantação?',
-      answer: 'A taxa de onboarding é cobrada uma única vez e varia conforme a complexidade da operação da sua empresa (volume de lançamentos, número de contas, histórico de dados). O valor é informado e acordado na proposta comercial antes da assinatura.',
+      question: 'Qual a diferença entre o AnalisAí Solo (IA) e o BPO Financeiro com consultor?',
+      answer: 'No AnalisAí Solo (a partir de R$ 39,90/mês), você tem autonomia total: manda documentos e recebe relatórios pelo WhatsApp. No BPO Financeiro com consultor (a partir de R$ 397/mês), um especialista humano assume a conciliação bancária, emissão de notas e reuniões mensais com você.',
     },
     {
-      question: 'Posso fazer um diagnóstico antes de contratar um plano?',
-      answer: 'Sim! Esse é exatamente o nosso processo padrão. Agendamos um diagnóstico gratuito de 30 a 45 minutos onde entendemos sua realidade e apresentamos a proposta mais adequada. Nenhum compromisso antes disso.',
-    },
-    {
-      question: 'E o AnalisAI.me (IA Preditiva)? Quando estará disponível?',
-      answer: 'O AnalisAI.me é nosso laboratório de inteligência preditiva em constante evolução. Clientes de BPO Financeiro têm acesso prioritário ao Programa Beta conforme disponibilização gradual dos recursos.',
+      question: 'Como faço para assinar após o teste?',
+      answer: 'Você pode assinar diretamente na seção de Planos do site ou solicitar o link de pagamento Asaas pelo próprio WhatsApp. A liberação do limite do seu plano é instantânea.',
     },
   ];
 
@@ -105,32 +102,29 @@ export default function BpoLandingPage() {
 
       {/* Botão flutuante WhatsApp */}
       <a
-        href={WA_DIAGNOSTICO}
+        href={WA_SOLO}
         target="_blank"
         rel="noopener noreferrer"
         id="btn-whatsapp-float"
         className="fixed bottom-6 right-6 z-50 bg-emerald-500 hover:bg-emerald-400 text-slate-950 p-4 rounded-full shadow-2xl shadow-emerald-500/40 flex items-center gap-3 transition-all duration-300 hover:scale-110 animate-bounce"
-        aria-label="Falar no WhatsApp"
+        aria-label="Testar no WhatsApp"
       >
         <MessageCircle className="w-6 h-6 fill-slate-950 stroke-none" />
-        <span className="font-bold text-sm hidden sm:inline pr-1">Diagnóstico Gratuito</span>
+        <span className="font-extrabold text-sm hidden sm:inline pr-1">Testar 1 Boleto Grátis</span>
       </a>
 
       {/* ── HERO + NAVBAR ── */}
-      <HeroSection waUrl={WA_DIAGNOSTICO} scrolled={scrolled} />
-
-      {/* ── COMPARATIVO CLT vs BPO ── */}
-      <CostComparisonSection />
+      <HeroSection waUrl={WA_SOLO} scrolled={scrolled} />
 
       {/* ── NÚMEROS DE IMPACTO ── */}
       <div className="border-y border-slate-800/60 bg-slate-900/30">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
             {[
-              { valor: 'Até R$ 43k', label: 'Economia anual vs. CLT' },
-              { valor: 'R$ 67', label: 'Planos a partir de /mês' },
-              { valor: '+120', label: 'Empresas e MEIs atendidos' },
-              { valor: '< 48h', label: 'Para primeira entrega' },
+              { valor: '2 seg', label: 'Tempo de leitura do boleto pela IA' },
+              { valor: 'R$ 39,90', label: 'Planos a partir de /mês' },
+              { valor: '100%', label: 'No seu WhatsApp sem instalar app' },
+              { valor: 'PDF A4', label: 'Relatório oficial com seu CNPJ' },
             ].map((stat) => (
               <div key={stat.label}>
                 <p className="text-3xl sm:text-4xl font-black text-amber-300 mb-1">{stat.valor}</p>
@@ -148,29 +142,26 @@ export default function BpoLandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-14">
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[.14em] text-emerald-300 mb-5">
-              <Sparkles className="h-3.5 w-3.5" /> Painel Executivo BPO
+              <Sparkles className="h-3.5 w-3.5" /> Inteligência Analítica
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-white mb-5 leading-tight">
-              Seus números, organizados e{' '}
-              <span className="text-shimmer-emerald">interpretados para você</span>
+              Seus números organizados e{' '}
+              <span className="text-shimmer-emerald">sempre na palma da mão</span>
             </h2>
             <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-              Cada cliente tem acesso a um painel gerencial completo — DRE, indicadores de margem, fluxo de caixa e alertas automáticos — tudo em tempo real, sem precisar entender de contabilidade.
+              Diga adeus às pilhas de comprovantes esquecidos. Com o AnalisAí, seu fluxo de caixa, vencimentos e relatórios estão sempre atualizados pelo WhatsApp.
             </p>
           </div>
           <DashboardShowcase />
           <div className="mt-10 flex flex-col items-center gap-4">
-            <p className="text-sm text-slate-500 text-center max-w-lg">
-              Demonstração com dados simulados. O seu painel reflete os dados reais da sua empresa, atualizados pelo nosso time de BPO.
-            </p>
             <a
-              href={WA_DIAGNOSTICO}
+              href={WA_SOLO}
               target="_blank"
               rel="noopener noreferrer"
               id="painel-cta-whatsapp"
-              className="inline-flex items-center gap-2.5 rounded-2xl bg-emerald-400 px-7 py-3.5 text-sm font-extrabold text-slate-950 shadow-xl shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-300"
+              className="inline-flex items-center gap-2.5 rounded-2xl bg-emerald-400 px-7 py-3.5 text-sm font-black text-slate-950 shadow-xl shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-300"
             >
-              <Calendar className="h-4 w-4" /> Quero um painel assim para minha empresa
+              <MessageCircle className="h-4 w-4 fill-slate-950 stroke-none" /> Experimentar no WhatsApp
             </a>
           </div>
         </div>
@@ -180,7 +171,7 @@ export default function BpoLandingPage() {
       <ReportShowcase />
 
       {/* ── SEGURANÇA + SETORES ── */}
-      <TrustSection waUrl={WA_DIAGNOSTICO} />
+      <TrustSection waUrl={WA_SOLO} />
 
       {/* ── PLANOS ── */}
       <PricingSection />
@@ -193,7 +184,7 @@ export default function BpoLandingPage() {
         >
           <div className="text-center mb-14">
             <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Perguntas frequentes</h2>
-            <p className="text-slate-400">Transparência desde a primeira conversa.</p>
+            <p className="text-slate-400">Tudo o que você precisa saber sobre o AnalisAí Solo.</p>
           </div>
           <div className="space-y-3">
             {faqs.map((faq) => (
@@ -213,33 +204,41 @@ export default function BpoLandingPage() {
           className={`mx-auto max-w-3xl px-4 sm:px-6 text-center transition-all duration-700 ${ctaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
         >
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[.14em] text-amber-300">
-            <Sparkles className="h-3.5 w-3.5" /> Próximo passo
+            <Sparkles className="h-3.5 w-3.5" /> Comece agora mesmo
           </div>
           <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 leading-tight">
-            Pronto para ter clareza{' '}
-            <span className="text-shimmer-amber">financeira de verdade?</span>
+            Pronto para colocar seu financeiro{' '}
+            <span className="text-shimmer-amber">no piloto automático?</span>
           </h2>
           <p className="text-xl text-slate-300 mb-10 leading-relaxed">
-            Agende o diagnóstico gratuito e descubra exatamente o que está impedindo sua empresa de ter um caixa previsível e saudável.
+            Envie a foto de 1 boleto gratuitamente no WhatsApp e veja a mágica acontecer em segundos.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              href={WA_DIAGNOSTICO}
+              href={WA_SOLO}
               target="_blank"
               rel="noopener noreferrer"
               id="final-cta-primary"
-              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-400 px-8 py-4 text-base font-extrabold text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300"
+              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-400 px-8 py-4 text-base font-black text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300"
             >
-              <Calendar className="h-5 w-5" />
-              Agendar Diagnóstico Gratuito
+              <MessageCircle className="h-5 w-5 fill-slate-950 stroke-none" />
+              Testar 1 Boleto Grátis no WhatsApp
               <ArrowRight className="h-5 w-5" />
             </a>
-            <Link
-              href="/parceiros"
+            <a
+              href="#planos"
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 px-6 py-4 font-bold text-slate-200 transition hover:border-amber-300/50 hover:text-amber-200"
             >
-              <HeartHandshake className="h-5 w-5" />
-              Programa de Parcerias Contábeis
+              Ver Planos e Assinar
+            </a>
+          </div>
+          <div className="mt-4">
+            <Link
+              href="/parceiros"
+              className="inline-flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-amber-300 transition-colors"
+            >
+              <HeartHandshake className="h-4 w-4" />
+              É contador? Conheça nosso Programa de Parcerias Contábeis
             </Link>
           </div>
           <p className="mt-6 text-sm text-slate-500">

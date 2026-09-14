@@ -6,6 +6,7 @@ export function createWhatsAppLink(message: string) {
 }
 
 export const WHATSAPP = {
+  soloTeste: createWhatsAppLink('Olá! Quero testar o AnalisAí Solo no WhatsApp enviando um boleto.'),
   diagnostico: createWhatsAppLink('Olá! Gostaria de agendar um Diagnóstico Financeiro Gratuito (30 a 45 min) para a minha empresa.'),
   planoMei: createWhatsAppLink('Olá! Tenho interesse no Plano Autônomo & MEI (a partir de R$ 397/mês) e gostaria de solicitar uma proposta.'),
   planoEssencial: createWhatsAppLink('Olá! Tenho interesse no Plano Essencial (a partir de R$ 697/mês) e gostaria de solicitar uma proposta.'),
