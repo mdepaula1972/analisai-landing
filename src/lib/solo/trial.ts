@@ -99,10 +99,10 @@ export function getTrialWelcomeMessage(): string {
   return `Olá! 👋 Bem-vindo ao *AnalisAí*.
 
 🎁 *Que tal experimentar uma degustação gratuita agora mesmo?*
-Envie uma foto ou PDF de qualquer **boleto ou nota fiscal** aqui nesta conversa.
+Envie uma foto ou PDF de qualquer **boleto ou nota fiscal**, ou simplesmente digite seu lançamento aqui (ex: *"Pagar fornecedor R$ 350 dia 25"*).
 
 Em menos de 15 segundos, nosso robô com inteligência artificial vai:
-1️⃣ Ler e auditar todos os dados do seu documento;
+1️⃣ Ler e auditar todos os dados do seu lançamento;
 2️⃣ Entregar o código de barras limpo para você pagar no seu banco;
 3️⃣ Calcular o vencimento exato e gerar uma dica de fluxo de caixa!
 
@@ -112,7 +112,7 @@ Em menos de 15 segundos, nosso robô com inteligência artificial vai:
 • *AnalisAí Solo* (R$ 87,99/mês - Áudio & IA de Caixa): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 • *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
 • *AnalisAí Pro* (R$ 297,00/mês - Multi-CNPJ & Conciliação Semanal): ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-• *AnalisAí Super* (R$ 597,00/mês - 1.000 docs & Até 4 CNPJs): ${ASAAS_PLANS.monthly.super.checkoutUrl}
+• *AnalisAí Super* (R$ 597,00/mês - 1.000 lançamentos & Até 4 CNPJs): ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 *Já é cliente e trocou de número?*
@@ -125,27 +125,27 @@ Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta co
 export function getTrialLimitReachedMessage(): string {
   return `🎁 *Sua degustação gratuita foi concluída com sucesso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para continuar organizando todos os seus boletos e notas fiscais, receber avisos diários antes dos vencimentos e contar com conciliação bancária e consultoria financeira sem planilhas, escolha seu plano:
+Para continuar organizando todas as suas contas, boletos e notas fiscais por foto, PDF, voz ou texto, receber avisos diários antes dos vencimentos e contar com conciliação bancária sem planilhas, escolha seu plano:
 
 1️⃣ *AnalisAí Start* — R$ 39,90/mês
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
-_(Até 15 docs/mês, leitura automática, livro caixa e avisos pontuais)_
+_(Até 15 lançamentos/mês, livro caixa e avisos pontuais)_
 
 2️⃣ *AnalisAí Solo* — R$ 87,99/mês ⭐ *Mais Escolhido*
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-_(Até 30 docs/mês, comandos por voz, consultor de caixa e conciliação mensal)_
+_(Até 30 lançamentos/mês, comandos por voz e texto, consultor de caixa e conciliação mensal)_
 
 3️⃣ *AnalisAí Solo Plus* — R$ 157,99/mês
 👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-_(Até 60 docs/mês, o dobro de análises de caixa e conciliação mensal)_
+_(Até 60 lançamentos/mês, 4 análises de caixa e conciliação mensal)_
 
 4️⃣ *AnalisAí Pro* — R$ 297,00/mês 🏢 *Multi-CNPJ*
 👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-_(Até 500 docs/mês, até 2 CNPJs, conciliação semanal para até 2 bancos)_
+_(Até 500 lançamentos/mês, até 2 CNPJs, conciliação semanal para até 2 bancos)_
 
 5️⃣ *AnalisAí Super* — R$ 597,00/mês 🚀 *Escala & Potência Máxima*
 👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
-_(Até 1.000 docs/mês, até 4 CNPJs, conciliação semanal contínua para até 4 bancos)_
+_(Até 1.000 lançamentos/mês, até 4 CNPJs, conciliação semanal contínua para até 4 bancos)_
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💳 *A ativação é instantânea após o pagamento no Asaas!*
@@ -161,7 +161,7 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
     ? Number(doc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : 'Não identificado';
 
-  let txt = `📄 *Análise Documental Concluída — Degustação AnalisAí*\n`;
+  let txt = `📄 *Análise e Lançamento Concluído — Degustação AnalisAí*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   txt += `🏢 *Cedente/Fornecedor:* ${doc.supplier_name || 'Não identificado'}\n`;
   txt += `📑 *Tipo de Documento:* ${doc.document_type || 'Boleto/Conta'}\n`;
@@ -172,11 +172,11 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
   }
 
   if (remainingDocs > 0) {
-    txt += `\n🎁 *Você ainda tem ${remainingDocs} análise(s) gratuita(s) nesta degustação!*\n`;
+    txt += `\n🎁 *Você ainda tem ${remainingDocs} lançamento(s) gratuito(s) nesta degustação!*\n`;
   }
 
   txt += `\n💡 *Dica Inteligente do AnalisAí:* Conta cadastrada com sucesso! Recomendamos programar o pagamento com antecedência para evitar juros e manter seu score bancário positivo.\n`;
-  txt += `🔒 *Nota:* Na degustação, salvamos os dados da conta. Para ter o *Cofre Digital permanente em nuvem* com a 2ª via da imagem/PDF sempre guardada, assine um plano pago!`;
+  txt += `🔒 *Nota:* Na degustação, salvamos os dados do lançamento. Para ter o *Cofre Digital permanente em nuvem* com a 2ª via da imagem/PDF sempre guardada, assine um plano pago!`;
 
   return txt;
 }
@@ -187,28 +187,28 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
 export function getTrialConversionMenu(): string {
   return `✨ *Gostou da velocidade e precisão? Esse é só o começo!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Imagine nunca mais digitar um código de barras, receber avisos diários no seu WhatsApp para não esquecer vencimentos e comandar todo o seu fluxo de caixa por áudio.
+Imagine nunca mais digitar um código de barras, receber avisos diários no seu WhatsApp para não esquecer vencimentos e comandar todo o seu fluxo de caixa por áudio e texto.
 
 🚀 *Escolha seu plano e ative seu assistente contábil agora mesmo:*
 
 1️⃣ *AnalisAí Start* (R$ 39,90/mês)
-• 15 docs/mês + Lembretes diários
+• 15 lançamentos/mês + Lembretes diários
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
 
 2️⃣ *AnalisAí Solo* (R$ 87,99/mês) ⭐ *Mais Escolhido*
-• 30 docs/mês + Comandos por Áudio + Consultor de Caixa + Conciliação Mensal
+• 30 lançamentos/mês + Comandos por Áudio/Texto + Consultor de Caixa + Conciliação Mensal
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
 3️⃣ *AnalisAí Solo Plus* (R$ 157,99/mês)
-• 60 docs/mês + 4 Análises de Caixa + Conciliação Mensal
+• 60 lançamentos/mês + 4 Análises de Caixa + Conciliação Mensal
 👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
 
 4️⃣ *AnalisAí Pro* (R$ 297,00/mês) 🏢
-• 500 docs/mês + Até 2 CNPJs + Conciliação Semanal
+• 500 lançamentos/mês + Até 2 CNPJs + Conciliação Semanal
 👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
 
 5️⃣ *AnalisAí Super* (R$ 597,00/mês) 🚀
-• 1.000 docs/mês + Até 4 CNPJs + Conciliação Semanal Contínua
+• 1.000 lançamentos/mês + Até 4 CNPJs + Conciliação Semanal Contínua
 👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━

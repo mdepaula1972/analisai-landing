@@ -74,7 +74,7 @@ export default function TermosPage() {
             </ul>
           </div>
 
-          <h3 className="text-base font-bold text-amber-400 pt-2">3. Natureza dos Serviços — Limites Operacionais</h3>
+          <h3 className="text-base font-bold text-amber-400 pt-2">3. Natureza dos Serviços — Limites Operacionais &amp; Conceito de Lançamento</h3>
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 my-2 text-slate-300 space-y-2 text-xs">
             <p className="font-bold text-white">Regras Claras de Atuação:</p>
             <ul className="list-disc pl-5 space-y-1">
@@ -86,8 +86,20 @@ export default function TermosPage() {
             </ul>
           </div>
 
+          <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-5 my-2 text-slate-300 space-y-2.5 text-xs leading-relaxed">
+            <p className="font-bold text-amber-400 text-sm">3.1. Cômputo de Lançamentos na Franquia do Plano:</p>
+            <p>
+              Para todos os efeitos de cobrança, degustação e limites mensais contratados, entende-se por <strong>&quot;Lançamento Financeiro&quot;</strong> qualquer registro individual de movimentação (conta a pagar ou conta a receber) estruturado pela plataforma.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-slate-400">
+              <li><strong>Igualdade de Canais de Entrada:</strong> Informações financeiras transmitidas por fotos de documentos/boletos, arquivos digitais (PDF), comandos de voz (áudios) ou mensagens de texto no WhatsApp computam igualmente como 1 (um) lançamento contra a franquia do plano contratado.</li>
+              <li><strong>Momento da Dedução:</strong> A dedução da franquia ocorre no momento em que os dados da movimentação são confirmados e inseridos no Livro Caixa/Fluxo de Caixa. Trocas de mensagens de esclarecimento ou dúvidas não debitam lançamentos.</li>
+              <li><strong>Esgotamento da Cota:</strong> Ao atingir o limite de lançamentos do ciclo mensal, o Usuário poderá optar pela contratação do Pacote Extra (+20 Lançamentos avulsos) ou efetuar o upgrade para o plano imediatamente superior.</li>
+            </ul>
+          </div>
+
           <h3 className="text-base font-bold text-amber-400 pt-2">4. Responsabilidades do Cliente</h3>
-          <p>O Cliente é responsável por fornecer com veracidade e tempestividade os extratos e comprovantes necessários, bem como efetivar pessoalmente os pagamentos agendados e validados.</p>
+          <p>O Cliente é responsável por fornecer com veracidade e tempestividade os extratos, comprovantes e dados das movimentações, bem como efetivar pessoalmente os pagamentos agendados e validados.</p>
 
           <h3 className="text-base font-bold text-amber-400 pt-2">5. Propriedade Intelectual</h3>
           <p>Todos os direitos sobre a marca AnalisAI.me, marca Solucione Assessoria Virtual, metodologias, softwares e inteligência preditiva pertencem exclusivamente à Contratada.</p>

@@ -54,10 +54,12 @@ Comandos disponíveis para você testar todas as opções:
 
 • *!status* → Exibe seu plano atual, limites consumidos e status
 • *!reset* → Zera todos os contadores do seu ciclo para testar do início
-• *!simular start* → Muda seu plano para **Start** (testa bloqueio de voz e upsell)
-• *!simular solo* → Muda seu plano para **Solo** (testa 2 análises de caixa e áudio)
-• *!simular plus* → Muda seu plano para **Solo Plus** (o dobro de limites)
-• *!estourar doc* → Simula que você estourou a cota de documentos
+• *!simular start* → Muda seu plano para **Start** (15 lançamentos, bloqueio de voz e upsell)
+• *!simular solo* → Muda seu plano para **Solo** (30 lançamentos, 2 análises de caixa e áudio)
+• *!simular plus* → Muda seu plano para **Solo Plus** (60 lançamentos, 4 análises de caixa)
+• *!simular pro* → Muda seu plano para **Pro** (500 lançamentos, 2 CNPJs, conciliação semanal)
+• *!simular super* → Muda seu plano para **Super** (1.000 lançamentos, 4 CNPJs, conciliação contínua)
+• *!estourar lancamento* → Simula que você estourou a cota de lançamentos do mês
 • *!estourar analise* → Simula que você gastou todas análises de caixa
 • *!gerar contas teste* → Cria 4 contas a pagar fictícias para testar o consultor
 • *!simular lembrete vespera* → Dispara o aviso de véspera da degustação (10h)
@@ -101,7 +103,7 @@ Comandos disponíveis para você testar todas as opções:
 💡 *Consultor Caixa:* ${plan?.has_cash_flow_advisor ? '✅ Habilitado' : '❌ Desabilitado'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 *Contadores do Ciclo:*
-• Documentos: ${cycle?.docs_processed_count || 0} / ${plan?.doc_limit || 0} (Estourou: ${cycle?.hit_doc_limit ? 'Sim' : 'Não'})
+• Lançamentos: ${cycle?.docs_processed_count || 0} / ${plan?.doc_limit || 0} (Estourou: ${cycle?.hit_doc_limit ? 'Sim' : 'Não'})
 • Interações Bot: ${cycle?.bot_interactions_count || 0} / ${plan?.bot_interaction_limit || 0}
 • Análises de Caixa: ${cycle?.cash_flow_analyses_count || 0} / ${plan?.cash_flow_analysis_limit || 0} (Estourou: ${cycle?.hit_analysis_limit ? 'Sim' : 'Não'})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -159,11 +161,13 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
     if (arg1 === 'start') targetCode = 'start';
     else if (arg1 === 'solo') targetCode = 'solo';
     else if (arg1 === 'plus' || arg1 === 'solo_plus') targetCode = 'solo_plus';
+    else if (arg1 === 'pro') targetCode = 'pro';
+    else if (arg1 === 'super') targetCode = 'super';
     else {
       return {
         handled: true,
         message:
-          'Informe a simulação desejada:\n• `!simular start`\n• `!simular solo`\n• `!simular plus`\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`',
+          'Informe a simulação desejada:\n• `!simular start` (15 lançamentos)\n• `!simular solo` (30 lançamentos)\n• `!simular plus` (60 lançamentos)\n• `!simular pro` (500 lançamentos)\n• `!simular super` (1.000 lançamentos)\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`',
       };
     }
 
@@ -181,24 +185,36 @@ Todos os seus limites deste mês foram zerados para testes. Você pode começar 
 
       let detailMsg = '';
       if (targetCode === 'start') {
-        detailMsg = `• 📄 *Documentos:* Até 15 notas/boletos por mês (por texto ou foto)
+        detailMsg = `• 📑 *Lançamentos:* Até 15 lançamentos por mês (por foto, PDF ou texto)
 • 💬 *WhatsApp:* Registro contábil e lembretes diários
 • 🎙️ *Comandos por Voz:* Indisponíveis (gera convite de upgrade para o Solo)
 • 💡 *Consultor de Caixa:* Indisponível (oferece análise avulsa por R$ 14,90 ou upgrade para o Solo)`;
       } else if (targetCode === 'solo') {
-        detailMsg = `• 📄 *Documentos:* Até 30 notas/boletos por mês
+        detailMsg = `• 📑 *Lançamentos:* Até 30 lançamentos por mês
 • 🎙️ *Comandos por Voz:* 100% Liberados (altere vencimentos e envie áudios)
 • 💡 *Consultor de Caixa:* 2 análises estratégicas inclusas por mês
 • 📊 *Livro Caixa & DRE:* Automatizados
+• 🏦 *Conciliação Bancária:* Mensal (1 conta inclusa)
 
 💡 *Próximos testes recomendados:*
-1. Envie uma foto ou PDF de boleto/nota para leitura com IA.
+1. Envie foto/PDF de boleto ou texto *"Pagar fornecedor 350 dia 25"*.
 2. Pergunte *"estou sem dinheiro, qual conta devo atrasar?"*`;
-      } else {
-        detailMsg = `• 📄 *Documentos:* Até 60 notas/boletos por mês (o dobro do Solo)
+      } else if (targetCode === 'solo_plus') {
+        detailMsg = `• 📑 *Lançamentos:* Até 60 lançamentos por mês (o dobro do Solo)
 • 💬 *Interações de Bot:* Até 100 por mês
 • 💡 *Consultor de Caixa:* 4 análises estratégicas inclusas por mês
-• 🎙️ *Voz & IA:* Ilimitados com suporte prioritário`;
+• 🎙️ *Voz & IA:* Ilimitados com suporte prioritário
+• 🏦 *Conciliação Bancária:* Mensal (1 conta inclusa)`;
+      } else if (targetCode === 'pro') {
+        detailMsg = `• 📑 *Lançamentos:* Até 500 lançamentos por mês
+• 🏢 *Multi-CNPJ:* Gestão integrada de até 2 empresas/CNPJs
+• 🏦 *Conciliação Bancária:* Semanal (até 2 contas bancárias)
+• 💡 *Consultoria & DRE:* Painel consolidado e relatórios executivos`;
+      } else if (targetCode === 'super') {
+        detailMsg = `• 📑 *Lançamentos:* Até 1.000 lançamentos por mês
+• 🏢 *Multi-CNPJ:* Gestão corporativa de até 4 empresas/CNPJs
+• 🏦 *Conciliação Bancária:* Semanal contínua (até 4 contas bancárias)
+• 🚀 *Potência Máxima:* Análises e consultor de caixa ilimitados`;
       }
 
       return {
@@ -210,7 +226,7 @@ ${detailMsg}`,
     }
   }
 
-  // ── !estourar [doc|analise|bot] ─────────────────────────────────────────────
+  // ── !estourar [lancamento|doc|analise|bot] ─────────────────────────────────────────────
   if (action === 'estourar') {
     const { data: sub } = await supabase
       .from('subscriptions')
@@ -220,7 +236,7 @@ ${detailMsg}`,
 
     const plan = sub?.plans as any;
 
-    if (arg1 === 'doc') {
+    if (arg1 === 'doc' || arg1 === 'lancamento' || arg1 === 'lancamentos') {
       await supabase
         .from('usage_cycles')
         .update({
@@ -231,7 +247,7 @@ ${detailMsg}`,
 
       return {
         handled: true,
-        message: `💥 *Cota de Documentos Estourada!* Agora, envie qualquer foto ou PDF para testar a resposta de bloqueio e sugestão de upgrade para o Solo Plus.`,
+        message: `💥 *Cota de Lançamentos Estourada!* Agora, envie uma mensagem de texto (ex: *"Pagar fornecedor 250 dia 25"*), áudio ou foto de boleto para testar a resposta de bloqueio com link do Pacote Extra (+20 Lançamentos por R$ 14,90) e sugestão de upgrade.`,
       };
     }
 

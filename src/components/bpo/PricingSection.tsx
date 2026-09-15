@@ -210,7 +210,7 @@ export default function PricingSection() {
                 <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-300">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>15 documentos/mês</strong></span>
+                    <span><strong>15 lançamentos/mês</strong> (foto, PDF, voz ou texto)</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -274,7 +274,7 @@ export default function PricingSection() {
                 <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-200">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <span><strong>30 documentos/mês</strong></span>
+                    <span><strong>30 lançamentos/mês</strong> (foto, PDF, voz ou texto)</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -282,7 +282,7 @@ export default function PricingSection() {
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <span><strong>Comandos por voz no WhatsApp</strong></span>
+                    <span><strong>Comandos por voz e texto</strong></span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -312,7 +312,7 @@ export default function PricingSection() {
                 </span>
                 <h3 className="text-xl font-black text-white mb-2">AnalisAí Solo Plus</h3>
                 <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
-                  O dobro de capacidade em documentos e análises para rotinas movimentadas.
+                  O dobro de capacidade em lançamentos e análises para rotinas movimentadas.
                 </p>
 
                 <div className="mb-6">
@@ -334,7 +334,7 @@ export default function PricingSection() {
                 <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-300">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>60 documentos/mês</strong></span>
+                    <span><strong>60 lançamentos/mês</strong> (o dobro do Solo)</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -394,7 +394,7 @@ export default function PricingSection() {
                 <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-200">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                    <span><strong>500 documentos/mês</strong></span>
+                    <span><strong>500 lançamentos/mês</strong> (foto, PDF, voz/texto)</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
@@ -410,7 +410,7 @@ export default function PricingSection() {
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                    <span>🎁 <strong>Degustação de até 10 docs</strong></span>
+                    <span>🎁 <strong>Degustação de até 10 lançamentos</strong></span>
                   </div>
                 </div>
 
@@ -454,7 +454,7 @@ export default function PricingSection() {
                 <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-200">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                    <span><strong>1.000 documentos/mês</strong></span>
+                    <span><strong>1.000 lançamentos/mês</strong> (foto, PDF, voz/texto)</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
@@ -470,7 +470,7 @@ export default function PricingSection() {
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                    <span>🎁 <strong>Degustação de até 50 docs</strong></span>
+                    <span>🎁 <strong>Degustação de até 50 lançamentos</strong></span>
                   </div>
                 </div>
 
@@ -562,14 +562,14 @@ export default function PricingSection() {
                   </div>
                 </div>
 
-                {/* Pacote Extra de Documentos */}
+                {/* Pacote Extra de Lançamentos */}
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-slate-700 transition-all">
                   <div>
                     <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
                       Capacidade
                     </span>
-                    <h5 className="text-sm font-bold text-white mb-1">Pacote Extra (+20 Documentos)</h5>
-                    <p className="text-xs text-slate-400 mb-3">Créditos de processamento com validade de 60 dias para fechar picos de compras.</p>
+                    <h5 className="text-sm font-bold text-white mb-1">Pacote Extra (+20 Lançamentos)</h5>
+                    <p className="text-xs text-slate-400 mb-3">Créditos de processamento com validade de 60 dias para picos sazonais de movimentação.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                     <span className="text-base font-black text-white">{ASAAS_ONE_OFF.extraDocsPackage.priceFormatted}</span>
@@ -628,6 +628,16 @@ export default function PricingSection() {
                   </div>
                 </div>
 
+              </div>
+
+              {/* Nota de Transparência Contratual sobre Lançamentos */}
+              <div className="mt-8 rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5 text-center sm:text-left flex flex-col sm:flex-row items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div className="text-xs text-slate-400 leading-relaxed">
+                  <strong className="text-slate-200">Como são contabilizados os lançamentos no seu plano:</strong> Qualquer conta a pagar ou receita cadastrada no sistema — seja enviando a foto ou PDF de um boleto/nota fiscal, ou informando dados por comando de voz ou texto no WhatsApp — computa como <strong>1 lançamento</strong> na sua cota mensal. Sem letras miúdas, com controle transparente e aviso antecipado quando a cota estiver próxima do limite.
+                </div>
               </div>
             </div>
           </div>

@@ -83,7 +83,7 @@ export function formatConsumptionSummary(cycle: UsageCycle | null, plan: Plan | 
 
   return `📊 *Resumo de Consumo do seu Plano (${plan.name})*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 *Documentos:* ${cycle.docs_processed_count} de ${plan.doc_limit}
+📑 *Lançamentos Financeiros:* ${cycle.docs_processed_count} de ${plan.doc_limit} (fotos, PDFs, áudios ou textos)
 💬 *Interações com Bot:* ${cycle.bot_interactions_count} de ${plan.bot_interaction_limit}
 💡 *Análises de Caixa:* ${cycle.cash_flow_analyses_count} de ${plan.cash_flow_analysis_limit}
 

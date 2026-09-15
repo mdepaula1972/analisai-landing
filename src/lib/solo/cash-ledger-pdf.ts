@@ -674,7 +674,7 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
   page.drawRectangle({ x: 35, y: currentY - 120, width: planWidth, height: 120, color: lightBg, borderColor: slate200, borderWidth: 1 });
   drawSafeText(page, 'START', { x: 45, y: currentY - 20, size: 10, font: fontBold, color: navyDark });
   drawSafeText(page, 'R$ 39,90 /mês', { x: 45, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
-  drawSafeText(page, '* 15 documentos/mês', { x: 45, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* 15 lançamentos/mês', { x: 45, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Lembretes de vencimento', { x: 45, y: currentY - 64, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Livro caixa digital', { x: 45, y: currentY - 76, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Relatório em PDF', { x: 45, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
@@ -684,7 +684,7 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
   page.drawRectangle({ x: 35 + planWidth + 10, y: currentY - 120, width: planWidth, height: 120, color: rgb(0.99, 0.98, 0.93), borderColor: amberGold, borderWidth: 1.5 });
   drawSafeText(page, 'SOLO (Mais Escolhido)', { x: 35 + planWidth + 18, y: currentY - 20, size: 9, font: fontBold, color: amberGold });
   drawSafeText(page, 'R$ 87,99 /mês', { x: 35 + planWidth + 18, y: currentY - 36, size: 11, font: fontBold, color: navyDark });
-  drawSafeText(page, '* 30 documentos/mês', { x: 35 + planWidth + 18, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, '* 30 lançamentos/mês', { x: 35 + planWidth + 18, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Comandos por Áudio/Voz', { x: 35 + planWidth + 18, y: currentY - 64, size: 7.5, font: fontBold, color: navyDark });
   drawSafeText(page, '* Consultor de Caixa IA', { x: 35 + planWidth + 18, y: currentY - 76, size: 7.5, font: fontBold, color: navyDark });
   drawSafeText(page, '* Prorrogação no WhatsApp', { x: 35 + planWidth + 18, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });
@@ -693,8 +693,8 @@ export async function generateTrialDocPdfBuffer(extraction: any, phone: string):
   // Solo Plus
   page.drawRectangle({ x: 35 + (planWidth + 10) * 2, y: currentY - 120, width: planWidth, height: 120, color: lightBg, borderColor: slate200, borderWidth: 1 });
   drawSafeText(page, 'SOLO PLUS', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 20, size: 10, font: fontBold, color: navyDark });
-  drawSafeText(page, 'R$ 147,99 /mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
-  drawSafeText(page, '* 60 documentos/mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
+  drawSafeText(page, 'R$ 157,99 /mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 36, size: 11, font: fontBold, color: amberGold });
+  drawSafeText(page, '* 60 lançamentos/mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 52, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* Logotipo nos relatórios', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 64, size: 7.5, font: fontBold, color: navyDark });
   drawSafeText(page, '* Suporte contábil prioritário', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 76, size: 7.5, font: fontRegular, color: slate600 });
   drawSafeText(page, '* 4 análises de caixa/mês', { x: 35 + (planWidth + 10) * 2 + 10, y: currentY - 88, size: 7.5, font: fontRegular, color: slate600 });

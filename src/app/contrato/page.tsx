@@ -91,6 +91,17 @@ export default function ContratoPage() {
             </ul>
           </div>
           <p><strong>2.3.</strong> O acesso da CONTRATADA aos dados financeiros da CONTRATANTE tem finalidade estritamente de registro, organização, conciliação e elaboração de relatórios, não conferindo à CONTRATADA qualquer poder de disposição sobre os recursos da CONTRATANTE.</p>
+          <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-4 my-2 text-slate-300 space-y-2 text-xs">
+            <p className="font-bold text-amber-400">2.4. Da Franquia de Lançamentos e Formatos de Entrada:</p>
+            <p>
+              Para efeito de limite mensal contratado e faturamento de excedentes, define-se como <strong>&quot;Lançamento&quot;</strong> toda inserção unitária de conta a pagar ou a receber no sistema da CONTRATADA.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-slate-400">
+              <li>Cada despesa ou receita registrada a partir de arquivo digital (PDF), captura fotográfica, comando em mensagem de texto ou instrução gravada em áudio via WhatsApp é contabilizada como 1 (um) lançamento.</li>
+              <li>A dedução da franquia ocorre no momento da validação e inclusão no fluxo financeiro, não sendo computadas as interações preliminares de esclarecimento de dados faltantes.</li>
+              <li>Esgotada a franquia do ciclo mensal, a CONTRATANTE poderá adquirir pacotes adicionais avulsos de lançamentos ou solicitar a migração para plano de maior capacidade.</li>
+            </ul>
+          </div>
 
           <h3 className="text-base font-bold text-amber-400 pt-2">CLÁUSULA 3ª — DA CONFIDENCIALIDADE E PROTEÇÃO DE DADOS (LGPD)</h3>
           <p><strong>3.1.</strong> A CONTRATADA obriga-se a manter absoluto sigilo sobre todas as informações financeiras, comerciais, fiscais e estratégicas da CONTRATANTE às quais tiver acesso em razão da execução deste contrato.</p>

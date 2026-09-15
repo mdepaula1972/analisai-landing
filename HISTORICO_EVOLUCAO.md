@@ -27,19 +27,19 @@ O **AnalisAí Solo** é um assistente financeiro e contábil inteligente que rod
 
 Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 
-| Plano | Valor Mensal | Valor Anual (20% OFF) | Volume Docs/mês | CNPJs | Conciliação Bancária | Degustação Gratuita |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **AnalisAí Start** | R$ 39,90 | R$ 383,04 (R$ 31,92/mês) | 15 docs | 1 | Avulsa sob demanda (+R$ 37/mês) | 1 doc |
-| **AnalisAí Solo** ⭐ | R$ 87,99 | R$ 844,70 (R$ 70,39/mês) | 30 docs | 1 | Mensal (1 conta bancária) | 1 doc |
-| **AnalisAí Solo Plus** | R$ 157,99 | R$ 1.516,70 (R$ 126,39/mês) | 60 docs | 1 | Mensal (1 conta bancária) | 1 doc |
-| **AnalisAí Pro** 🏢 | R$ 297,00 | R$ 2.851,20 (R$ 237,60/mês) | 500 docs | Até 2 | Semanal (até 2 contas bancárias) | Até 10 docs |
-| **AnalisAí Super** 🚀 | R$ 597,00 | R$ 5.731,20 (R$ 477,60/mês) | 1.000 docs | Até 4 | Semanal/Contínua (até 4 contas bancárias) | Até 50 docs |
+| Plano | Valor Mensal | Valor Anual (Economia) | Franquia Lançamentos/mês | CNPJs | Conciliação Bancária | Degustação Inicial |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **AnalisAí Start** | R$ 39,90 | R$ 383,04 (R$ 31,92/mês) | 15 lançamentos | 1 | Avulsa sob demanda (+R$ 37/mês) | 1 lançamento |
+| **AnalisAí Solo** ⭐ | R$ 87,99 | R$ 844,70 (R$ 70,39/mês) | 30 lançamentos | 1 | Mensal (1 conta bancária) | 1 lançamento |
+| **AnalisAí Solo Plus** | R$ 157,99 | R$ 1.516,70 (R$ 126,39/mês) | 60 lançamentos | 1 | Mensal (1 conta bancária) | 1 lançamento |
+| **AnalisAí Pro** 🏢 | R$ 297,00 | R$ 2.851,20 (R$ 237,60/mês) | 500 lançamentos | Até 2 | Semanal (até 2 contas bancárias) | Até 10 lançamentos |
+| **AnalisAí Super** 🚀 | R$ 597,00 | R$ 5.731,20 (R$ 477,60/mês) | 1.000 lançamentos | Até 4 | Semanal/Contínua (até 4 contas bancárias) | Até 50 lançamentos |
 
 ### Serviços Avulsos sob Demanda:
 - **DRE Agrupado Multi-CNPJ:** R$ 27,99 por cada CNPJ adicional (consolidação contábil unificada).
 - **Conciliação Bancária Extra:** R$ 37,00 por conta/mês.
 - **Análise de Caixa Avulsa (Qual conta adiar):** R$ 14,90.
-- **Pacote Extra de 20 Documentos:** R$ 14,90 (validade de 60 dias).
+- **Pacote Extra (+20 Lançamentos):** R$ 14,90 (validade de 60 dias, válido para texto, áudio, fotos e PDFs).
 - **Raio-X de Fornecedores:** R$ 59,90.
 - **Certificado Digital A1:** R$ 170,00.
 
@@ -47,15 +47,16 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 
 ## 3. Linha do Tempo das Versões
 
-### [v2.4.0] — Grade Expandida, Conciliação Proativa & Lançamentos Conversacionais
-- **Inclusão dos Planos Pro e Super:** Modelagem digital de alta performance para substituir e digitalizar o antigo BPO humano tradicional.
+### [v2.4.0] — Grade Expandida, Transição para Lançamentos & Regras Contratuais
+- **Transição de "Documentos" para "Lançamentos":** Todas as interações que inserem contas a pagar/receber no Livro Caixa (seja via foto, PDF, comando de áudio ou texto digitado) são computadas no limite mensal contratual com total transparência ao cliente.
+- **Termos de Uso e Contrato Modular Atualizados:** Inclusão formal da Cláusula 2.4 no Contrato e Seção 3.1 nos Termos de Uso esclarecendo a definição de Lançamento e a igualdade de canais de entrada.
+- **Inclusão dos Planos Pro e Super:** Modelagem digital de alta performance para substituir e digitalizar o antigo BPO humano tradicional com links reais do Asaas.
 - **DRE Agrupado Multi-CNPJ:** Módulo avulso de R$ 27,99 por empresa extra para holdings, filiais e sócios com múltiplos negócios.
-- **Degustação Escalada (1 doc, 10 docs no Pro, 50 docs no Super):** Suporte a contagem de cota de testes na tabela `trial_leads` do Supabase.
-- **Cofre Digital como Argumento de Venda:** Na degustação gratuita, salvam-se apenas os dados cadastrais (sem armazenar fotos pesadas em bucket); nos planos pagos, os documentos ficam arquivados permanentemente em cofre na nuvem.
+- **Degustação Escalada & Flexível:** Suporte a fotos, PDFs e textos na degustação de novos leads (`trial_leads`).
+- **Cofre Digital como Argumento de Venda:** Na degustação gratuita, salvam-se os dados contábeis; nos planos pagos, os comprovantes ficam arquivados permanentemente na nuvem.
 - **Anti-Duplicação Boleto x Nota Fiscal:** Vinculação automática do código de barras à parcela existente de NF aberta por matching inteligente de fornecedor, vencimento e valor.
-- **Lançamento Conversacional por Texto/Áudio:** O robô identifica a intenção financeira em linguagem natural, faz bate-bola amigável de campos faltantes e registra contas a pagar e contas a receber.
+- **Lançamento Conversacional por Texto/Áudio com Dedução de Cota:** O robô identifica a intenção financeira em linguagem natural, faz bate-bola de dados faltantes (sem debitar cota no esclarecimento) e, ao cadastrar, deduz da cota do plano informando os lançamentos restantes. Se esgotado, oferece o Pacote Extra (+20 Lançamentos por R$ 14,90) ou upgrade.
 - **Cron de Conciliação Bancária Proativa:** Rota `/api/cron/bank-reconciliation-reminders` que dispara pedidos de extrato toda segunda-feira (para Pro e Super) e no 1º dia do mês (para Solo e Solo Plus).
-- **Segurança Psicológica no System Instruction:** Normalização sem alarme de contas vencidas, postura de parceiro de trincheira e proibição de upsell comercial sob vulnerabilidade financeira.
 
 ### [v2.3.0] — Idempotência e Horário Oficial de Brasília
 - Ajuste do cron de lembretes para às 10:00 pontual de Brasília (13:00 UTC no Vercel Crons).

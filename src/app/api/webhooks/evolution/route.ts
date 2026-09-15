@@ -48,6 +48,125 @@ interface EvolutionWebhookBody {
   };
 }
 
+function getUpgradeCheckoutUrl(currentCode?: string): string {
+  if (currentCode === 'start') return ASAAS_PLANS.monthly.solo.checkoutUrl;
+  if (currentCode === 'solo') return ASAAS_PLANS.monthly.solo_plus.checkoutUrl;
+  if (currentCode === 'solo_plus') return ASAAS_PLANS.monthly.pro.checkoutUrl;
+  return ASAAS_PLANS.monthly.super.checkoutUrl;
+}
+
+async function processConversationalEntry(
+  client: any,
+  plan: any,
+  phone: string,
+  rawText: string,
+  origin: 'texto' | 'áudio' = 'texto'
+): Promise<boolean> {
+  try {
+    const conv = await parseConversationalFinancialEntry(rawText);
+    if (!conv.is_financial_entry) return false;
+
+    if (conv.needs_clarification) {
+      await sendEvolutionText({
+        phone,
+        text:
+          conv.clarification_prompt ||
+          'Entendi a sua intenção! Para registrar certinho no seu fluxo de caixa, por favor me informe o valor e a data de vencimento.',
+      });
+      return true;
+    }
+
+    if (conv.amount && conv.due_date) {
+      const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
+
+      if (!quotaCheck.allowed && !client.is_admin) {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Limite de Lançamentos do Mês Atingido!*
+Você já processou todos os ${quotaCheck.limit} lançamentos inclusos no seu plano este mês.
+
+As informações enviadas via ${origin} são computadas no seu limite mensal contratual. Para registrar essa conta sem travar sua rotina:
+
+1️⃣ *Pacote Extra (+20 Lançamentos) por R$ 14,90:*
+Válido por 60 dias para qualquer canal (texto, áudio, fotos ou PDFs):
+👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}
+
+2️⃣ *Upgrade para o próximo plano:*
+👉 ${getUpgradeCheckoutUrl(plan?.code)}`,
+        });
+        return true;
+      }
+
+      const supabase = createServiceRoleClient();
+      const isIncome = conv.entry_type === 'receivable';
+      const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+      const dreGroup =
+        conv.category_suggestion || (isIncome ? 'receita_operacional' : 'despesa_administrativa');
+
+      await supabase.from('cash_ledger_entries').insert({
+        client_id: client.id,
+        entry_date: conv.due_date,
+        description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity} (via ${origin})`,
+        amount: isIncome ? Math.abs(conv.amount) : -Math.abs(conv.amount),
+        entry_type: isIncome ? 'income' : 'expense',
+        dre_group: dreGroup,
+        status: 'previsto',
+      });
+
+      await supabase.from('payables_receivables').insert({
+        client_id: client.id,
+        counterparty_name: entity,
+        type: isIncome ? 'receivable' : 'payable',
+        amount: Math.abs(conv.amount),
+        original_due_date: conv.due_date,
+        current_due_date: conv.due_date,
+        status: 'open',
+      });
+
+      const formattedDate = formatDueDateDetails(conv.due_date);
+      const valFmt = Number(conv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      const quotaFootnote = client.is_admin
+        ? '👑 _Modo Admin Irrestrito_'
+        : quotaCheck.consumed_from_extra
+          ? `🎁 _Lançado utilizando sua carteira de lançamentos extras (restam ${quotaCheck.extra_credits_remaining} extras válidos)._`
+          : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
+
+      if (isIncome) {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Previsão de Recebimento Registrada (via ${origin})!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Cliente/Origem:* ${entity}
+• *Valor:* ${valFmt}
+• *Data Prevista:* ${formattedDate}
+• *Classificação:* Receita Operacional
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${quotaFootnote}
+Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *relatório* para ver o PDF atualizado!`,
+        });
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Conta a Pagar Registrada (via ${origin})!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Fornecedor:* ${entity}
+• *Valor:* ${valFmt}
+• *Vencimento:* ${formattedDate}
+• *Classificação:* ${dreGroup}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${quotaFootnote}
+O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para manter seu caixa impecável!`,
+        });
+      }
+      return true;
+    }
+  } catch (convErr) {
+    console.warn(`[Conversational ${origin} Parsing Warning]:`, convErr);
+  }
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
@@ -314,7 +433,59 @@ ${BANK_SAFETY_NOTICE}`,
       return;
     }
 
-    // 1.4 Se o usuário enviou texto comum, apresenta a mensagem de boas-vindas da Degustação
+    // 1.4 Se o usuário enviou texto, verifica se é um lançamento financeiro para a degustação
+    if (rawText && rawText.trim().length >= 4) {
+      try {
+        const trialStatus = await checkTrialStatus(cleanPhone);
+        if (trialStatus.hasUsedTrial) {
+          await sendEvolutionText({
+            phone,
+            text: getTrialLimitReachedMessage(),
+          });
+          return;
+        }
+
+        const conv = await parseConversationalFinancialEntry(rawText);
+        if (conv.is_financial_entry && conv.amount && conv.due_date) {
+          const isIncome = conv.entry_type === 'receivable';
+          const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+          const mockExtracted = {
+            is_financial_doc: true,
+            supplier_name: entity,
+            counterparty_name: entity,
+            total_amount: Number(conv.amount),
+            amount: Number(conv.amount),
+            due_date: conv.due_date,
+            document_type: isIncome ? 'Recebimento' : 'Conta a Pagar',
+            category: conv.category_suggestion || (isIncome ? 'Receita Operacional' : 'Despesa Administrativa'),
+            barcode_or_pix: null,
+          };
+
+          await recordTrialUsage(cleanPhone, mockExtracted);
+
+          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
+          const summaryText = formatTrialDocSummary(mockExtracted, remainingAfter);
+          await sendEvolutionText({ phone, text: summaryText });
+
+          try {
+            const { sendTrialPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+            await sendTrialPdfToWhatsApp(cleanPhone, mockExtracted);
+          } catch (trialPdfErr) {
+            console.warn('[Trial Text PDF Generation Warning]:', trialPdfErr);
+          }
+
+          await sendEvolutionText({
+            phone,
+            text: getTrialConversionMenu(),
+          });
+          return;
+        }
+      } catch (trialTextErr) {
+        console.warn('[Trial Text Entry Error]:', trialTextErr);
+      }
+    }
+
+    // Se o usuário enviou texto comum, apresenta a mensagem de boas-vindas da Degustação
     await sendEvolutionText({
       phone,
       text: getTrialWelcomeMessage(),
@@ -598,7 +769,7 @@ ${BANK_SAFETY_NOTICE}`,
 
         const quotaFootnote = client.is_admin
           ? '👑 _Modo Admin Irrestrito_'
-          : `Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`;
+          : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
 
         await sendEvolutionText({
           phone,
@@ -637,11 +808,11 @@ ${quotaFootnote}`,
         ? '👑 _Modo Admin Irrestrito_'
         : quotaCheck.consumed_from_extra
           ? `🎁 _Lançado utilizando sua carteira de documentos extras (restam ${quotaCheck.extra_credits_remaining} extras válidos)._`
-          : `Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`;
+          : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
 
       await sendEvolutionText({
         phone,
-        text: `✅ *Documento registrado no Livro Caixa!*
+        text: `✅ *Lançamento registrado no Livro Caixa!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *Fornecedor:* ${extracted.counterparty_name}
 • *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
@@ -869,6 +1040,17 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
           });
           return;
         }
+      }
+
+      if (audioResult.textResponse && audioResult.textResponse.trim().length >= 4) {
+        const handledAudioEntry = await processConversationalEntry(
+          client,
+          plan,
+          phone,
+          audioResult.textResponse,
+          'áudio'
+        );
+        if (handledAudioEntry) return;
       }
 
       await sendEvolutionText({
