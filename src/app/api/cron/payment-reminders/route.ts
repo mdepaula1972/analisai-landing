@@ -15,7 +15,16 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServiceRoleClient();
-  const today = new Date().toISOString().split('T')[0];
+
+  // Garante a data atual no fuso oficial de Brasília (UTC-3)
+  const brDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const [day, month, year] = brDateFormatter.format(new Date()).split('/');
+  const today = `${year}-${month}-${day}`;
 
   // Busca contas a pagar vencendo hoje de clientes ativos
   const { data: bills, error } = await supabase
@@ -27,6 +36,7 @@ export async function GET(req: NextRequest) {
       type,
       current_due_date,
       barcode_or_pix,
+      last_reminder_sent_at,
       clients (
         id,
         name,
@@ -46,12 +56,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, count: 0, message: 'Nenhuma conta vencendo hoje.' });
   }
 
-  // Agrupa contas por cliente
+  // Agrupa contas por cliente, filtrando apenas aquelas que AINDA NÃO receberam lembrete hoje
   const billsByClient: Record<string, { client: any; items: typeof bills }> = {};
 
   for (const bill of bills) {
     const client = bill.clients as any;
     if (!client || client.status !== 'active') continue;
+
+    // Idempotência: Se já foi enviado um lembrete hoje para esta conta, não repete
+    if (bill.last_reminder_sent_at) {
+      const [sentD, sentM, sentY] = brDateFormatter.format(new Date(bill.last_reminder_sent_at)).split('/');
+      const sentDateStr = `${sentY}-${sentM}-${sentD}`;
+      if (sentDateStr === today) {
+        continue;
+      }
+    }
 
     if (!billsByClient[client.id]) {
       billsByClient[client.id] = {
@@ -63,9 +82,12 @@ export async function GET(req: NextRequest) {
   }
 
   let sentCount = 0;
+  let processedBillsCount = 0;
 
   for (const entry of Object.values(billsByClient)) {
     const { client, items } = entry;
+    if (items.length === 0) continue;
+
     const totalAmount = items.reduce((acc, item) => acc + Number(item.amount), 0);
 
     const itemsText = items
@@ -92,12 +114,21 @@ ${itemsText}
       text: message,
     });
 
+    // Carimba last_reminder_sent_at para impedir reenvio no mesmo dia
+    const billIds = items.map((b) => b.id);
+    await supabase
+      .from('payables_receivables')
+      .update({ last_reminder_sent_at: new Date().toISOString() })
+      .in('id', billIds);
+
     sentCount++;
+    processedBillsCount += items.length;
   }
 
   return NextResponse.json({
     success: true,
+    today_br: today,
     notified_clients: sentCount,
-    processed_bills: bills.length,
+    processed_bills: processedBillsCount,
   });
 }

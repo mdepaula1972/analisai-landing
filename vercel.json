@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/payment-reminders",
-      "schedule": "0 11 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/billing-cycle-reset",

@@ -241,12 +241,14 @@ Verifique se digitou corretamente ou escolha um dos nossos planos para começar 
 Aguarde alguns segundos enquanto nossa inteligência artificial faz a leitura completa dos dados.`,
       });
 
-      let base64 = body.data?.base64 || '';
-      const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
-      const messageId = body.data?.key?.id;
+      let base64 =
+        body.data?.base64 ||
+        message?.imageMessage?.base64 ||
+        message?.documentMessage?.base64 ||
+        '';
 
-      if (!base64 && messageId) {
-        base64 = (await fetchMediaBase64FromEvolution(messageId)) || '';
+      if (!base64) {
+        base64 = (await fetchMediaBase64FromEvolution(body.data)) || '';
       }
 
       if (!base64) {

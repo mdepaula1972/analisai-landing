@@ -135,8 +135,44 @@ export async function sendEvolutionMedia({
 
 export async function fetchMediaBase64FromEvolution(messageData: any): Promise<string | null> {
   try {
-    const key = messageData?.key || (messageData?.id ? messageData : null);
-    const payloadMessage = key ? { key } : messageData;
+    if (!messageData) return null;
+
+    // 1. Se o próprio objeto já tiver o base64 (webhookBase64: true da Evolution API)
+    const directBase64 =
+      messageData.base64 ||
+      messageData.message?.base64 ||
+      messageData.message?.imageMessage?.base64 ||
+      messageData.message?.documentMessage?.base64 ||
+      messageData.message?.audioMessage?.base64 ||
+      (typeof messageData === 'string' && messageData.length > 500 ? messageData : null);
+
+    if (directBase64 && typeof directBase64 === 'string') {
+      const clean = directBase64.replace(/^data:[^;]+;base64,/, '').trim();
+      if (clean.length > 50) {
+        return clean;
+      }
+    }
+
+    // 2. Monta o objeto message completo exigido pelo endpoint /chat/getBase64FromMediaMessage
+    // O Baileys/Evolution API precisa de { key: ..., message: ... } para descriptografar com a mediaKey
+    let fullMessage: any = messageData;
+
+    if (messageData.data?.key && messageData.data?.message) {
+      fullMessage = {
+        key: messageData.data.key,
+        message: messageData.data.message,
+      };
+    } else if (messageData.key && messageData.message) {
+      fullMessage = {
+        key: messageData.key,
+        message: messageData.message,
+      };
+    } else if (messageData.key) {
+      fullMessage = {
+        key: messageData.key,
+        message: messageData.message || {},
+      };
+    }
 
     const res = await fetch(`${EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
@@ -145,18 +181,23 @@ export async function fetchMediaBase64FromEvolution(messageData: any): Promise<s
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message: payloadMessage,
+        message: fullMessage,
         convertToMp4: false,
       }),
     });
 
     if (!res.ok) {
-      console.error('[Evolution API] Falha ao buscar base64 da mídia:', await res.text());
+      const errText = await res.text();
+      console.error('[Evolution API] Falha ao buscar base64 da mídia:', errText);
       return null;
     }
 
     const json = await res.json();
-    return json.base64 || null;
+    let base64Result = json.base64 || null;
+    if (base64Result && typeof base64Result === 'string') {
+      base64Result = base64Result.replace(/^data:[^;]+;base64,/, '').trim();
+    }
+    return base64Result;
   } catch (err) {
     console.error('[Evolution API] Erro na requisição de getBase64FromMediaMessage:', err);
     return null;
