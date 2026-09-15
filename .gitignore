@@ -43,3 +43,6 @@ next-env.d.ts
 # local docker
 evolution-api-docker/
 
+# scratch tests
+scratch/
+

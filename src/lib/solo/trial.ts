@@ -2,6 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { sendEvolutionText } from '@/lib/solo/evolution';
+import { classifyTaxId, TaxClassification } from '@/lib/solo/tax-classifier';
 import { addDays, format } from 'date-fns';
 
 export interface TrialStatus {
@@ -10,6 +11,8 @@ export interface TrialStatus {
   docsLimit: number;
   remainingDocs: number;
   docData?: any;
+  taxType?: 'cpf' | 'mei' | 'simples' | 'empresa';
+  interestedPlan?: string;
 }
 
 /**
@@ -28,7 +31,7 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 
   const { data } = await supabase
     .from('trial_leads')
-    .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit')
+    .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit, interested_plan')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
@@ -52,11 +55,13 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
     docsLimit,
     remainingDocs,
     docData: data.doc_data,
+    interestedPlan: data.interested_plan,
   };
 }
 
 /**
- * Registra o uso da degustação gratuita para este número, incrementando a contagem de documentos
+ * Registra o uso da degustação gratuita para este número, incrementando a contagem de lançamentos
+ * e detectando automaticamente o perfil tributário (CPF = 1, MEI = 3, Simples/Empresa = até 10)
  */
 export async function recordTrialUsage(
   phone: string,
@@ -66,10 +71,38 @@ export async function recordTrialUsage(
   const supabase = createServiceRoleClient();
   const cleanPhone = phone.replace(/\D/g, '');
 
-  // Consulta estado atual para incrementar
+  // Consulta estado atual
   const current = await checkTrialStatus(cleanPhone);
   const newCount = current.docsCount + 1;
-  const newLimit = grantedLimit || current.docsLimit;
+
+  // 1. Identificação inteligente do perfil tributário do lead
+  let detectedLimit = current.docsLimit;
+  let taxType: 'cpf' | 'mei' | 'simples' | 'empresa' = 'cpf';
+  let suggestedPlan = current.interestedPlan || null;
+
+  // Se o lead ainda tem o limite padrão inicial (<= 1) e nenhum limite manual forçado:
+  if (!grantedLimit && current.docsLimit <= 1) {
+    const rawTaxId = docData.tax_id || docData.payer_tax_id || docData.counterparty_tax_id || null;
+    const companyHint = docData.supplier_name || docData.counterparty_name || docData.payer_name || '';
+
+    try {
+      const classification = await classifyTaxId(rawTaxId, companyHint);
+      detectedLimit = Math.max(current.docsLimit, classification.trialLimit);
+      taxType = classification.type;
+
+      if (classification.type === 'simples' || classification.type === 'empresa') {
+        suggestedPlan = 'pro';
+      } else if (classification.type === 'mei') {
+        suggestedPlan = 'solo';
+      } else {
+        suggestedPlan = 'start';
+      }
+    } catch (classifyErr) {
+      console.warn('[Trial Classification Warning]:', classifyErr);
+    }
+  }
+
+  const newLimit = grantedLimit || detectedLimit;
 
   await supabase
     .from('trial_leads')
@@ -84,6 +117,7 @@ export async function recordTrialUsage(
         barcode_or_pix: docData.barcode_or_pix || null,
         trial_docs_count: newCount,
         trial_docs_limit: newLimit,
+        interested_plan: suggestedPlan,
         reminder_eve_sent: false,
         reminder_due_sent: false,
         trial_completed_at: new Date().toISOString(),
@@ -104,7 +138,7 @@ Envie uma foto ou PDF de qualquer **boleto ou nota fiscal**, ou simplesmente dig
 Em menos de 15 segundos, nosso robô com inteligência artificial vai:
 1️⃣ Ler e auditar todos os dados do seu lançamento;
 2️⃣ Entregar o código de barras limpo para você pagar no seu banco;
-3️⃣ Calcular o vencimento exato e gerar uma dica de fluxo de caixa!
+3️⃣ Calcular o vencimento exato e gerar seu primeiro relatório demonstrativo!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 *Já quer assinar seu plano direto pelo WhatsApp?*
@@ -121,31 +155,72 @@ Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta co
 
 /**
  * Mensagem quando o lead esgotou sua cota de degustação gratuita
+ * com adequação inteligente ao porte do cliente
  */
-export function getTrialLimitReachedMessage(): string {
+export function getTrialLimitReachedMessage(trialLimit: number = 1): string {
+  // 1. Perfil Corporativo / Simples Nacional (já desfrutou de até 10 lançamentos)
+  if (trialLimit >= 10) {
+    return `🏢 *Você concluiu sua degustação empresarial do AnalisAí!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você testou a velocidade e a precisão da nossa inteligência contábil em lote na rotina da sua empresa.
+
+Para ter autonomia total com múltiplos CNPJs, conciliação bancária periódica e suporte contínuo sem limites, escolha seu plano:
+
+1️⃣ *AnalisAí Pro* — R$ 297,00/mês ⭐ *Empresarial*
+👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
+_(Até 500 lançamentos/mês, até 2 CNPJs, conciliação semanal para 2 bancos e 10 análises de caixa)_
+
+2️⃣ *AnalisAí Super* — R$ 597,00/mês 🚀 *Escala Total*
+👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
+_(Até 1.000 lançamentos/mês, até 4 CNPJs, conciliação semanal contínua para 4 bancos e 20 análises de caixa)_
+
+3️⃣ *AnalisAí Solo Plus* — R$ 157,99/mês
+👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
+_(Até 60 lançamentos/mês, 1 CNPJ e conciliação mensal)_
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💳 *A liberação do seu plano é instantânea após o pagamento no Asaas!*
+Dúvidas ou faturamento corporativo? Pode responder aqui mesmo!`;
+  }
+
+  // 2. Perfil MEI (já desfrutou de 3 lançamentos)
+  if (trialLimit >= 3) {
+    return `💼 *Você concluiu sua degustação MEI do AnalisAí!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você já organizou suas contas de teste e viu como é fácil manter seus pagamentos no piloto automático sem planilhas e sem atrasos.
+
+Para continuar usando o robô o mês inteiro direto no seu WhatsApp, escolha seu plano:
+
+1️⃣ *AnalisAí Solo* — R$ 87,99/mês ⭐ *Mais Escolhido*
+👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
+_(Até 30 lançamentos/mês, comandos por voz e texto, consultor de caixa e conciliação mensal)_
+
+2️⃣ *AnalisAí Start* — R$ 39,90/mês
+👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
+_(Até 15 lançamentos/mês, livro caixa e avisos pontuais no WhatsApp)_
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💳 *Ativação imediata após confirmação no Asaas.*
+Dúvidas? Pode perguntar por aqui!`;
+  }
+
+  // 3. Perfil Padrão / Pessoa Física / Autônomo (1 lançamento de demonstração)
   return `🎁 *Sua degustação gratuita foi concluída com sucesso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para continuar organizando todas as suas contas, boletos e notas fiscais por foto, PDF, voz ou texto, receber avisos diários antes dos vencimentos e contar com conciliação bancária sem planilhas, escolha seu plano:
+Para continuar organizando todas as suas contas, boletos e notas fiscais por foto, PDF, voz ou texto e receber avisos pontuais antes dos vencimentos, escolha seu plano:
 
 1️⃣ *AnalisAí Start* — R$ 39,90/mês
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
-_(Até 15 lançamentos/mês, livro caixa e avisos pontuais)_
+_(Até 15 lançamentos/mês, livro caixa e avisos pontuais no WhatsApp)_
 
 2️⃣ *AnalisAí Solo* — R$ 87,99/mês ⭐ *Mais Escolhido*
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 _(Até 30 lançamentos/mês, comandos por voz e texto, consultor de caixa e conciliação mensal)_
 
-3️⃣ *AnalisAí Solo Plus* — R$ 157,99/mês
-👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-_(Até 60 lançamentos/mês, 4 análises de caixa e conciliação mensal)_
-
-4️⃣ *AnalisAí Pro* — R$ 297,00/mês 🏢 *Multi-CNPJ*
-👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-_(Até 500 lançamentos/mês, até 2 CNPJs, conciliação semanal para até 2 bancos)_
-
-5️⃣ *AnalisAí Super* — R$ 597,00/mês 🚀 *Escala & Potência Máxima*
-👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
-_(Até 1.000 lançamentos/mês, até 4 CNPJs, conciliação semanal contínua para até 4 bancos)_
+🏢 *Sua empresa possui maior volume ou múltiplos CNPJs?*
+Conheça nossos planos empresariais:
+• *AnalisAí Pro* (R$ 297,00/mês - 500 lançamentos & até 2 CNPJs): ${ASAAS_PLANS.monthly.pro.checkoutUrl}
+• *AnalisAí Super* (R$ 597,00/mês - 1.000 lançamentos & até 4 CNPJs): ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💳 *A ativação é instantânea após o pagamento no Asaas!*
@@ -171,11 +246,7 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
     txt += `📂 *Categoria:* ${doc.category}\n`;
   }
 
-  if (remainingDocs > 0) {
-    txt += `\n🎁 *Você ainda tem ${remainingDocs} lançamento(s) gratuito(s) nesta degustação!*\n`;
-  }
-
-  txt += `\n💡 *Dica Inteligente do AnalisAí:* Conta cadastrada com sucesso! Recomendamos programar o pagamento com antecedência para evitar juros e manter seu score bancário positivo.\n`;
+  txt += `\n💡 *Dica Inteligente do AnalisAí:* Conta cadastrada com sucesso! Programamos seus lembretes na véspera e no dia do vencimento às 10h pelo WhatsApp.\n`;
   txt += `🔒 *Nota:* Na degustação, salvamos os dados do lançamento. Para ter o *Cofre Digital permanente em nuvem* com a 2ª via da imagem/PDF sempre guardada, assine um plano pago!`;
 
   return txt;
@@ -218,7 +289,7 @@ Imagine nunca mais digitar um código de barras, receber avisos diários no seu 
 export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de confirmar o pagamento no aplicativo do seu banco, confira sempre se o nome do favorecido, CNPJ e o valor na tela de confirmação correspondem exatamente ao seu credor/fornecedor. O AnalisAí realiza a leitura digital automatizada dos dados, cabendo exclusivamente ao pagador a conferência final e autorização da operação junto à sua instituição financeira.`;
 
 /**
- * Mensagem da Véspera do Vencimento (disparo às 10h)
+ * Mensagem da Véspera do Vencimento (disparo às 10h) — Etapa 1: Alívio da Prevenção e Livro Caixa
  */
 export function getEveReminderMessage(lead: {
   supplier_name?: string;
@@ -240,14 +311,23 @@ export function getEveReminderMessage(lead: {
   }
 
   txt += `${BANK_SAFETY_NOTICE}\n\n`;
-  txt += `💡 *Essa tranquilidade para todas as contas da sua empresa custa a partir de R$ 1,33/dia no AnalisAí.*\n`;
-  txt += `👉 *Escolha seu plano e ative seu assistente:* ${ASAAS_PLANS.monthly.solo.checkoutUrl}`;
+  txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  txt += `✨ *O Poder da Rotina no Piloto Automático:*\n`;
+  txt += `Viu a tranquilidade de não ser pego de surpresa na véspera?\n\n`;
+  txt += `Conheça os recursos disponíveis nos nossos planos oficiais:\n`;
+  txt += `• *AnalisAí Start (R$ 39,90/mês):* 15 lançamentos/mês e lembretes diários pontuais no WhatsApp;\n`;
+  txt += `• *AnalisAí Solo (R$ 87,99/mês):* 30 lançamentos, comandos por áudio, consultor de caixa e relatório de Livro Caixa em PDF;\n`;
+  txt += `• *Planos Pro & Super (a partir de R$ 297/mês):* Para empresas com múltiplos CNPJs, centenas de lançamentos e conciliação bancária contínua.\n\n`;
+  txt += `👉 *Escolha o plano sob medida para sua empresa:*\n`;
+  txt += `• Assinar Start: ${ASAAS_PLANS.monthly.start.checkoutUrl}\n`;
+  txt += `• Assinar Solo: ${ASAAS_PLANS.monthly.solo.checkoutUrl}\n`;
+  txt += `• Conhecer todos os planos: https://analisai.me#planos`;
 
   return txt;
 }
 
 /**
- * Mensagem do Dia do Vencimento (disparo às 10h com toque humano e consultoria de caixa)
+ * Mensagem do Dia do Vencimento (disparo às 10h) — Etapa 2: Agilidade e Inteligência Financeira
  */
 export function getDueReminderMessage(lead: {
   supplier_name?: string;
@@ -269,11 +349,17 @@ export function getDueReminderMessage(lead: {
   }
 
   txt += `${BANK_SAFETY_NOTICE}\n\n`;
-  txt += `🤝 *Sem dinheiro no caixa para liquidar a conta hoje?*\n`;
-  txt += `Não tome decisões no escuro nem pague juros desnecessários. Contrate a nossa **Análise de Fluxo de Caixa** avulsa por apenas R$ 14,90 para receber uma recomendação personalizada de qual conta adiar e como reequilibrar seus pagamentos:\n`;
-  txt += `👉 *Análise de Caixa Avulsa (R$ 14,90):* ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}\n\n`;
-  txt += `Ou tenha consultoria contínua de caixa e comandos de voz ilimitados no plano **AnalisAí Solo**:\n`;
-  txt += `👉 *Plano Solo:* ${ASAAS_PLANS.monthly.solo.checkoutUrl}`;
+  txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  txt += `⚡ *Agilidade e Organização Financeira:*\n`;
+  txt += `Copie o código acima e liquide no app do seu banco para não pagar juros ou multas de atraso!\n\n`;
+  txt += `🤖 *Cada plano é desenhado para o estágio do seu negócio:*\n`;
+  txt += `• *Para Autônomos & MEIs:* Planos Start e Solo cuidam do básico essencial e avisos pontuais no WhatsApp;\n`;
+  txt += `• *Para Empresas em Crescimento:* Plano Solo Plus (60 lançamentos) com conciliação mensal do seu extrato bancário;\n`;
+  txt += `• *Para Grupos e Médias Empresas:* Planos Pro e Super gerenciam de 2 a 4 CNPJs com conciliação semanal e até 1.000 lançamentos/mês.\n\n`;
+  txt += `👉 *Ative agora mesmo com liberação instantânea no WhatsApp:*\n`;
+  txt += `• *AnalisAí Solo* (Mais Escolhido - R$ 87,99/mês): ${ASAAS_PLANS.monthly.solo.checkoutUrl}\n`;
+  txt += `• *AnalisAí Pro* (Multi-CNPJ - R$ 297,00/mês): ${ASAAS_PLANS.monthly.pro.checkoutUrl}\n`;
+  txt += `• *Análise de Caixa Avulsa (R$ 14,90):* ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`;
 
   return txt;
 }
@@ -306,7 +392,6 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
 
   if (eveLeads && eveLeads.length > 0) {
     for (const lead of eveLeads) {
-      // Checa se virou cliente ativo
       const { data: activeClient } = await supabase
         .from('clients')
         .select('id')

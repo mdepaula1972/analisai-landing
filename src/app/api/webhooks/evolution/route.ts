@@ -352,7 +352,7 @@ Verifique se digitou corretamente ou escolha um dos nossos planos para começar 
       if (trialStatus.hasUsedTrial) {
         await sendEvolutionText({
           phone,
-          text: getTrialLimitReachedMessage(),
+          text: getTrialLimitReachedMessage(trialStatus.docsLimit),
         });
         return;
       }
@@ -440,7 +440,7 @@ ${BANK_SAFETY_NOTICE}`,
         if (trialStatus.hasUsedTrial) {
           await sendEvolutionText({
             phone,
-            text: getTrialLimitReachedMessage(),
+            text: getTrialLimitReachedMessage(trialStatus.docsLimit),
           });
           return;
         }

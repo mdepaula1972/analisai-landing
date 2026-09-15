@@ -148,7 +148,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
               <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
                 <span className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-emerald-400" />
-                  Teste imediato com 1 boleto grátis
+                  Degustação gratuita imediata
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Shield className="h-3.5 w-3.5 text-emerald-400" />

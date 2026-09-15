@@ -72,12 +72,16 @@ export default function BpoLandingPage() {
 
   const faqs = [
     {
-      question: 'Como funciona o teste grátis no WhatsApp?',
-      answer: 'Você não precisa cadastrar cartão de crédito nem preencher formulários longos. Basta clicar em "Testar no WhatsApp", mandar um "Olá" e enviar a foto ou PDF de um boleto. Em 2 segundos a IA lê os dados, cadastra a conta e te dá as boas-vindas.',
+      question: 'Como funciona a degustação gratuita no WhatsApp?',
+      answer: 'Você não precisa cadastrar cartão de crédito nem preencher formulários longos. Basta clicar em "Testar no WhatsApp", mandar um "Olá" e enviar a foto ou PDF de um boleto/nota, ou simplesmente ditar por áudio ou digitar o valor e vencimento da sua despesa. Em 2 segundos a IA lê os dados, cadastra a conta e te dá as boas-vindas com seus lembretes programados.',
     },
     {
-      question: 'Quais tipos de documentos a inteligência artificial lê?',
-      answer: 'Boletos bancários (em PDF ou fotos mesmo que amassados), faturas de consumo (luz, água, telefone, internet), notas fiscais (NF-e, NFS-e) e recibos. Você também pode mandar áudios de voz gravados com gastos do dia a dia.',
+      question: 'O que é considerado um lançamento no meu plano?',
+      answer: 'Um lançamento é qualquer registro financeiro que você cadastra no sistema. Pode ser uma foto ou PDF de boleto/nota fiscal, uma mensagem de texto com os dados da despesa ou um áudio de voz gravado no WhatsApp (ex: "Paguei 150 reais de internet hoje"). Cada conta cadastrada consome 1 lançamento da franquia do seu plano de forma 100% transparente.',
+    },
+    {
+      question: 'Quais formatos a inteligência artificial aceita?',
+      answer: 'Boletos bancários (PDF ou fotos mesmo que amassados), faturas de consumo (luz, água, telefone, internet), notas fiscais (NF-e, NFS-e com parcelamento automático) e recibos. Você também pode enviar comandos de texto ou mensagens de áudio gravadas diretamente no WhatsApp.',
     },
     {
       question: 'Vocês têm acesso à minha conta bancária ou realizam pagamentos?',
@@ -88,8 +92,12 @@ export default function BpoLandingPage() {
       answer: 'A qualquer momento você pode pedir no WhatsApp (por exemplo: "me manda o relatório em PDF"). A IA gera instantaneamente um documento A4 executivo com o logotipo da sua empresa, CNPJ, extrato cronológico e relação de contas atrasadas e a vencer.',
     },
     {
-      question: 'Qual a diferença entre o AnalisAí Solo (IA) e o BPO Financeiro com consultor?',
-      answer: 'No AnalisAí Solo (a partir de R$ 39,90/mês), você tem autonomia total: manda documentos e recebe relatórios pelo WhatsApp. No BPO Financeiro com consultor (a partir de R$ 397/mês), um especialista humano assume a conciliação bancária, emissão de notas e reuniões mensais com você.',
+      question: 'Qual a diferença entre os planos digitais (Start ao Super) e o BPO com consultor humano?',
+      answer: 'Nos planos 100% digitais no WhatsApp (Start a R$ 39,90/mês até Super a R$ 597/mês), você tem autonomia total: cadastra lançamentos por foto, PDF, áudio ou texto, tem conciliação bancária periódica e relatórios instantâneos. Na modalidade BPO com consultor dedicado (a partir de R$ 397/mês), um especialista humano assume rotinas operacionais e reuniões de alinhamento com você.',
+    },
+    {
+      question: 'Como funciona a degustação para empresas com maior volume (Planos Pro e Super)?',
+      answer: 'Para empresas em expansão e grupos com múltiplos CNPJs que desejam avaliar o fluxo antes da contratação, disponibilizamos degustações ampliadas de até 10 lançamentos no Plano Pro e até 50 lançamentos no Plano Super, permitindo validar o fluxo completo e a conciliação bancária antes de assinar.',
     },
     {
       question: 'Como faço para assinar após o teste?',
@@ -110,7 +118,7 @@ export default function BpoLandingPage() {
         aria-label="Testar no WhatsApp"
       >
         <MessageCircle className="w-6 h-6 fill-slate-950 stroke-none" />
-        <span className="font-extrabold text-sm hidden sm:inline pr-1">Testar 1 Boleto Grátis</span>
+        <span className="font-extrabold text-sm hidden sm:inline pr-1">Degustação Grátis no WhatsApp</span>
       </a>
 
       {/* ── HERO + NAVBAR ── */}
@@ -211,7 +219,7 @@ export default function BpoLandingPage() {
             <span className="text-shimmer-amber">no piloto automático?</span>
           </h2>
           <p className="text-xl text-slate-300 mb-10 leading-relaxed">
-            Envie a foto de 1 boleto gratuitamente no WhatsApp e veja a mágica acontecer em segundos.
+            Envie a foto de uma conta, PDF ou grave um áudio gratuitamente no WhatsApp e veja a mágica acontecer em segundos.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
@@ -222,7 +230,7 @@ export default function BpoLandingPage() {
               className="inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-400 px-8 py-4 text-base font-black text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300"
             >
               <MessageCircle className="h-5 w-5 fill-slate-950 stroke-none" />
-              Testar 1 Boleto Grátis no WhatsApp
+              Começar Degustação Grátis no WhatsApp
               <ArrowRight className="h-5 w-5" />
             </a>
             <a

@@ -47,6 +47,18 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 
 ## 3. Linha do Tempo das Versões
 
+### [v2.4.1] — Degustação Silenciosa por Porte, Anti-Abuso e Lembretes Educativos
+- **Classificação Tributária Automática:** Módulo `tax-classifier.ts` com consulta à BrasilAPI e fallback heurístico para identificar o perfil tributário do lead sem atrito.
+- **Cotas Proporcionais de Degustação:**
+  - **CPF (Pessoa Física):** 1 degustação de demonstração.
+  - **MEI:** 3 degustações para validação da rotina dos planos Start/Solo.
+  - **Simples Nacional / EPP / Médio Porte:** até 10 degustações para teste em lote corporativo sem canibalizar os planos Pro e Super.
+- **Degustação Silenciosa (Anti-Abuso):** O robô não expõe publicamente contadores de cota gratuita; quando o lead atinge o teto do seu porte, o sistema bloqueia gentilmente e apresenta o plano com fit perfeito para ele.
+- **Lembretes Estratégicos em Duas Etapas com Transparência Contratual:**
+  - **Na Véspera (D-1 às 10h):** Alívio de não ser pego de surpresa, valor do Livro Caixa em PDF e delimitação de que comandos de voz são a partir do Plano Solo.
+  - **No Vencimento (D-0 às 10h):** Urgência de pagamento, código de barras limpo, e discriminação clara de que conciliação mensal pertence ao Solo Plus e conciliação semanal e multi-CNPJ são exclusivos dos Planos Pro e Super.
+- **Landing Page Alinhada:** FAQ e CTAs atualizados com nova grade digital e conceito de lançamentos.
+
 ### [v2.4.0] — Grade Expandida, Transição para Lançamentos & Regras Contratuais
 - **Transição de "Documentos" para "Lançamentos":** Todas as interações que inserem contas a pagar/receber no Livro Caixa (seja via foto, PDF, comando de áudio ou texto digitado) são computadas no limite mensal contratual com total transparência ao cliente.
 - **Termos de Uso e Contrato Modular Atualizados:** Inclusão formal da Cláusula 2.4 no Contrato e Seção 3.1 nos Termos de Uso esclarecendo a definição de Lançamento e a igualdade de canais de entrada.
