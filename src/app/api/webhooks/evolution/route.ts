@@ -260,7 +260,11 @@ Aguarde alguns segundos enquanto nossa inteligência artificial faz a leitura co
       }
 
       const extraction = await extractDocumentWithGemini(base64, mimeType);
-      if (!extraction.is_financial_doc) {
+      const isFinancial =
+        extraction.is_financial_doc !== false &&
+        (extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
+
+      if (!isFinancial) {
         await sendEvolutionText({
           phone,
           text: `⚠️ *Documento não identificado como financeiro.*

@@ -26,6 +26,11 @@ export async function extractDocumentWithGemini(
       responseSchema: {
         type: SchemaType.OBJECT,
         properties: {
+          is_financial_doc: {
+            type: SchemaType.BOOLEAN,
+            description:
+              'True se o arquivo for um documento fiscal, contábil ou financeiro real (boleto, conta de luz/água/telefone, nota fiscal, recibo, cupom, comprovante). False se for foto de objeto, pessoa, paisagem, meme, documento não financeiro ou ilegível.',
+          },
           doc_type: {
             type: SchemaType.STRING,
             enum: ['nfe', 'nfse', 'boleto', 'recibo', 'cupom', 'outro'],
@@ -74,6 +79,7 @@ export async function extractDocumentWithGemini(
           },
         },
         required: [
+          'is_financial_doc',
           'doc_type',
           'counterparty_name',
           'total_amount',

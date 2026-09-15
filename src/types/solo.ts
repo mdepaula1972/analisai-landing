@@ -62,6 +62,7 @@ export interface UsageCycle {
 }
 
 export interface ExtractedDocumentData {
+  is_financial_doc?: boolean;
   doc_type: 'nfe' | 'nfse' | 'boleto' | 'recibo' | 'cupom' | 'outro';
   counterparty_name: string;
   tax_id?: string | null;
