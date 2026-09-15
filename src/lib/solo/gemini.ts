@@ -23,7 +23,7 @@ export async function extractDocumentWithGemini(
     model: 'gemini-2.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
-      responseSchema: {
+      responseSchema: ({
         type: SchemaType.OBJECT,
         properties: {
           is_financial_doc: {
@@ -77,6 +77,22 @@ export async function extractDocumentWithGemini(
             description:
               'Grau de certeza de 0.0 a 1.0. Se houver rasura, baixa resolução ou dados duvidosos em nota sem dígito verificador, atribua valor estritamente abaixo de 0.7.',
           },
+          installments: {
+            type: SchemaType.ARRAY,
+            description:
+              'Se for uma Nota Fiscal com cobrança/duplicatas parceladas ou múltiplos vencimentos futuros, liste todas as parcelas identificadas.',
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                installment_number: { type: SchemaType.INTEGER },
+                due_date: { type: SchemaType.STRING, description: 'YYYY-MM-DD' },
+                amount: { type: SchemaType.NUMBER },
+                barcode_or_pix: { type: SchemaType.STRING, nullable: true },
+              },
+              required: ['installment_number', 'due_date', 'amount'],
+            },
+            nullable: true,
+          },
         },
         required: [
           'is_financial_doc',
@@ -87,11 +103,20 @@ export async function extractDocumentWithGemini(
           'criticality_hint',
           'confidence_score',
         ],
-      },
+      } as any),
     },
-    systemInstruction: `Você é o leitor contábil de inteligência artificial de alta precisão do serviço AnalisAí Solo.
+    systemInstruction: `Você é o leitor contábil e assistente financeiro de alta precisão do serviço AnalisAí Solo.
 Sua missão é extrair rigorosamente os dados financeiros de comprovantes, notas fiscais, boletos e recibos.
-Se a imagem estiver cortada, borrada, com dados ambíguos ou você não tiver absoluta certeza de valores ou vencimentos em notas fiscais, indique um confidence_score menor que 0.7 para que o sistema solicite a confirmação do cliente.`,
+
+DIRETRIZES DE SEGURANÇA PSICOLÓGICA & POSTURA PROFISSIONAL:
+1. Normalização sem culpa: Se um boleto ou conta estiver vencido ou atrasado, NUNCA use linguagem punitiva, de julgamento, sermão ou pânico. Trate contas atrasadas como parte normal e gerenciável da rotina de qualquer pequena empresa.
+2. Parceiro de trincheira: Comunique-se de igual para igual, de forma pragmática, acolhedora e construtiva.
+3. Proibição de Upsell sob vulnerabilidade: Em momentos de aperto financeiro, o foco é 100% apoiar a resolução do fluxo de caixa. Jamais sugira vendas ou upgrades enquanto o cliente estiver sob estresse de caixa.
+4. Limite ético profissional: Ofereça suporte consultivo técnico sem bancar psicólogo, sem drama e sem frieza mecânica.
+
+NOTAS FISCAIS & PARCELAS:
+Se o documento for uma Nota Fiscal (NF-e/NFS-e) com campo de duplicatas, faturas ou parcelamento, extraia cada parcela no array "installments" com seu respectivo vencimento e valor.
+Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.`,
   });
 
   const result = await model.generateContent([
@@ -111,8 +136,95 @@ Se a imagem estiver cortada, borrada, com dados ambíguos ou você não tiver ab
 }
 
 /**
- * 2. Processamento nativo de áudio (WhatsApp PTT) com Function Calling
+ * 2. Análise e Extração de Lançamentos Financeiros Conversacionais (Texto ou Áudio Transcrito)
+ * Identifica se é Conta a Pagar (payable) ou Conta a Receber (receivable)
+ * e detecta dados faltantes (valor, favorecido/cliente, vencimento) para permitir bate-bola.
  */
+export async function parseConversationalFinancialEntry(
+  userText: string,
+  referenceDateStr: string = new Date().toISOString().split('T')[0]
+) {
+  const genAI = getGeminiClient();
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: ({
+        type: SchemaType.OBJECT,
+        properties: {
+          is_financial_entry: {
+            type: SchemaType.BOOLEAN,
+            description: 'True se a mensagem indicar intenção de registrar ou consultar um pagamento (despesa) ou recebimento (receita).',
+          },
+          entry_type: {
+            type: SchemaType.STRING,
+            enum: ['payable', 'receivable', 'other'],
+            description: 'payable para contas a pagar/despesas, receivable para contas a receber/vendas/honorários, other se neutro.',
+          },
+          supplier_or_customer: {
+            type: SchemaType.STRING,
+            description: 'Nome da empresa, fornecedor, cliente ou descrição do serviço (ex: Copel, Padaria do Zé, Cliente João)',
+            nullable: true,
+          },
+          amount: {
+            type: SchemaType.NUMBER,
+            description: 'Valor monetário numérico em reais (ex: 250.00)',
+            nullable: true,
+          },
+          due_date: {
+            type: SchemaType.STRING,
+            description: 'Data de vencimento ou previsão no formato YYYY-MM-DD',
+            nullable: true,
+          },
+          category_suggestion: {
+            type: SchemaType.STRING,
+            description: 'Categoria contábil DRE (ex: receita_operacional, despesa_administrativa, custo_mercadoria_servico)',
+            nullable: true,
+          },
+          missing_fields: {
+            type: SchemaType.ARRAY,
+            description: 'Lista dos campos vitais ausentes: "amount", "supplier_or_customer", "due_date"',
+            items: { type: SchemaType.STRING },
+          },
+          needs_clarification: {
+            type: SchemaType.BOOLEAN,
+            description: 'True se faltar pelo menos um dos 3 dados essenciais (amount, supplier_or_customer, due_date)',
+          },
+          clarification_prompt: {
+            type: SchemaType.STRING,
+            description: 'Mensagem curta e acolhedora em tom de parceiro de trincheira solicitando apenas os dados que faltam.',
+            nullable: true,
+          },
+        },
+        required: [
+          'is_financial_entry',
+          'entry_type',
+          'missing_fields',
+          'needs_clarification',
+        ],
+      } as any),
+    },
+    systemInstruction: `Você é o parceiro de trincheira financeiro do AnalisAí.
+Seu objetivo é registrar contas a pagar e contas a receber informadas pelo usuário em linguagem natural (texto ou voz).
+Data de referência de hoje: ${referenceDateStr}.
+
+REGRAS:
+1. Para cada lançamento, precisamos de 3 dados essenciais:
+   - Valor (amount)
+   - Favorecido / Cliente (supplier_or_customer)
+   - Vencimento / Data (due_date no formato YYYY-MM-DD). Se ele falar "amanhã", "sexta", "dia 20", calcule com base na data de referência.
+2. Se faltar qualquer um desses 3 dados:
+   - needs_clarification = true
+   - adicione os nomes em missing_fields
+   - formule um clarification_prompt leve, direto e parceiro perguntando o dado faltante.
+3. Se todos os dados estiverem presentes:
+   - needs_clarification = false
+   - clarification_prompt = null.`,
+  });
+
+  const result = await model.generateContent(`Mensagem do usuário: "${userText}"`);
+  return JSON.parse(result.response.text());
+}
 export async function processVoiceCommandWithGemini(
   audioBase64: string,
   mimeType: string = 'audio/ogg; codecs=opus',
@@ -310,7 +422,7 @@ Data de referência: 2026-09-13. ${contextText}`;
   try {
     const textModel = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      tools: [{ functionDeclarations }],
+      tools: [{ functionDeclarations: functionDeclarations as any }],
       systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
 Classifique o comando do usuário e acione a ferramenta correta.
 Data de referência: 2026-09-13.`,

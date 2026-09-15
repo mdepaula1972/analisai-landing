@@ -178,50 +178,55 @@ export default function PricingSection() {
               </span>
             </div>
 
-            {/* Grid dos 3 Planos Self-Service */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-stretch mb-14">
+            {/* Grid dos 5 Planos Self-Service */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto items-stretch mb-14">
               
-              {/* Start */}
-              <div className="relative flex flex-col rounded-3xl border border-slate-800 bg-slate-900/90 p-7 hover:border-slate-700 transition-all">
+              {/* 1. Start */}
+              <div className="relative flex flex-col rounded-3xl border border-slate-800 bg-slate-900/90 p-6 hover:border-slate-700 transition-all">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-800 px-3 py-1 rounded-full mb-4 inline-block w-fit">
-                  Para começar organizado
+                  Para começar
                 </span>
-                <h3 className="text-2xl font-black text-white mb-2">AnalisAí Start</h3>
-                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                  O básico essencial para não se perder nas contas e focar no seu trabalho.
+                <h3 className="text-xl font-black text-white mb-2">AnalisAí Start</h3>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
+                  O básico essencial para não esquecer contas e manter o caixa sob controle.
                 </p>
 
                 <div className="mb-6">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl sm:text-4xl font-black text-white">
+                    <span className="text-2xl sm:text-3xl font-black text-white">
                       {frequencia === 'mensal' ? 'R$ 39,90' : 'R$ 383,04'}
                     </span>
-                    <span className="text-slate-400 text-xs sm:text-sm">
-                      {frequencia === 'mensal' ? '/mês' : '/ano (parcela única)'}
+                    <span className="text-slate-400 text-xs">
+                      {frequencia === 'mensal' ? '/mês' : '/ano'}
                     </span>
                   </div>
+                  {frequencia === 'anual' && (
+                    <span className="text-[10px] text-emerald-400 font-semibold block mt-1">
+                      Equivalente a R$ 31,92/mês
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex-1 space-y-3 mb-8 text-xs text-slate-300">
-                  <div className="flex items-start gap-2.5">
+                <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-300">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>15 documentos/mês</strong> (foto ou PDF de boletos/notas)</span>
+                    <span><strong>15 documentos/mês</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>20 interações de bot/mês</strong> no WhatsApp</span>
+                    <span><strong>1 CNPJ ou CPF</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>Livro Caixa cronológico transparente</span>
+                    <span>Livro Caixa cronológico</span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>Lembretes diários de contas no WhatsApp</span>
+                    <span>Lembretes pontuais às 10h</span>
                   </div>
-                  <div className="flex items-start gap-2.5 text-slate-500">
-                    <span className="w-4 text-center font-bold">—</span>
-                    <span>Sem comandos por voz ou consultor de caixa</span>
+                  <div className="flex items-start gap-2 text-slate-400">
+                    <span className="text-amber-400 font-bold">•</span>
+                    <span>Conciliação avulsa sob demanda</span>
                   </div>
                 </div>
 
@@ -229,58 +234,63 @@ export default function PricingSection() {
                   href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.start.checkoutUrl : ASAAS_PLANS.annual.start.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-4 font-extrabold text-xs sm:text-sm border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-200 bg-slate-800/60 transition-all hover:-translate-y-0.5"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-200 bg-slate-800/60 transition-all hover:-translate-y-0.5"
                 >
                   Assinar Start
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               </div>
 
-              {/* Solo (Destaque) */}
-              <div className="relative flex flex-col rounded-3xl border border-amber-500/60 bg-gradient-to-b from-amber-500/15 via-slate-900 to-slate-900 p-7 shadow-2xl shadow-amber-500/10 scale-[1.03] z-10">
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full px-4 py-1 text-[10px] font-extrabold uppercase tracking-widest bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30">
-                  <Sparkles className="w-3 h-3" /> Mais Recomendado
+              {/* 2. Solo (Destaque) */}
+              <div className="relative flex flex-col rounded-3xl border border-amber-500/60 bg-gradient-to-b from-amber-500/15 via-slate-900 to-slate-900 p-6 shadow-2xl shadow-amber-500/10 scale-[1.02] z-10">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full px-3 py-0.5 text-[9px] font-extrabold uppercase tracking-widest bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30 whitespace-nowrap">
+                  <Sparkles className="w-3 h-3" /> Mais Escolhido
                 </div>
 
                 <span className="text-[10px] font-bold uppercase tracking-widest text-amber-300 bg-amber-500/20 border border-amber-500/30 px-3 py-1 rounded-full mb-4 inline-block w-fit">
-                  Autonomia completa por voz
+                  Áudio & Consultor IA
                 </span>
-                <h3 className="text-2xl font-black text-white mb-2">AnalisAí Solo</h3>
-                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                  Controle financeiro avançado por áudio com IA e consultor de caixa inteligente.
+                <h3 className="text-xl font-black text-white mb-2">AnalisAí Solo</h3>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
+                  Controle por áudio no WhatsApp com IA consultora de fluxo de caixa.
                 </p>
 
                 <div className="mb-6">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl sm:text-4xl font-black text-amber-300">
+                    <span className="text-2xl sm:text-3xl font-black text-amber-300">
                       {frequencia === 'mensal' ? 'R$ 87,99' : 'R$ 844,70'}
                     </span>
-                    <span className="text-slate-400 text-xs sm:text-sm">
-                      {frequencia === 'mensal' ? '/mês' : '/ano (parcela única)'}
+                    <span className="text-slate-400 text-xs">
+                      {frequencia === 'mensal' ? '/mês' : '/ano'}
                     </span>
                   </div>
+                  {frequencia === 'anual' && (
+                    <span className="text-[10px] text-amber-400 font-semibold block mt-1">
+                      Equivalente a R$ 70,39/mês
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex-1 space-y-3 mb-8 text-xs text-slate-200">
-                  <div className="flex items-start gap-2.5">
+                <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-200">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <span><strong>30 documentos/mês</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <span><strong>50 interações de bot/mês</strong></span>
+                    <span><strong>1 CNPJ ou CPF</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <span><strong>Comandos por voz no WhatsApp</strong> (altere vencimentos por áudio)</span>
+                    <span><strong>Comandos por voz no WhatsApp</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <span><strong>2 análises de fluxo de caixa/mês</strong> (qual conta atrasar)</span>
+                    <span><strong>2 Análises de Caixa/mês</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <span>Livro Caixa cronológico + DRE enxuto</span>
+                    <span><strong>Conciliação Mensal</strong> (1 banco)</span>
                   </div>
                 </div>
 
@@ -288,54 +298,59 @@ export default function PricingSection() {
                   href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.solo.checkoutUrl : ASAAS_PLANS.annual.solo.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-4 font-extrabold text-xs sm:text-sm bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5"
                 >
-                  Assinar AnalisAí Solo
-                  <ArrowRight className="w-4 h-4" />
+                  Assinar Solo
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               </div>
 
-              {/* Solo Plus */}
-              <div className="relative flex flex-col rounded-3xl border border-slate-800 bg-slate-900/90 p-7 hover:border-slate-700 transition-all">
+              {/* 3. Solo Plus */}
+              <div className="relative flex flex-col rounded-3xl border border-slate-800 bg-slate-900/90 p-6 hover:border-slate-700 transition-all">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-800 px-3 py-1 rounded-full mb-4 inline-block w-fit">
-                  Para maior volume
+                  Mais volume
                 </span>
-                <h3 className="text-2xl font-black text-white mb-2">AnalisAí Solo Plus</h3>
-                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                  O dobro de capacidade em documentos, bot e análises para operações ativas.
+                <h3 className="text-xl font-black text-white mb-2">AnalisAí Solo Plus</h3>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
+                  O dobro de capacidade em documentos e análises para rotinas movimentadas.
                 </p>
 
                 <div className="mb-6">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl sm:text-4xl font-black text-white">
+                    <span className="text-2xl sm:text-3xl font-black text-white">
                       {frequencia === 'mensal' ? 'R$ 157,99' : 'R$ 1.516,70'}
                     </span>
-                    <span className="text-slate-400 text-xs sm:text-sm">
-                      {frequencia === 'mensal' ? '/mês' : '/ano (parcela única)'}
+                    <span className="text-slate-400 text-xs">
+                      {frequencia === 'mensal' ? '/mês' : '/ano'}
                     </span>
                   </div>
+                  {frequencia === 'anual' && (
+                    <span className="text-[10px] text-emerald-400 font-semibold block mt-1">
+                      Equivalente a R$ 126,39/mês
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex-1 space-y-3 mb-8 text-xs text-slate-300">
-                  <div className="flex items-start gap-2.5">
+                <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-300">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>60 documentos/mês</strong> (o dobro do Solo)</span>
+                    <span><strong>60 documentos/mês</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>100 interações de bot/mês</strong></span>
+                    <span><strong>1 CNPJ ou CPF</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>4 análises de fluxo de caixa/mês</strong></span>
+                    <span><strong>4 Análises de Caixa/mês</strong></span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>Comandos por voz com confirmação segura</span>
+                    <span>Comandos por voz e texto</span>
                   </div>
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>Painel completo e exportação em PDF/CSV</span>
+                    <span><strong>Conciliação Mensal</strong> (1 banco)</span>
                   </div>
                 </div>
 
@@ -343,31 +358,196 @@ export default function PricingSection() {
                   href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.solo_plus.checkoutUrl : ASAAS_PLANS.annual.solo_plus.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3.5 px-4 font-extrabold text-xs sm:text-sm border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-200 bg-slate-800/60 transition-all hover:-translate-y-0.5"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-200 bg-slate-800/60 transition-all hover:-translate-y-0.5"
                 >
                   Assinar Solo Plus
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              {/* 4. Pro (Novo) */}
+              <div className="relative flex flex-col rounded-3xl border border-cyan-500/40 bg-gradient-to-b from-cyan-950/20 via-slate-900 to-slate-900 p-6 hover:border-cyan-500/70 transition-all">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-3 py-1 rounded-full mb-4 inline-block w-fit">
+                  Multi-CNPJ & Semanal
+                </span>
+                <h3 className="text-xl font-black text-white mb-2">AnalisAí Pro</h3>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
+                  Alta performance operacional para empresas em expansão e holdings familiares.
+                </p>
+
+                <div className="mb-6">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl sm:text-3xl font-black text-cyan-300">
+                      {frequencia === 'mensal' ? 'R$ 297,00' : 'R$ 2.851,20'}
+                    </span>
+                    <span className="text-slate-400 text-xs">
+                      {frequencia === 'mensal' ? '/mês' : '/ano'}
+                    </span>
+                  </div>
+                  {frequencia === 'anual' && (
+                    <span className="text-[10px] text-cyan-400 font-semibold block mt-1">
+                      Equivalente a R$ 237,60/mês
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-200">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <span><strong>500 documentos/mês</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <span><strong>Até 2 CNPJs inclusos</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <span><strong>Conciliação Semanal</strong> (até 2 contas)</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <span><strong>10 Análises de Caixa/mês</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <span>🎁 <strong>Degustação de até 10 docs</strong></span>
+                  </div>
+                </div>
+
+                <a
+                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.pro.checkoutUrl : ASAAS_PLANS.annual.pro.checkoutUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/20 bg-cyan-950/30 transition-all hover:-translate-y-0.5"
+                >
+                  Assinar Pro
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              {/* 5. Super (Novo) */}
+              <div className="relative flex flex-col rounded-3xl border border-purple-500/40 bg-gradient-to-b from-purple-950/25 via-slate-900 to-slate-900 p-6 hover:border-purple-500/70 transition-all">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300 bg-purple-500/15 border border-purple-500/30 px-3 py-1 rounded-full mb-4 inline-block w-fit">
+                  Escala Total & Máxima
+                </span>
+                <h3 className="text-xl font-black text-white mb-2">AnalisAí Super</h3>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
+                  Poder contábil supremo para grupos empresariais, redes e comércios de alto giro.
+                </p>
+
+                <div className="mb-6">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl sm:text-3xl font-black text-purple-300">
+                      {frequencia === 'mensal' ? 'R$ 597,00' : 'R$ 5.731,20'}
+                    </span>
+                    <span className="text-slate-400 text-xs">
+                      {frequencia === 'mensal' ? '/mês' : '/ano'}
+                    </span>
+                  </div>
+                  {frequencia === 'anual' && (
+                    <span className="text-[10px] text-purple-400 font-semibold block mt-1">
+                      Equivalente a R$ 477,60/mês
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-2.5 mb-7 text-xs text-slate-200">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <span><strong>1.000 documentos/mês</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <span><strong>Até 4 CNPJs inclusos</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <span><strong>Conciliação Semanal</strong> (até 4 contas)</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <span><strong>20 Análises de Caixa/mês</strong></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <span>🎁 <strong>Degustação de até 50 docs</strong></span>
+                  </div>
+                </div>
+
+                <a
+                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.super.checkoutUrl : ASAAS_PLANS.annual.super.checkoutUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-purple-500/40 text-purple-200 hover:bg-purple-500/20 bg-purple-950/30 transition-all hover:-translate-y-0.5"
+                >
+                  Assinar Super
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               </div>
 
             </div>
 
             {/* Seção de Serviços e Itens Avulsos */}
-            <div className="max-w-5xl mx-auto mb-14">
-              <div className="text-center mb-6">
-                <h4 className="text-lg font-bold text-white mb-1">Serviços Avulsos sob Demanda</h4>
-                <p className="text-xs text-slate-400">Contrate análises extras e produtos sem fidelidade quando precisar.</p>
+            <div className="max-w-6xl mx-auto mb-14">
+              <div className="text-center mb-7">
+                <h4 className="text-lg sm:text-xl font-black text-white mb-1.5">Serviços Avulsos sob Demanda</h4>
+                <p className="text-xs sm:text-sm text-slate-400">Contrate módulos complementares sem fidelidade ou necessidade de upgrade de plano.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                {/* DRE Agrupado Multi-CNPJ */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-amber-500/40 transition-all">
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
+                      Multi-Empresa
+                    </span>
+                    <h5 className="text-sm font-bold text-white mb-1">DRE Agrupado Multi-CNPJ</h5>
+                    <p className="text-xs text-slate-400 mb-3">Consolidação de receitas, custos e lucro de múltiplos CNPJs em um só relatório visual.</p>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                    <span className="text-base font-black text-white">{ASAAS_ONE_OFF.dreConsolidatedMultiCnpj.priceFormatted}</span>
+                    <a
+                      href={ASAAS_ONE_OFF.dreConsolidatedMultiCnpj.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300"
+                    >
+                      Contratar <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Conciliação Bancária Extra */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-cyan-500/40 transition-all">
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
+                      Auditoria
+                    </span>
+                    <h5 className="text-sm font-bold text-white mb-1">Conciliação Bancária Extra</h5>
+                    <p className="text-xs text-slate-400 mb-3">Auditoria de extrato bancário contra o livro caixa com apontamento de divergências.</p>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                    <span className="text-base font-black text-white">{ASAAS_ONE_OFF.bankReconciliationExtra.priceFormatted}</span>
+                    <a
+                      href={ASAAS_ONE_OFF.bankReconciliationExtra.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300"
+                    >
+                      Contratar <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+
                 {/* Análise de Caixa */}
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-slate-700 transition-all">
                   <div>
                     <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
                       Fluxo de Caixa
                     </span>
                     <h5 className="text-sm font-bold text-white mb-1">Análise de Caixa Avulsa</h5>
-                    <p className="text-xs text-slate-400 mb-3">Recomendação estratégica de qual conta postergar com segurança.</p>
+                    <p className="text-xs text-slate-400 mb-3">Recomendação estratégica de qual conta postergar com menor custo financeiro.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                     <span className="text-base font-black text-white">{ASAAS_ONE_OFF.cashFlowAnalysis.priceFormatted}</span>
@@ -382,14 +562,36 @@ export default function PricingSection() {
                   </div>
                 </div>
 
+                {/* Pacote Extra de Documentos */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-slate-700 transition-all">
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
+                      Capacidade
+                    </span>
+                    <h5 className="text-sm font-bold text-white mb-1">Pacote Extra (+20 Documentos)</h5>
+                    <p className="text-xs text-slate-400 mb-3">Créditos de processamento com validade de 60 dias para fechar picos de compras.</p>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                    <span className="text-base font-black text-white">{ASAAS_ONE_OFF.extraDocsPackage.priceFormatted}</span>
+                    <a
+                      href={ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300"
+                    >
+                      Contratar <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+
                 {/* Raio-X */}
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-slate-700 transition-all">
                   <div>
                     <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
                       Pesquisa de Mercado
                     </span>
                     <h5 className="text-sm font-bold text-white mb-1">Raio-X de Fornecedores</h5>
-                    <p className="text-xs text-slate-400 mb-3">Mapeamento regional via IA com relatório comparativo em PDF.</p>
+                    <p className="text-xs text-slate-400 mb-3">Mapeamento regional via IA com relatório comparativo de preços e cotações.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                     <span className="text-base font-black text-white">{ASAAS_ONE_OFF.supplierXray.priceFormatted}</span>
@@ -405,13 +607,13 @@ export default function PricingSection() {
                 </div>
 
                 {/* Certificado Digital */}
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-slate-700 transition-all">
                   <div>
                     <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full mb-2 inline-block">
                       Fiscal & Parceria
                     </span>
                     <h5 className="text-sm font-bold text-white mb-1">Certificado Digital A1</h5>
-                    <p className="text-xs text-slate-400 mb-3">Emissão rápida de e-CNPJ ou e-CPF por videoconferência.</p>
+                    <p className="text-xs text-slate-400 mb-3">Emissão rápida de e-CNPJ ou e-CPF por videoconferência com segurança homologada.</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                     <span className="text-base font-black text-white">{ASAAS_ONE_OFF.digitalCertificateA1.priceFormatted}</span>
@@ -425,6 +627,7 @@ export default function PricingSection() {
                     </a>
                   </div>
                 </div>
+
               </div>
             </div>
           </div>

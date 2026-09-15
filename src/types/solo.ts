@@ -1,4 +1,4 @@
-export type PlanCode = 'start' | 'solo' | 'solo_plus';
+export type PlanCode = 'start' | 'solo' | 'solo_plus' | 'pro' | 'super';
 
 export interface Plan {
   id: string;
@@ -61,6 +61,13 @@ export interface UsageCycle {
   upsell_status: 'none' | 'suggested' | 'accepted' | 'declined';
 }
 
+export interface DocumentInstallment {
+  installment_number: number;
+  due_date: string;
+  amount: number;
+  barcode_or_pix?: string | null;
+}
+
 export interface ExtractedDocumentData {
   is_financial_doc?: boolean;
   doc_type: 'nfe' | 'nfse' | 'boleto' | 'recibo' | 'cupom' | 'outro';
@@ -73,6 +80,19 @@ export interface ExtractedDocumentData {
   category_suggestion: string;
   criticality_hint: number;
   confidence_score: number;
+  installments?: DocumentInstallment[];
+}
+
+export interface ConversationalFinancialEntry {
+  is_financial_entry: boolean;
+  entry_type: 'payable' | 'receivable' | 'other';
+  supplier_or_customer: string | null;
+  amount: number | null;
+  due_date: string | null;
+  category_suggestion?: string | null;
+  missing_fields: Array<'amount' | 'supplier_or_customer' | 'due_date'>;
+  needs_clarification: boolean;
+  clarification_prompt?: string | null;
 }
 
 export interface CashLedgerEntry {

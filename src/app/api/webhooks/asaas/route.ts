@@ -61,6 +61,24 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   if (link.includes(ASAAS_PLANS.annual.solo_plus.slug) || link.includes('hmm2qnvy6kur1v6l')) {
     return { type: 'subscription', planCode: 'solo_plus', billingPeriod: 'annual', planName: 'AnalisAí Solo Plus (Anual)' };
   }
+  if (link.includes(ASAAS_PLANS.monthly.pro.slug)) {
+    return { type: 'subscription', planCode: 'pro', billingPeriod: 'monthly', planName: 'AnalisAí Pro' };
+  }
+  if (link.includes(ASAAS_PLANS.annual.pro.slug)) {
+    return { type: 'subscription', planCode: 'pro', billingPeriod: 'annual', planName: 'AnalisAí Pro (Anual)' };
+  }
+  if (link.includes(ASAAS_PLANS.monthly.super.slug)) {
+    return { type: 'subscription', planCode: 'super', billingPeriod: 'monthly', planName: 'AnalisAí Super' };
+  }
+  if (link.includes(ASAAS_PLANS.annual.super.slug)) {
+    return { type: 'subscription', planCode: 'super', billingPeriod: 'annual', planName: 'AnalisAí Super (Anual)' };
+  }
+  if (link.includes(ASAAS_ONE_OFF.dreConsolidatedMultiCnpj.slug) || desc.includes('dre agrupado')) {
+    return { type: 'one_off', orderType: 'dre_consolidated_multi_cnpj', name: 'DRE Agrupado Multi-CNPJ' };
+  }
+  if (link.includes(ASAAS_ONE_OFF.bankReconciliationExtra.slug) || desc.includes('conciliação extra') || desc.includes('conciliacao extra')) {
+    return { type: 'one_off', orderType: 'bank_reconciliation_extra', name: 'Conciliação Bancária Extra' };
+  }
   if (link.includes('85t737y1uom4k2b5')) {
     return { type: 'one_off', orderType: 'cash_flow_extra', name: 'Análise de Fluxo de Caixa' };
   }
@@ -84,6 +102,12 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   if (value === 15799) {
     return { type: 'subscription', planCode: 'solo_plus', billingPeriod: 'monthly', planName: 'AnalisAí Solo Plus' };
   }
+  if (value === 29700) {
+    return { type: 'subscription', planCode: 'pro', billingPeriod: 'monthly', planName: 'AnalisAí Pro' };
+  }
+  if (value === 59700) {
+    return { type: 'subscription', planCode: 'super', billingPeriod: 'monthly', planName: 'AnalisAí Super' };
+  }
   if (value === 38304) {
     return { type: 'subscription', planCode: 'start', billingPeriod: 'annual', planName: 'AnalisAí Start (Anual)' };
   }
@@ -93,8 +117,20 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   if (value === 151670) {
     return { type: 'subscription', planCode: 'solo_plus', billingPeriod: 'annual', planName: 'AnalisAí Solo Plus (Anual)' };
   }
+  if (value === 285120) {
+    return { type: 'subscription', planCode: 'pro', billingPeriod: 'annual', planName: 'AnalisAí Pro (Anual)' };
+  }
+  if (value === 573120) {
+    return { type: 'subscription', planCode: 'super', billingPeriod: 'annual', planName: 'AnalisAí Super (Anual)' };
+  }
   if (value === 1490) {
     return { type: 'one_off', orderType: 'cash_flow_extra', name: 'Análise de Fluxo de Caixa' };
+  }
+  if (value === 2799) {
+    return { type: 'one_off', orderType: 'dre_consolidated_multi_cnpj', name: 'DRE Agrupado Multi-CNPJ' };
+  }
+  if (value === 3700) {
+    return { type: 'one_off', orderType: 'bank_reconciliation_extra', name: 'Conciliação Bancária Extra' };
   }
   if (value === 5990) {
     return { type: 'one_off', orderType: 'supplier_xray', name: 'Raio-X de Fornecedores' };
@@ -104,6 +140,12 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   }
 
   // 3. Por descrição
+  if (desc.includes('super')) {
+    return { type: 'subscription', planCode: 'super', billingPeriod: 'monthly', planName: 'AnalisAí Super' };
+  }
+  if (desc.includes('pro')) {
+    return { type: 'subscription', planCode: 'pro', billingPeriod: 'monthly', planName: 'AnalisAí Pro' };
+  }
   if (desc.includes('plus')) {
     return { type: 'subscription', planCode: 'solo_plus', billingPeriod: 'monthly', planName: 'AnalisAí Solo Plus' };
   }

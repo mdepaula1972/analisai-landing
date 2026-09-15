@@ -6,11 +6,14 @@ import { addDays, format } from 'date-fns';
 
 export interface TrialStatus {
   hasUsedTrial: boolean;
+  docsCount: number;
+  docsLimit: number;
+  remainingDocs: number;
   docData?: any;
 }
 
 /**
- * Consulta se este número de WhatsApp já utilizou a degustação gratuita de 1 documento
+ * Consulta se este número de WhatsApp já esgotou a sua cota de degustação gratuita
  */
 export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
   const supabase = createServiceRoleClient();
@@ -25,23 +28,48 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 
   const { data } = await supabase
     .from('trial_leads')
-    .select('doc_processed, doc_data')
+    .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
-  if (data && data.doc_processed) {
-    return { hasUsedTrial: true, docData: data.doc_data };
+  if (!data) {
+    return {
+      hasUsedTrial: false,
+      docsCount: 0,
+      docsLimit: 1,
+      remainingDocs: 1,
+    };
   }
 
-  return { hasUsedTrial: false };
+  const docsLimit = Number(data.trial_docs_limit) || 1;
+  const docsCount = Number(data.trial_docs_count) || (data.doc_processed ? 1 : 0);
+  const remainingDocs = Math.max(0, docsLimit - docsCount);
+  const hasUsedTrial = remainingDocs <= 0;
+
+  return {
+    hasUsedTrial,
+    docsCount,
+    docsLimit,
+    remainingDocs,
+    docData: data.doc_data,
+  };
 }
 
 /**
- * Registra o uso da degustação gratuita para este número, salvando os dados para agenda de lembretes
+ * Registra o uso da degustação gratuita para este número, incrementando a contagem de documentos
  */
-export async function recordTrialUsage(phone: string, docData: any): Promise<void> {
+export async function recordTrialUsage(
+  phone: string,
+  docData: any,
+  grantedLimit?: number
+): Promise<void> {
   const supabase = createServiceRoleClient();
   const cleanPhone = phone.replace(/\D/g, '');
+
+  // Consulta estado atual para incrementar
+  const current = await checkTrialStatus(cleanPhone);
+  const newCount = current.docsCount + 1;
+  const newLimit = grantedLimit || current.docsLimit;
 
   await supabase
     .from('trial_leads')
@@ -54,6 +82,8 @@ export async function recordTrialUsage(phone: string, docData: any): Promise<voi
         amount: docData.amount ? Number(docData.amount) : null,
         due_date: docData.due_date || null,
         barcode_or_pix: docData.barcode_or_pix || null,
+        trial_docs_count: newCount,
+        trial_docs_limit: newLimit,
         reminder_eve_sent: false,
         reminder_due_sent: false,
         trial_completed_at: new Date().toISOString(),
@@ -81,6 +111,8 @@ Em menos de 15 segundos, nosso robô com inteligência artificial vai:
 • *AnalisAí Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
 • *AnalisAí Solo* (R$ 87,99/mês - Áudio & IA de Caixa): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 • *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
+• *AnalisAí Pro* (R$ 297,00/mês - Multi-CNPJ & Conciliação Semanal): ${ASAAS_PLANS.monthly.pro.checkoutUrl}
+• *AnalisAí Super* (R$ 597,00/mês - 1.000 docs & Até 4 CNPJs): ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 *Já é cliente e trocou de número?*
@@ -88,34 +120,42 @@ Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta co
 }
 
 /**
- * Mensagem quando o lead já utilizou sua degustação gratuita de 1 documento
+ * Mensagem quando o lead esgotou sua cota de degustação gratuita
  */
 export function getTrialLimitReachedMessage(): string {
-  return `🎁 *Sua degustação gratuita já foi utilizada com sucesso!*
+  return `🎁 *Sua degustação gratuita foi concluída com sucesso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para continuar organizando todos os seus boletos e notas fiscais, receber avisos diários antes dos vencimentos e contar com consultoria financeira sem planilhas, escolha seu plano:
+Para continuar organizando todos os seus boletos e notas fiscais, receber avisos diários antes dos vencimentos e contar com conciliação bancária e consultoria financeira sem planilhas, escolha seu plano:
 
 1️⃣ *AnalisAí Start* — R$ 39,90/mês
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
-_(Até 30 documentos/mês, leitura automática e status financeiro)_
+_(Até 15 docs/mês, leitura automática, livro caixa e avisos pontuais)_
 
 2️⃣ *AnalisAí Solo* — R$ 87,99/mês ⭐ *Mais Escolhido*
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-_(Até 80 documentos/mês, comandos de voz por áudio e consultor de caixa)_
+_(Até 30 docs/mês, comandos por voz, consultor de caixa e conciliação mensal)_
 
 3️⃣ *AnalisAí Solo Plus* — R$ 157,99/mês
 👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-_(Até 200 documentos/mês, suporte contábil prioritário e máxima potência)_
+_(Até 60 docs/mês, o dobro de análises de caixa e conciliação mensal)_
+
+4️⃣ *AnalisAí Pro* — R$ 297,00/mês 🏢 *Multi-CNPJ*
+👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
+_(Até 500 docs/mês, até 2 CNPJs, conciliação semanal para até 2 bancos)_
+
+5️⃣ *AnalisAí Super* — R$ 597,00/mês 🚀 *Escala & Potência Máxima*
+👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
+_(Até 1.000 docs/mês, até 4 CNPJs, conciliação semanal contínua para até 4 bancos)_
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💳 *A ativação é automática e instantânea logo após o pagamento no Asaas!*
+💳 *A ativação é instantânea após o pagamento no Asaas!*
 Dúvidas? Pode perguntar por aqui!`;
 }
 
 /**
  * Formata o resumo do documento processado na degustação gratuita
  */
-export function formatTrialDocSummary(doc: any): string {
+export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): string {
   const dueInfo = doc.due_date ? formatDueDateDetails(doc.due_date) : 'Não identificado';
   const valFormatted = doc.amount
     ? Number(doc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -130,7 +170,13 @@ export function formatTrialDocSummary(doc: any): string {
   if (doc.category) {
     txt += `📂 *Categoria:* ${doc.category}\n`;
   }
-  txt += `\n💡 *Dica Inteligente do AnalisAí:* Conta cadastrada com sucesso! Recomendamos programar o pagamento com antecedência para evitar juros e manter seu score bancário positivo.`;
+
+  if (remainingDocs > 0) {
+    txt += `\n🎁 *Você ainda tem ${remainingDocs} análise(s) gratuita(s) nesta degustação!*\n`;
+  }
+
+  txt += `\n💡 *Dica Inteligente do AnalisAí:* Conta cadastrada com sucesso! Recomendamos programar o pagamento com antecedência para evitar juros e manter seu score bancário positivo.\n`;
+  txt += `🔒 *Nota:* Na degustação, salvamos os dados da conta. Para ter o *Cofre Digital permanente em nuvem* com a 2ª via da imagem/PDF sempre guardada, assine um plano pago!`;
 
   return txt;
 }
@@ -146,16 +192,24 @@ Imagine nunca mais digitar um código de barras, receber avisos diários no seu 
 🚀 *Escolha seu plano e ative seu assistente contábil agora mesmo:*
 
 1️⃣ *AnalisAí Start* (R$ 39,90/mês)
-• 30 documentos/mês
+• 15 docs/mês + Lembretes diários
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
 
 2️⃣ *AnalisAí Solo* (R$ 87,99/mês) ⭐ *Mais Escolhido*
-• 80 docs/mês + Comandos por Áudio + Consultor de Caixa
+• 30 docs/mês + Comandos por Áudio + Consultor de Caixa + Conciliação Mensal
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
 3️⃣ *AnalisAí Solo Plus* (R$ 157,99/mês)
-• 200 documentos/mês + Suporte VIP
+• 60 docs/mês + 4 Análises de Caixa + Conciliação Mensal
 👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
+
+4️⃣ *AnalisAí Pro* (R$ 297,00/mês) 🏢
+• 500 docs/mês + Até 2 CNPJs + Conciliação Semanal
+👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
+
+5️⃣ *AnalisAí Super* (R$ 597,00/mês) 🚀
+• 1.000 docs/mês + Até 4 CNPJs + Conciliação Semanal Contínua
+👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💬 *Precisa de ajuda ou tem dúvidas? Pode responder aqui mesmo!*`;

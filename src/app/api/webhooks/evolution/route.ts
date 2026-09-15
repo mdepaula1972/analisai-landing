@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
-import { extractDocumentWithGemini, processVoiceCommandWithGemini } from '@/lib/solo/gemini';
+import {
+  extractDocumentWithGemini,
+  processVoiceCommandWithGemini,
+  parseConversationalFinancialEntry,
+} from '@/lib/solo/gemini';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
@@ -278,8 +282,9 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
       // Registra que a degustação foi realizada
       await recordTrialUsage(cleanPhone, extraction);
 
-      // 1. Envia resumo executivo do documento
-      const summaryText = formatTrialDocSummary(extraction);
+      // 1. Envia resumo executivo do documento informando a cota restante
+      const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
+      const summaryText = formatTrialDocSummary(extraction, remainingAfter);
       await sendEvolutionText({ phone, text: summaryText });
 
       // 2. Se houver código de barras / Pix / linha digitável, envia separado para cópia rápida
@@ -521,6 +526,98 @@ Os dados estão corretos?
         status: 'realizado',
       });
 
+      // ── MECANISMO ANTI-DUPLICAÇÃO INTELIGENTE ──────────────────────────────
+      // Se o documento tiver código de barras, verifica se já existe uma parcela em aberto
+      // cadastrada anteriormente sem código de barras (ex: via Nota Fiscal prévia)
+      let duplicateMatched = false;
+      if (extracted.barcode_or_pix && extracted.due_date) {
+        const { data: duplicateCandidate } = await supabase
+          .from('payables_receivables')
+          .select('id, counterparty_name, amount, current_due_date, barcode_or_pix')
+          .eq('client_id', client.id)
+          .eq('status', 'open')
+          .eq('current_due_date', extracted.due_date)
+          .is('barcode_or_pix', null)
+          .gte('amount', Number(extracted.total_amount) - 0.05)
+          .lte('amount', Number(extracted.total_amount) + 0.05)
+          .limit(1)
+          .maybeSingle();
+
+        if (duplicateCandidate) {
+          // Vincula o código de barras à parcela existente sem duplicar o contas a pagar!
+          await supabase
+            .from('payables_receivables')
+            .update({
+              barcode_or_pix: extracted.barcode_or_pix,
+              document_id: docRecord?.id,
+            })
+            .eq('id', duplicateCandidate.id);
+
+          duplicateMatched = true;
+
+          await sendEvolutionText({
+            phone,
+            text: `🔗 *Boleto vinculado à parcela existente sem duplicar!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este boleto corresponde ao lançamento de *${duplicateCandidate.counterparty_name}* (R$ ${Number(duplicateCandidate.amount).toFixed(2)}) que vence em *${formatDueDateDetails(duplicateCandidate.current_due_date)}*.
+
+O código de barras foi anexado com sucesso para pagamento e lembretes sem gerar despesa duplicada no seu fluxo de caixa!`,
+          });
+
+          await sendEvolutionText({
+            phone,
+            text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
+${extracted.barcode_or_pix.trim()}
+
+${BANK_SAFETY_NOTICE}`,
+          });
+
+          return;
+        }
+      }
+
+      // ── SUPORTE A NOTA FISCAL COM MÚLTIPLAS PARCELAS / DUPLICATAS ──────────
+      if (extracted.installments && extracted.installments.length > 0) {
+        for (const inst of extracted.installments) {
+          await supabase.from('payables_receivables').insert({
+            client_id: client.id,
+            document_id: docRecord?.id,
+            counterparty_name: `${extracted.counterparty_name} (Parc. ${inst.installment_number}/${extracted.installments.length})`,
+            type: 'payable',
+            amount: Number(inst.amount),
+            original_due_date: inst.due_date,
+            current_due_date: inst.due_date,
+            status: 'open',
+            barcode_or_pix: inst.barcode_or_pix || null,
+          });
+        }
+
+        const parcelasDesc = extracted.installments
+          .map((inst) => `• *Parc. ${inst.installment_number}:* R$ ${Number(inst.amount).toFixed(2)} — Vence ${formatDueDateDetails(inst.due_date)}`)
+          .join('\n');
+
+        const quotaFootnote = client.is_admin
+          ? '👑 _Modo Admin Irrestrito_'
+          : `Você ainda tem *${quotaCheck.remaining}* documentos disponíveis neste mês.`;
+
+        await sendEvolutionText({
+          phone,
+          text: `📑 *Nota Fiscal Faturada — ${extracted.installments.length} Parcelas Registradas!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Fornecedor:* ${extracted.counterparty_name}
+• *Valor Total:* R$ ${Number(extracted.total_amount).toFixed(2)}
+
+📅 *Cronograma de Vencimentos:*
+${parcelasDesc}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 O AnalisAí vai te avisar na véspera e no dia de cada parcela! Quando os boletos chegarem, basta enviá-los aqui que vinculamos automaticamente ao pagamento.
+${quotaFootnote}`,
+        });
+
+        return;
+      }
+
+      // Lançamento de Parcela Única
       if (extracted.due_date) {
         await supabase.from('payables_receivables').insert({
           client_id: client.id,
@@ -933,11 +1030,91 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
     return;
   }
 
+  // ── LANÇAMENTOS CONVERSACIONAIS EM TEXTO (CONTAS A PAGAR E RECEBER) ────────
+  if (rawText && rawText.trim().length >= 4) {
+    try {
+      const conv = await parseConversationalFinancialEntry(rawText);
+      if (conv.is_financial_entry) {
+        if (conv.needs_clarification) {
+          await sendEvolutionText({
+            phone,
+            text:
+              conv.clarification_prompt ||
+              `Entendi a sua intenção! Para registrar certinho no seu fluxo de caixa, por favor me informe o valor e a data de vencimento.`,
+          });
+          return;
+        }
+
+        if (conv.amount && conv.due_date) {
+          const isIncome = conv.entry_type === 'receivable';
+          const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+          const dreGroup =
+            conv.category_suggestion || (isIncome ? 'receita_operacional' : 'despesa_administrativa');
+
+          // Registra no Livro Caixa
+          await supabase.from('cash_ledger_entries').insert({
+            client_id: client.id,
+            entry_date: conv.due_date,
+            description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity}`,
+            amount: isIncome ? Math.abs(conv.amount) : -Math.abs(conv.amount),
+            entry_type: isIncome ? 'income' : 'expense',
+            dre_group: dreGroup,
+            status: 'previsto',
+          });
+
+          // Registra no Contas a Pagar / Receber
+          await supabase.from('payables_receivables').insert({
+            client_id: client.id,
+            counterparty_name: entity,
+            type: isIncome ? 'receivable' : 'payable',
+            amount: Math.abs(conv.amount),
+            original_due_date: conv.due_date,
+            current_due_date: conv.due_date,
+            status: 'open',
+          });
+
+          const formattedDate = formatDueDateDetails(conv.due_date);
+          const valFmt = Number(conv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+          if (isIncome) {
+            await sendEvolutionText({
+              phone,
+              text: `✅ *Previsão de Recebimento Registrada!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Cliente/Origem:* ${entity}
+• *Valor:* ${valFmt}
+• *Data Prevista:* ${formattedDate}
+• *Classificação:* Receita Operacional
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *relatório* para ver o PDF atualizado!`,
+            });
+          } else {
+            await sendEvolutionText({
+              phone,
+              text: `✅ *Conta a Pagar Registrada via Conversa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Fornecedor:* ${entity}
+• *Valor:* ${valFmt}
+• *Vencimento:* ${formattedDate}
+• *Classificação:* ${dreGroup}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para manter seu caixa impecável!`,
+            });
+          }
+          return;
+        }
+      }
+    } catch (convErr) {
+      console.warn('[Conversational Text Parsing Warning]:', convErr);
+    }
+  }
+
   await sendEvolutionText({
     phone,
     text: `Olá, ${client.name.split(' ')[0]}! 😊
 Como posso te ajudar hoje?
 • Envie uma **foto ou PDF de boleto/nota** para eu lançar no seu Livro Caixa
+• Digite ou mande áudio: *"Pagar Fornecedor de Embalagens R$ 350 dia 25"* ou *"Receber R$ 1.500 do Cliente Pedro amanhã"*
 • Envie um **áudio** alterando vencimento de uma conta ou pedindo conselho de caixa
 • Digite *relatório* ou *PDF* para receber seu Livro Caixa oficial em anexo
 • Pergunte *"qual conta devo atrasar?"* para analisar seu aperto de caixa
