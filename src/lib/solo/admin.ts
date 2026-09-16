@@ -69,6 +69,10 @@ Comandos disponíveis para você testar todas as opções:
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
 • *!indicar* → Consulta o link de indicação e progresso para mensalidade gratuita
+• *!qa add <cpf/cnpj/tel> [desc]* → Libera CPF/CNPJ/Tel para atuar livremente no app como QA
+• *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
+• *!qa list* → Lista todos os identificadores em modo QA
+• *!feedbacks* → Consulta os últimos feedbacks e sugestões recebidos dos clientes
 • *!raio-x* → Dispara a geração e envio imediato do **Raio-X de Fornecedores em PDF**
 • *!pdf* ou *!relatorio* → Emite e envia o **Livro Caixa oficial em PDF**
 • *!escalar* → Simula o **Escalonamento Humano**, disparando o lead no seu WhatsApp
@@ -435,6 +439,51 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
       handled: true,
       message: tracking.summaryMessage,
     };
+  }
+
+  // ── !qa add / remove / list ───────────────────────────────────────────────
+  if (action === 'qa') {
+    const subAction = arg1;
+    const targetId = parts[2];
+    const description = parts.slice(3).join(' ');
+
+    if (subAction === 'add' && targetId) {
+      const { addQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+      const res = await addQaWhitelist(targetId, description || 'QA Liberado pelo Admin', client.name);
+      return { handled: true, message: res.message };
+    } else if (subAction === 'remove' && targetId) {
+      const { removeQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+      const res = await removeQaWhitelist(targetId);
+      return { handled: true, message: res.message };
+    } else if (subAction === 'list' || !subAction) {
+      const { listQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+      const txt = await listQaWhitelist();
+      return { handled: true, message: txt };
+    } else {
+      return {
+        handled: true,
+        message: `🧪 *Uso dos Comandos de QA:*\n• \`!qa add <cpf/cnpj/tel> [descrição]\`\n• \`!qa remove <cpf/cnpj/tel>\`\n• \`!qa list\``,
+      };
+    }
+  }
+
+  // ── !feedbacks / !feedback ──────────────────────────────────────────────────
+  if (action === 'feedbacks' || action === 'feedback') {
+    const { data: feedbacks } = await supabase
+      .from('client_feedbacks')
+      .select('id, whatsapp_number, client_name, feedback_type, message, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (!feedbacks || feedbacks.length === 0) {
+      return { handled: true, message: '📭 Nenhum feedback registrado até o momento.' };
+    }
+
+    let txt = `📬 *Últimos Feedbacks e Sugestões (${feedbacks.length}):*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    for (const fb of feedbacks) {
+      txt += `• *${fb.feedback_type.toUpperCase()}* (${fb.client_name || fb.whatsapp_number}):\n"${fb.message}"\n\n`;
+    }
+    return { handled: true, message: txt };
   }
 
   // ── !bypass on / !bypass off ────────────────────────────────────────────────

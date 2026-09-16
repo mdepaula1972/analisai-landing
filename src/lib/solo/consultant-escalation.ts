@@ -1,7 +1,8 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from './evolution';
+import { ADMIN_PERSONAL_WHATSAPP } from './constants';
 
-const CONSULTANT_WHATSAPP = process.env.CONSULTANT_ANALISAI_WHATSAPP || '+551331500987';
+const CONSULTANT_WHATSAPP = process.env.CONSULTANT_ANALISAI_WHATSAPP || ADMIN_PERSONAL_WHATSAPP;
 
 export async function escalateToHumanConsultant(
   clientId: string,

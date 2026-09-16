@@ -133,14 +133,16 @@ export const ASAAS_PLANS = {
   },
 } as const;
 
+export const ADMIN_PERSONAL_WHATSAPP = '5514930855878';
+
 export const ASAAS_ONE_OFF = {
   cashFlowAnalysis: {
     code: 'cash_flow_extra',
     name: 'Análise de Fluxo de Caixa (Avulsa)',
-    priceCents: 1490,
-    priceFormatted: 'R$ 14,90',
-    checkoutUrl: 'https://www.asaas.com/c/85t737y1uom4k2b5',
-    slug: '85t737y1uom4k2b5',
+    priceCents: 4900,
+    priceFormatted: 'R$ 49,00',
+    checkoutUrl: 'https://www.asaas.com/c/icv2c1fiit1781q3',
+    slug: 'icv2c1fiit1781q3',
   },
   supplierXray: {
     code: 'supplier_xray',

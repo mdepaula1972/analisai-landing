@@ -25,6 +25,7 @@ import { recordWaitlistLead } from '@/lib/solo/waitlist';
 import { linkReferralLead, getReferralShareMessage } from '@/lib/solo/referral';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
+import { isQaWhitelisted } from '@/lib/solo/qa-whitelist';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -82,8 +83,9 @@ async function processConversationalEntry(
 
     if (conv.amount && conv.due_date) {
       const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
+      const isEntryQa = client.is_admin || await isQaWhitelisted(cleanPhone) || await isQaWhitelisted(client.tax_id);
 
-      if (!quotaCheck.allowed && !client.is_admin) {
+      if (!quotaCheck.allowed && !isEntryQa) {
         await sendEvolutionText({
           phone,
           text: `⚠️ *Limite de Lançamentos do Mês Atingido!*
@@ -251,12 +253,35 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   }
 
   // 1. Localiza cliente pelo número de WhatsApp ou WhatsApp LID
-  const { data: client } = await supabase
+  let { data: client } = await supabase
     .from('clients')
-    .select('id, name, whatsapp_number, status, is_admin, whatsapp_lid')
+    .select('id, name, whatsapp_number, status, is_admin, whatsapp_lid, tax_id')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone},whatsapp_lid.eq.${cleanPhone}`)
     .limit(1)
     .maybeSingle();
+
+  // Garante privilégios de Administrador se for o número pessoal do Marcos
+  const isAdminPhone = cleanPhone === '5514930855878' || altPhone === '5514930855878' || cleanPhone.includes('930855878');
+  if (isAdminPhone) {
+    if (!client) {
+      const { data: adminCreated } = await supabase
+        .from('clients')
+        .insert({
+          name: 'Marcos Administrador',
+          whatsapp_number: cleanPhone,
+          tax_id: '00000000000',
+          tax_type: 'CPF',
+          is_admin: true,
+          status: 'active',
+        })
+        .select('id, name, whatsapp_number, status, is_admin, whatsapp_lid, tax_id')
+        .single();
+      if (adminCreated) client = adminCreated;
+    } else if (!client.is_admin) {
+      await supabase.from('clients').update({ is_admin: true }).eq('id', client.id);
+      client.is_admin = true;
+    }
+  }
 
   // Se o cliente foi localizado e a mensagem veio com LID, sincroniza automaticamente
   if (client && body.data?.key?.remoteJid?.includes('@lid') && !client.whatsapp_lid) {
@@ -270,6 +295,29 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
+
+  // ── Interceptação 0: Feedbacks, Críticas e Sugestões dos Clientes ──────────
+  const { isFeedbackMessage, recordClientFeedback } = await import('@/lib/solo/feedback');
+  const feedbackCheck = isFeedbackMessage(rawText);
+  if (feedbackCheck.isFeedback) {
+    const res = await recordClientFeedback({
+      phone: cleanPhone,
+      message: feedbackCheck.cleanMessage,
+      clientId: client?.id,
+      clientName: client?.name || body.data?.pushName,
+    });
+    await sendEvolutionText({ phone, text: res.userReply });
+    return;
+  }
+
+  // ── Interceptação 0.1: Comandos de Administração Diretos (!qa, !feedbacks, !ajuda, etc.) ──
+  if (client?.is_admin && (cleanText.startsWith('!') || cleanText.startsWith('/'))) {
+    const adminResponse = await handleAdminCommands(client.id, rawText);
+    if (adminResponse.handled && adminResponse.message) {
+      await sendEvolutionText({ phone, text: adminResponse.message });
+      return;
+    }
+  }
 
   // ── Interceptação 1: Comando de Indicação (!indicar ou indicar) ───────────
   if (cleanText === '!indicar' || cleanText === 'indicar' || cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '/indicar') {
@@ -711,7 +759,8 @@ Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
   if (isImage || isDoc) {
     const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
 
-    if (!quotaCheck.allowed && !client.is_admin) {
+    const isDocQa = client.is_admin || await isQaWhitelisted(cleanPhone) || await isQaWhitelisted(client.tax_id);
+    if (!quotaCheck.allowed && !isDocQa) {
       await sendEvolutionText({
         phone,
         text: `⚠️ *Limite de Documentos do Mês Atingido!*

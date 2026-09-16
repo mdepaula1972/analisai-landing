@@ -29,6 +29,17 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
     altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
   }
 
+  // 0. Verifica se o número ou documento está na Whitelist de QA (acesso livre sem limites)
+  const { isQaWhitelisted } = await import('@/lib/solo/qa-whitelist');
+  if (await isQaWhitelisted(cleanPhone) || await isQaWhitelisted(altPhone)) {
+    return {
+      hasUsedTrial: false,
+      docsCount: 0,
+      docsLimit: 99999,
+      remainingDocs: 99999,
+    };
+  }
+
   const { data } = await supabase
     .from('trial_leads')
     .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit, interested_plan')

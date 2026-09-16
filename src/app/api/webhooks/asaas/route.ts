@@ -79,7 +79,7 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   if (link.includes(ASAAS_ONE_OFF.bankReconciliationExtra.slug) || desc.includes('conciliação extra') || desc.includes('conciliacao extra')) {
     return { type: 'one_off', orderType: 'bank_reconciliation_extra', name: 'Conciliação Bancária Extra' };
   }
-  if (link.includes('85t737y1uom4k2b5')) {
+  if (link.includes('icv2c1fiit1781q3') || link.includes('85t737y1uom4k2b5') || desc.includes('fluxo de caixa') || value === 4900) {
     return { type: 'one_off', orderType: 'cash_flow_extra', name: 'Análise de Fluxo de Caixa' };
   }
   if (link.includes('opzifr0h6d2pds70')) {

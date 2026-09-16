@@ -47,6 +47,21 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 
 ## 3. Linha do Tempo das Versões
 
+### [v2.4.4] — Canal de Críticas/Sugestões, Whitelist de QA (Acesso Livre) & Link Oficial Fluxo de Caixa
+- **Canal de Críticas e Sugestões dos Clientes:**
+  - Criação da tabela `client_feedbacks` no Supabase via Migration 014.
+  - Reconhecimento automático de comandos (`!sugestao`, `!critica`, `!feedback`) e de linguagem natural no chat.
+  - Notificação instantânea com detalhes completos no WhatsApp pessoal do Marcos (`5514930855878`).
+  - Resposta humanizada e profissional para o cliente confirmando envio direto à diretoria.
+- **Whitelist de QA (Acesso Livre sem Limites ou Cobrança):**
+  - Tabela `qa_whitelist` e função PostgreSQL `check_is_qa` permitindo autorizar CPFs, CNPJs ou telefones para atuar livremente no sistema.
+  - Bypass total de limites de degustação e cotas de processamento mensal para usuários em QA.
+  - Comandos do administrador no WhatsApp: `!qa add <cpf/cnpj/tel> [desc]`, `!qa remove <id>`, `!qa list` e `!feedbacks`.
+  - Número pessoal do Marcos (`5514930855878`) configurado como administrador nativo e inserido na whitelist de QA.
+- **Link Oficial do Fluxo de Caixa no Asaas:**
+  - Cadastrado checkout oficial do relatório de Fluxo de Caixa: `https://www.asaas.com/c/icv2c1fiit1781q3` (slug `icv2c1fiit1781q3`, R$ 49,00).
+  - Webhook do Asaas atualizado para entrega e desbloqueio imediato do produto.
+
 ### [v2.4.3] — Quadro de Sócios (QSA), Alerta Sócio vs Terceiro, Monitor de Dividendos (<50k) & Blindagem de Caixa no Referral
 - **Quadro de Sócios (QSA) & Tabela `client_partners`:**
   - Sincronização gratuita com a BrasilAPI via CNPJ para mapear os sócios da empresa.
