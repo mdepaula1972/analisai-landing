@@ -47,6 +47,47 @@ export async function handleAdminCommands(
   const action = parts[0];
   const arg1 = parts[1];
 
+  // ── !marcos / !testes / !roteiro ──────────────────────────────────────────
+  if (action === 'marcos' || action === 'testes' || action === 'roteiro') {
+    return {
+      handled: true,
+      message: `👑 *Guia Executivo de Testes do Marcos (AnalisAí Solo)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use estes códigos para navegar e testar cada nível na prática:
+
+📋 *1. TESTE DA DEGUSTAÇÃO (TRIALS)*
+• *!reset* → Zera seu perfil para testar como se fosse um cliente novo
+• Envie foto/PDF de boleto ou digite: *"Pagar Fornecedor R$ 250 dia 28"*
+• Teste *Semana* para ver a listagem dos próximos 7 dias
+• Teste *Mês* para ver a recusa educada e a oferta de R$ 49
+
+🚀 *2. TESTE DOS PLANOS PAGOS (NÍVEIS 1 A 4)*
+• *!simular start* → Ativa o plano **Start** (15 lançamentos, sem áudio e sem consultor nativo)
+• *!simular solo* → Ativa o plano **Solo** (30 lançamentos, áudio liberado e 2 análises de caixa)
+• *!simular plus* → Ativa o **Solo Plus** (60 lançamentos, 4 análises e separação PJ x PF)
+• *!gerar contas teste* → Cria 4 contas fictícias no seu Livro Caixa para testar o consultor
+• Pergunte: *"Qual conta devo atrasar?"* para ver a IA contábil orientando
+
+⛔ *3. TESTE DE BLOQUEIOS E LIMITES CONTRATUAIS*
+• *!estourar lancamento* → Simula estouro da cota mensal (oferece Pacote Extra +20 por R$ 14,90 ou upgrade)
+• *!estourar analise* → Simula estouro do consultor de caixa (oferece R$ 49 avulso ou upgrade)
+
+👥 *4. GESTÃO DE USUÁRIOS QA (AMIGOS E FAMILIARES)*
+• *!qa add 11999999999 João Amigo* → Libera o João para testar tudo sem travas nem custos
+• *!qa list* → Lista todos os contatos que você já liberou como QA
+• *!qa remove 11999999999* → Remove o João do modo QA
+• *!feedbacks* → Vê todas as sugestões e críticas enviadas pelos testadores
+
+📊 *5. PRODUTOS AVULSOS E AUDITORIA*
+• *!pdf* ou *!relatorio* → Gera seu Livro Caixa em PDF na hora
+• *!raio-x* → Emite e entrega o Raio-X de Fornecedores em PDF
+• *!waitlist* → Vê a demanda acumulada dos planos Pro e Super
+• *!bypass on* / *!bypass off* → Liga ou desliga modo irrestrito
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 _Dica: Digite *!marcos* a qualquer momento para rever este guia!_`,
+    };
+  }
+
   // ── !ajuda / !help ──────────────────────────────────────────────────────────
   if (action === 'help' || action === 'ajuda') {
     return {
