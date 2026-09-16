@@ -403,12 +403,18 @@ export async function POST(req: NextRequest) {
         if (clientPhone) {
           await sendEvolutionText({
             phone: clientPhone,
-            text: `🎉 *Pagamento Confirmado no Asaas! (Análise de Caixa Avulsa)*
+            text: `🎉 *Pagamento Confirmado no Asaas! (Relatório Executivo de Fluxo de Caixa Futuro)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Sua consulta estratégica de fluxo de caixa foi liberada com sucesso!
+Recebemos a confirmação da sua solicitação!
+Nossa IA contábil está consolidando seu mapa de liquidez, sobras/déficits futuros e simulações para os próximos 30 a 90 dias.
 
-Você já pode me enviar um áudio ou perguntar:
-👉 *"Qual conta devo adiar este mês diante do aperto financeiro?"*`,
+Aguarde um instante, seu relatório executivo detalhado chegará aqui nesta conversa...`,
+          });
+
+          // Dispara a geração e entrega automática do Relatório Executivo
+          const { generateExtendedCashFlowReport } = await import('@/lib/solo/cash-flow-advisor');
+          generateExtendedCashFlowReport(clientId, clientPhone, 90).catch((reportErr) => {
+            console.error('[Asaas Webhook] Erro ao gerar Relatório Executivo de Fluxo de Caixa:', reportErr);
           });
         }
       } else if (product.orderType === 'supplier_xray') {

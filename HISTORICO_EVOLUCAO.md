@@ -59,7 +59,13 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
   - Totalizador previsto da semana com fechamento instrutivo.
 - **Recusa Educada de Prazos Maiores (> 7 dias / Mês) com Gancho de Fluxo de Caixa Futuro:**
   - Detecção inteligente (`isLongTermCashFlowQuery`) para pedidos de *"mês"*, *"próximo mês"*, *"30 dias"*, *"60 dias"*, *"fluxo de caixa futuro"*.
-  - O robô explica com delicadeza e respeito que o acompanhamento diário/semanal foca nas ações imediatas para evitar multas, e convida o cliente a emitir a projeção estendida de médio/longo prazo através do **Relatório Executivo de Fluxo de Caixa Futuro por R$ 49,00 avulsos** (link oficial Asaas: `https://www.asaas.com/c/icv2c1fiit1781q3`).
+  - Redação precisa e valorizadora do plano: *"Para seu acompanhamento diário, seu plano contempla, sem qualquer custo adicional, suas contas da semana!"*.
+  - O robô explica com delicadeza e respeito que o acompanhamento diário foca nas ações imediatas para evitar multas, e convida o cliente a emitir a projeção estendida de médio/longo prazo através do **Relatório Executivo de Fluxo de Caixa Futuro por R$ 49,00 avulsos** (link oficial Asaas: `https://www.asaas.com/c/icv2c1fiit1781q3`).
+- **Entrega Efetiva do Relatório de Fluxo de Caixa Futuro (30 a 90 dias) via IA:**
+  - Criação da função `generateExtendedCashFlowReport` no módulo `cash-flow-advisor.ts`.
+  - Agrupamento inteligente de saídas e recebíveis futuros em 3 blocos (Mês 1, Mês 2 e Mês 3).
+  - Gemini 2.5 Flash atua como CFO Contábil analisando liquidez, zonas de déficit/risco, janelas de sobra de caixa e parecer executivo para compras ou investimentos.
+  - Conexão direta com o webhook do Asaas (`src/app/api/webhooks/asaas/route.ts`): assim que o pagamento de R$ 49,00 é confirmado, o estudo completo é gerado e entregue automaticamente no WhatsApp do cliente!
 
 ### [v2.4.4] — Canal de Críticas/Sugestões, Whitelist de QA (Acesso Livre) & Link Oficial Fluxo de Caixa
 - **Canal de Críticas e Sugestões dos Clientes:**

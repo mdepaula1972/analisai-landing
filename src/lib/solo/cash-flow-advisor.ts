@@ -167,14 +167,145 @@ export function getExtendedCashFlowProposalMessage(): string {
 
   return `📊 *Projeção Estendida de Fluxo de Caixa Futuro (30 a 90 dias)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para manter seu foco nas decisões imediatas e no pagamento em dia sem estresse, no seu acompanhamento diário eu organizo gratuitamente suas contas da semana!
+Para seu acompanhamento diário, seu plano contempla, sem qualquer custo adicional, suas contas da semana!
 
 Para ter uma **visão estendida de médio e longo prazo (30, 60 ou 90 dias)** com diagnóstico contábil de sobras e déficits futuros, análise de sazonalidade e simulações para saber exatamente quando você pode comprar ou investir, nós temos o nosso **Relatório Executivo de Fluxo de Caixa Futuro** por apenas **R$ 49,00 avulsos**!
 
 👉 *Contratar Relatório Executivo de Fluxo de Caixa:*
 ${checkoutUrl}
 
-💳 _A liberação é imediata e o estudo contábil detalhado é entregue diretamente aqui no seu WhatsApp assim que o pagamento for confirmado no Asaas!_`;
+💳 _A liberação é imediata e o estudo contábil detalhado é gerado por IA e entregue diretamente aqui no seu WhatsApp assim que o pagamento for confirmado no Asaas!_`;
+}
+
+/**
+ * Gera e entrega o Relatório Executivo de Fluxo de Caixa Futuro (30 a 90 dias)
+ * acionado automaticamente após a confirmação do pagamento de R$ 49 no Asaas
+ */
+export async function generateExtendedCashFlowReport(
+  clientId: string,
+  phone: string,
+  daysHorizon: number = 90
+): Promise<string> {
+  const supabase = createServiceRoleClient();
+  const now = new Date();
+  const todayIso = now.toISOString().split('T')[0];
+  const horizonIso = new Date(now.getTime() + daysHorizon * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // 1. Busca saídas futuras agendadas
+  const { data: payables } = await supabase
+    .from('payables_receivables')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('type', 'payable')
+    .eq('status', 'open')
+    .gte('current_due_date', todayIso)
+    .lte('current_due_date', horizonIso)
+    .order('current_due_date', { ascending: true });
+
+  // 2. Busca entradas futuras agendadas
+  const { data: receivables } = await supabase
+    .from('payables_receivables')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('type', 'receivable')
+    .eq('status', 'open')
+    .gte('current_due_date', todayIso)
+    .lte('current_due_date', horizonIso)
+    .order('current_due_date', { ascending: true });
+
+  // 3. Busca lançamentos históricos do livro caixa para análise de média mensal
+  const { data: ledgerEntries } = await supabase
+    .from('cash_ledger_entries')
+    .select('amount, entry_type, dre_group, entry_date')
+    .eq('client_id', clientId)
+    .order('entry_date', { ascending: false })
+    .limit(100);
+
+  const totalPayables = (payables || []).reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const totalReceivables = (receivables || []).reduce((acc: number, r: any) => acc + Number(r.amount), 0);
+  const netProjection = totalReceivables - totalPayables;
+
+  // Agrupamento por períodos de 30 dias
+  const m30Iso = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const m60Iso = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const payablesM1 = (payables || []).filter((p: any) => p.current_due_date <= m30Iso);
+  const payablesM2 = (payables || []).filter((p: any) => p.current_due_date > m30Iso && p.current_due_date <= m60Iso);
+  const payablesM3 = (payables || []).filter((p: any) => p.current_due_date > m60Iso);
+
+  const sumM1 = payablesM1.reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const sumM2 = payablesM2.reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+  const sumM3 = payablesM3.reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: `Você é o Diretor Financeiro (CFO) e Consultor Sênior de Estratégia de Caixa do AnalisAí.
+Seu cliente contratou o Relatório Executivo de Fluxo de Caixa Futuro (R$ 49,00 avulso).
+Seu objetivo é entregar um diagnóstico contábil estratégico de alto padrão, empático, claro e orientado à ação para os próximos 30 a 90 dias.
+
+DIRETRIZES DO RELATÓRIO:
+1. Quadro Geral de Liquidez (Próximos 30, 60 e 90 dias).
+2. Diagnóstico de Sobras e Déficits: Onde o caixa vai apertar e onde haverá folga.
+3. Análise de Sazonalidade e Concentração de Vencimentos: Quais semanas concentram os maiores desembolsos.
+4. Simulação de Compras e Investimentos: Parecer claro sobre se a empresa pode assumir novas compras parceladas ou investimentos agora.
+5. Plano de Ação Estratégico do CFO: 3 decisões prioritárias para maximizar a rentabilidade e proteger a liquidez.
+
+Mantenha formatação primorosa para WhatsApp (emojis corporativos, negritos e tópicos legíveis).`,
+    });
+
+    const contextPrompt = `Dados Contábeis Projetados da Empresa (Próximos ${daysHorizon} dias):
+- Total de Contas a Pagar Comprometidas: R$ ${totalPayables.toFixed(2)} (${payables?.length || 0} contas)
+  • Próximos 30 dias (Mês 1): R$ ${sumM1.toFixed(2)} (${payablesM1.length} contas)
+  • 31 a 60 dias (Mês 2): R$ ${sumM2.toFixed(2)} (${payablesM2.length} contas)
+  • 61 a 90 dias (Mês 3): R$ ${sumM3.toFixed(2)} (${payablesM3.length} contas)
+- Total de Entradas e Recebíveis Previstos: R$ ${totalReceivables.toFixed(2)} (${receivables?.length || 0} recebimentos)
+- Saldo Líquido Projetado do Período: R$ ${netProjection.toFixed(2)}
+- Principais contas compromissadas:
+${(payables || []).slice(0, 10).map((p: any) => `• ${p.counterparty_name}: R$ ${Number(p.amount).toFixed(2)} (vence ${p.current_due_date})`).join('\n')}
+
+Gere agora o Relatório Executivo de Fluxo de Caixa Futuro para este cliente.`;
+
+    const result = await model.generateContent(contextPrompt);
+    const reportText = result.response.text();
+
+    const fullMessage = `📊 *RELATÓRIO EXECUTIVO DE FLUXO DE CAIXA FUTURO*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${reportText}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 _Relatório gerado pelo AnalisAí CFO com base nos compromissos agendados no seu Livro Caixa._`;
+
+    const { sendEvolutionText } = await import('@/lib/solo/evolution');
+    await sendEvolutionText({ phone, text: fullMessage });
+
+    return fullMessage;
+  } catch (err) {
+    console.error('[Generate Extended Cash Flow Report Error]:', err);
+    // Fallback contábil caso haja timeout na IA
+    const fallback = `📊 *RELATÓRIO EXECUTIVO DE FLUXO DE CAIXA FUTURO*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos os compromissos futuros da sua empresa para os próximos 90 dias:
+
+💰 *Mapa de Compromissos Futuros:*
+• *Mês 1 (Próximos 30 dias):* R$ ${sumM1.toFixed(2)} (${payablesM1.length} contas a pagar)
+• *Mês 2 (31 a 60 dias):* R$ ${sumM2.toFixed(2)} (${payablesM2.length} contas a pagar)
+• *Mês 3 (61 a 90 dias):* R$ ${sumM3.toFixed(2)} (${payablesM3.length} contas a pagar)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 *Total Comprometido:* R$ ${totalPayables.toFixed(2)}
+📈 *Recebíveis Previstos:* R$ ${totalReceivables.toFixed(2)}
+⚖️ *Saldo Projetado:* R$ ${netProjection.toFixed(2)}
+
+🎯 *Diagnóstico do CFO:*
+1. Mantenha reserva de liquidez para a concentração de vencimentos nos próximos 30 dias.
+2. Evite novas compras a prazo até que o fluxo do Mês 2 se estabilize.
+3. Antecipe cobranças de clientes com mais de 5 dias em aberto para reforçar o caixa.`;
+
+    const { sendEvolutionText } = await import('@/lib/solo/evolution');
+    await sendEvolutionText({ phone, text: fallback });
+    return fallback;
+  }
 }
 
 /**
