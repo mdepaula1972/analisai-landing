@@ -94,3 +94,168 @@ ${billsContext}`;
     return fallbackText;
   }
 }
+
+/**
+ * Detecta se a mensagem do usuário solicita projeções de períodos maiores que uma semana
+ * (ex: mês, 30 dias, 60 dias, projeção de fluxo de caixa futuro)
+ */
+export function isLongTermCashFlowQuery(cleanText: string): boolean {
+  const query = cleanText.toLowerCase();
+  const longTermKeywords = [
+    'fluxo de caixa',
+    'projeção',
+    'projecao',
+    'projeções',
+    'projecoes',
+    'mês',
+    'mes',
+    'próximo mês',
+    'proximo mes',
+    '30 dias',
+    '60 dias',
+    '90 dias',
+    'longo prazo',
+    'médio prazo',
+    'medio prazo',
+    'trimestre',
+    'bimestre',
+    'visão do mês',
+    'visao do mes',
+    'contas do mês',
+    'contas do mes',
+    'vencimentos do mês',
+    'vencimentos do mes',
+  ];
+
+  return longTermKeywords.some((kw) => query.includes(kw));
+}
+
+/**
+ * Detecta se a mensagem do usuário solicita consulta de contas da semana (até 7 dias)
+ */
+export function isWeeklyBillsQuery(cleanText: string): boolean {
+  const query = cleanText.toLowerCase().trim();
+  const weeklyKeywords = [
+    '!semana',
+    '/semana',
+    'semana',
+    'essa semana',
+    'esta semana',
+    'da semana',
+    'próximos 7 dias',
+    'proximos 7 dias',
+    '7 dias',
+    'contas',
+    '!contas',
+    'vencimentos',
+    'agenda',
+    'o que vence',
+    'quais contas',
+    'próximas contas',
+    'proximas contas',
+  ];
+
+  return weeklyKeywords.some((kw) => query === kw || query.includes(kw));
+}
+
+/**
+ * Mensagem respeitosa e educada quando o cliente solicita projeção de médio/longo prazo (> 7 dias / mês),
+ * recusando a análise gratuita no fluxo diário e oferecendo o produto avulso de Fluxo de Caixa Futuro (R$ 49)
+ */
+export function getExtendedCashFlowProposalMessage(): string {
+  const checkoutUrl = 'https://www.asaas.com/c/icv2c1fiit1781q3';
+
+  return `📊 *Projeção Estendida de Fluxo de Caixa Futuro (30 a 90 dias)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para manter seu foco nas decisões imediatas e no pagamento em dia sem estresse, no seu acompanhamento diário eu organizo gratuitamente suas contas da semana!
+
+Para ter uma **visão estendida de médio e longo prazo (30, 60 ou 90 dias)** com diagnóstico contábil de sobras e déficits futuros, análise de sazonalidade e simulações para saber exatamente quando você pode comprar ou investir, nós temos o nosso **Relatório Executivo de Fluxo de Caixa Futuro** por apenas **R$ 49,00 avulsos**!
+
+👉 *Contratar Relatório Executivo de Fluxo de Caixa:*
+${checkoutUrl}
+
+💳 _A liberação é imediata e o estudo contábil detalhado é entregue diretamente aqui no seu WhatsApp assim que o pagamento for confirmado no Asaas!_`;
+}
+
+/**
+ * Consulta e formata a relação de contas a pagar da semana (próximos 7 dias)
+ */
+export async function getUpcomingBillsSummary(
+  clientId: string | null,
+  phone?: string
+): Promise<string> {
+  const supabase = createServiceRoleClient();
+  const now = new Date();
+  const todayIso = now.toISOString().split('T')[0];
+  const next7DaysIso = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // 1. Se for cliente cadastrado com ID
+  if (clientId) {
+    const { data: bills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('type', 'payable')
+      .eq('status', 'open')
+      .gte('current_due_date', todayIso)
+      .lte('current_due_date', next7DaysIso)
+      .order('current_due_date', { ascending: true });
+
+    if (!bills || bills.length === 0) {
+      return `📅 *Agenda Financeira da Semana (Próximos 7 Dias)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você não possui nenhuma conta a pagar cadastrada com vencimento para os próximos 7 dias! 🎉
+
+Tudo em ordem com seu fluxo de caixa imediato.
+
+💡 _Precisa da visão estendida do mês completo ou próximos 60 dias? Digite *Mês* para conhecer nosso Relatório de Fluxo de Caixa Futuro!_`;
+    }
+
+    const totalWeek = bills.reduce((sum, b) => sum + Number(b.amount), 0);
+    const billsList = bills
+      .map((b) => {
+        const hasBarcode = b.barcode_or_pix ? '📋 _(código disponível)_' : '⚠️ _(sem código de barras)_';
+        return `• *${formatDueDateDetails(b.current_due_date)}:* ${b.counterparty_name} — R$ ${Number(b.amount).toFixed(2)} ${hasBarcode}`;
+      })
+      .join('\n');
+
+    return `📅 *Agenda Financeira da Semana (Próximos 7 Dias)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${billsList}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 *Total previsto para a semana:* R$ ${totalWeek.toFixed(2)}
+
+💡 _O AnalisAí vai te lembrar às 10h da véspera de cada vencimento com o código de barras prontinho para pagar!_
+📊 _Precisa da visão estendida do mês completo ou próximos 60 dias? Digite *Mês* para conhecer nosso Relatório de Fluxo de Caixa Futuro!_`;
+  }
+
+  // 2. Se for lead em degustação consultando pelo telefone
+  if (phone) {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const { data: lead } = await supabase
+      .from('trial_leads')
+      .select('*')
+      .eq('whatsapp_number', cleanPhone)
+      .maybeSingle();
+
+    if (lead && lead.due_date && lead.amount) {
+      return `📅 *Agenda Financeira — Degustação AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identifiquei seu boleto registrado em teste:
+• *Vencimento:* ${formatDueDateDetails(lead.due_date)}
+• *Favorecido:* ${lead.supplier_name || 'Fornecedor'}
+• *Valor:* R$ ${Number(lead.amount).toFixed(2)}
+• *Código de barras:* ${lead.barcode_or_pix ? 'Salvo para o lembrete' : 'Não identificado'}
+
+💡 _Na véspera deste vencimento, às 10h em ponto, eu vou te mandar o lembrete aqui com o código de barras limpo para você pagar sem atrasos!_
+📊 _Para acompanhar todas as contas do mês e ter projeção futura contínua, assine um de nossos planos!_`;
+    }
+  }
+
+  return `📅 *Agenda Financeira da Semana*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Não encontrei contas cadastradas para a sua empresa nos próximos 7 dias.
+
+👉 Envie uma foto ou PDF de boleto para agendar seu primeiro vencimento!`;
+}
+

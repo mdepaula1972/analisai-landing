@@ -357,6 +357,32 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     }
   }
 
+  // ── Interceptação 1.2: Projeção Estendida de Fluxo de Caixa (> 7 dias / Mês) ────
+  // Se o cliente ou lead solicitar prazo maior que uma semana, recusa educadamente
+  // e apresenta o Relatório de Fluxo de Caixa Futuro avulso (R$ 49,00)
+  const {
+    isLongTermCashFlowQuery,
+    isWeeklyBillsQuery,
+    getExtendedCashFlowProposalMessage,
+    getUpcomingBillsSummary,
+  } = await import('@/lib/solo/cash-flow-advisor');
+
+  const hasMonetaryPattern = /(?:r\$\s*|reais|\b\d+[,.]\d{2}\b)/i.test(rawText);
+  const isFinancialAction = /(?:pagar|receber|comprei|gastei|transferir|lance|lançar)/i.test(cleanText);
+
+  if (isLongTermCashFlowQuery(cleanText) && (!hasMonetaryPattern || !isFinancialAction)) {
+    const extendedProposal = getExtendedCashFlowProposalMessage();
+    await sendEvolutionText({ phone, text: extendedProposal });
+    return;
+  }
+
+  // ── Interceptação 1.3: Agenda de Contas da Semana (Até 7 dias) ───────────────
+  if (isWeeklyBillsQuery(cleanText) && (!hasMonetaryPattern || !isFinancialAction)) {
+    const weeklySummary = await getUpcomingBillsSummary(client?.id || null, cleanPhone);
+    await sendEvolutionText({ phone, text: weeklySummary });
+    return;
+  }
+
   // ── Interceptação 2: Lead vindo de Link de Indicação de Amigo ───────────────
   const referralMatch = rawText.match(/(?:indica[çc][ãa]o do cliente|indicado por)\s*(\d{10,14})/i);
   if (referralMatch && referralMatch[1]) {
@@ -936,6 +962,14 @@ ${parcelasDesc}
 ${quotaFootnote}`,
         });
 
+        await sendEvolutionText({
+          phone,
+          text: `💛 *Fique tranquilo(a), todas as parcelas estão registradas no seu Livro Caixa!*
+Na véspera de cada uma delas (às 10h em ponto) eu vou te avisar aqui para você não esquecer.
+
+💡 Digite *Semana* a qualquer momento para acompanhar seus compromissos imediatos!`,
+        });
+
         return;
       }
 
@@ -1007,6 +1041,19 @@ ${extracted.barcode_or_pix.trim()}
 ${BANK_SAFETY_NOTICE}`,
         });
       }
+
+      // Acolhimento Afetivo & Menu de Superpoderes (Eliminando o Vazio Pós-Boleto)
+      await sendEvolutionText({
+        phone,
+        text: `💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
+Na véspera do vencimento (às 10h em ponto) eu te lembro aqui com o código de barras prontinho para pagar sem estresse e sem multas.
+
+✨ *Dicas rápidas do seu AnalisAí:*
+• Digite *Semana* para ver suas contas dos próximos 7 dias;
+• Digite *Relatório* ou *PDF* para receber seu Livro Caixa atualizado;
+• Pergunte _"qual conta devo atrasar?"_ se o caixa apertar (incluso no Solo e Solo Plus);
+• Digite *Indicar* para compartilhar seu link e zerar sua mensalidade com 3 indicações ativas!`,
+      });
 
       return;
     } catch (err) {
@@ -1173,7 +1220,7 @@ Deseja digitar o nome correto ou consultar seu livro caixa?`,
               phone,
               text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
 
-Para liberar uma nova análise estratégica detalhada de postergação de contas imediatamente por apenas **R$ 14,90**, conclua o pagamento no link seguro:
+Para liberar uma nova análise estratégica detalhada de postergação de contas imediatamente por apenas **${ASAAS_ONE_OFF.cashFlowAnalysis.priceFormatted}**, conclua o pagamento no link seguro:
 👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
             });
             return;
@@ -1265,7 +1312,7 @@ Compreendo o momento de aperto! No seu plano atual (*AnalisAí Start*), o consul
 
 Você tem duas alternativas rápidas para resolver isso agora:
 
-1️⃣ *Análise de Caixa Avulsa (R$ 14,90)*:
+1️⃣ *Análise de Caixa Avulsa (${ASAAS_ONE_OFF.cashFlowAnalysis.priceFormatted})*:
 Nossa IA analisa suas contas agendadas e te indica na hora qual boleto adiar com o menor custo de juros e menor risco ao seu negócio:
 👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}
 
@@ -1283,7 +1330,7 @@ Garante 2 análises de caixa por mês, comandos por áudio e 30 documentos mensa
         phone,
         text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
 
-Para liberar uma nova análise estratégica detalhada por apenas **R$ 14,90**, pague pelo link seguro:
+Para liberar uma nova análise estratégica detalhada por apenas **${ASAAS_ONE_OFF.cashFlowAnalysis.priceFormatted}**, pague pelo link seguro:
 👉 ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`,
       });
       return;
@@ -1455,7 +1502,10 @@ Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *r
 • *Vencimento:* ${formattedDate}
 • *Classificação:* ${dreGroup}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para manter seu caixa impecável!`,
+💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
+Na véspera do vencimento (às 10h em ponto) eu te lembro aqui para manter seus pagamentos impecáveis sem multas!
+
+💡 Digite *Semana* a qualquer momento para ver sua agenda de pagamentos atualizada.`,
             });
           }
           return;

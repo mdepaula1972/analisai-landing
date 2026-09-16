@@ -267,48 +267,55 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
     txt += `📂 *Categoria:* ${doc.category}\n`;
   }
 
-  txt += `\n💡 *Dica Inteligente do AnalisAí:* Conta cadastrada com sucesso! Programamos seus lembretes na véspera e no dia do vencimento às 10h pelo WhatsApp.\n`;
-  txt += `🔒 *Nota:* Na degustação, salvamos os dados do lançamento. Para ter o *Cofre Digital permanente em nuvem* com a 2ª via da imagem/PDF sempre guardada, assine um plano pago!`;
+  txt += `\n💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
+Na véspera do vencimento (às 10h em ponto) eu te envio o lembrete aqui com o código de barras prontinho para você pagar sem estresse e sem multas.\n`;
+  txt += `🔒 *Nota:* Na degustação, salvamos os dados do lançamento para demonstrar a precisão da IA. Para ter o *Cofre Digital permanente em nuvem* com a 2ª via da imagem/PDF sempre guardada, assine um plano pago!`;
 
   return txt;
 }
 
 /**
- * Menu de conversão e contratação enviado logo após a degustação do documento
+ * Menu de conversão e apresentação dos recursos dos planos ativos
  */
 export function getTrialConversionMenu(): string {
-  return `✨ *Gostou da velocidade e precisão? Esse é só o começo!*
+  return `✨ *Sabia que nos planos ativos o AnalisAí entrega muito mais para seu negócio?*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Imagine nunca mais digitar um código de barras, receber avisos diários no seu WhatsApp para não esquecer vencimentos e comandar todo o seu fluxo de caixa por áudio e texto.
+Para que você tenha visão de tudo o que o robô faz no dia a dia da sua empresa, confira os recursos disponíveis em nossas assinaturas:
 
-🚀 *Escolha seu plano e ative seu assistente contábil agora mesmo:*
+1️⃣ 📅 *Agenda Semanal de Contas (Incluso em todos os planos):*
+• Digite *Semana* para consultar seus compromissos imediatos dos próximos 7 dias.
 
-1️⃣ *AnalisAí Start* (R$ 39,90/mês)
-• 15 lançamentos/mês + Lembretes diários
+2️⃣ 🎙️ *Comandos por Voz e Áudio (Plano Solo):*
+• Mande áudios na correria para registrar despesas, receitas ou adiar prazos sem precisar digitar.
+
+3️⃣ 💡 *Consultor Estratégico de Caixa (Plano Solo / Solo Plus):*
+• Apertou o caixa? Pergunte _"qual conta devo atrasar?"_ para ter orientação contábil sobre juros e multas.
+
+4️⃣ 📑 *Relatórios Contábeis e DRE em PDF (Incluso em todos os planos):*
+• Digite *Relatório* e receba seu Livro Caixa oficial em segundos para controle ou envio ao contador.
+
+5️⃣ 🎁 *Mensalidade 100% Grátis por Indicação:*
+• Ao assinar seu plano (1ª mensalidade paga), indique 3 parceiros que ativem um plano: suas faturas seguintes ficam **100% ISENTAS** enquanto os 3 continuarem ativos!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 *Escolha o plano ideal e ative seu assistente agora mesmo:*
+
+• *AnalisAí Start* (R$ 39,90/mês — 15 lançamentos/mês + Avisos no WhatsApp):
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
 
-2️⃣ *AnalisAí Solo* (R$ 87,99/mês) ⭐ *Mais Escolhido*
-• 30 lançamentos/mês + Comandos por Áudio/Texto + Consultor de Caixa + Conciliação Mensal
+• *AnalisAí Solo* (R$ 87,99/mês — 30 lançamentos/mês + Áudio + Consultor de Caixa):
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
-3️⃣ *AnalisAí Solo Plus* (R$ 157,99/mês)
-• 60 lançamentos/mês + 4 Análises de Caixa + Conciliação Mensal
+• *AnalisAí Solo Plus* (R$ 157,99/mês — 60 lançamentos/mês + Separação PJ x PF):
 👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
 
-4️⃣ *AnalisAí Pro* (R$ 297,00/mês) 🏢
-• 500 lançamentos/mês + Até 2 CNPJs + Conciliação Semanal
-👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-
-5️⃣ *AnalisAí Super* (R$ 597,00/mês) 🚀
-• 1.000 lançamentos/mês + Até 4 CNPJs + Conciliação Semanal Contínua
-👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
+🏢 *Precisa de múltiplos CNPJs ou mais de 500 lançamentos?*
+Conheça os planos corporativos sob demanda:
+• *AnalisAí Pro* (R$ 297/mês): ${ASAAS_PLANS.monthly.pro.checkoutUrl}
+• *AnalisAí Super* (R$ 597/mês): ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎁 *Sabia que sua mensalidade pode sair 100% DE GRAÇA?*
-Ao ativar seu plano (1ª mensalidade paga), indique 3 empresários parceiros que também ativem um plano: as suas faturas seguintes ficam **100% ISENTAS** enquanto os 3 continuarem ativos no sistema! O AnalisAí se paga sozinho!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💬 *Precisa de ajuda ou tem dúvidas? Pode responder aqui mesmo!*`;
+💬 *Dúvidas ou faturamento corporativo? Pode responder aqui mesmo!*`;
 }
 
 export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de confirmar o pagamento no aplicativo do seu banco, confira sempre se o nome do favorecido, CNPJ e o valor na tela de confirmação correspondem exatamente ao seu credor/fornecedor. O AnalisAí realiza a leitura digital automatizada dos dados, cabendo exclusivamente ao pagador a conferência final e autorização da operação junto à sua instituição financeira.`;

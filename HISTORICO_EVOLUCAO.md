@@ -38,7 +38,7 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 ### Serviços Avulsos sob Demanda:
 - **DRE Agrupado Multi-CNPJ:** R$ 27,99 por cada CNPJ adicional (consolidação contábil unificada).
 - **Conciliação Bancária Extra:** R$ 37,00 por conta/mês.
-- **Análise de Caixa Avulsa (Qual conta adiar):** R$ 14,90.
+- **Relatório Executivo de Fluxo de Caixa Futuro (30 a 90 dias):** R$ 49,00 (link Asaas: `icv2c1fiit1781q3`).
 - **Pacote Extra (+20 Lançamentos):** R$ 14,90 (validade de 60 dias, válido para texto, áudio, fotos e PDFs).
 - **Raio-X de Fornecedores:** R$ 59,90.
 - **Certificado Digital A1:** R$ 170,00.
@@ -46,6 +46,20 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 ---
 
 ## 3. Linha do Tempo das Versões
+
+### [v2.4.5] — Experiência Afetiva Pós-Boleto, Menu de Superpoderes dos Planos Pagos & Agenda Semanal vs. Fluxo Estendido
+- **Experiência Afetiva Pós-Boleto ("Fim do Vazio"):**
+  - Eliminação do silêncio após o envio de boletos ou notas fiscais.
+  - Mensagem carinhosa e respeitosa de alívio imediato da carga mental:
+    > *"Pode deixar comigo, esse já está guardado a sete chaves e monitorado! 💛 Na véspera do vencimento (às 10h em ponto) eu te lembro aqui com o código de barras prontinho para pagar sem estresse e sem multas."*
+- **Menu Transparente de Recursos dos Planos Ativos:**
+  - Apresentação didática e sem falsas promessas de "tudo grátis", evidenciando os recursos inclusos em cada categoria de plano pago (Agenda Semanal, Comandos por Áudio no Solo, Consultor Estratégico de Caixa no Solo/Solo Plus, Relatório PDF em todos e Indicação para Mensalidade Zero).
+- **Nova Intenção Conversacional — Agenda da Semana (`Semana`, `Contas`):**
+  - Módulo `getUpcomingBillsSummary` em `cash-flow-advisor.ts` listando os compromissos dos próximos 7 dias com credor, data, valor e status de código de barras.
+  - Totalizador previsto da semana com fechamento instrutivo.
+- **Recusa Educada de Prazos Maiores (> 7 dias / Mês) com Gancho de Fluxo de Caixa Futuro:**
+  - Detecção inteligente (`isLongTermCashFlowQuery`) para pedidos de *"mês"*, *"próximo mês"*, *"30 dias"*, *"60 dias"*, *"fluxo de caixa futuro"*.
+  - O robô explica com delicadeza e respeito que o acompanhamento diário/semanal foca nas ações imediatas para evitar multas, e convida o cliente a emitir a projeção estendida de médio/longo prazo através do **Relatório Executivo de Fluxo de Caixa Futuro por R$ 49,00 avulsos** (link oficial Asaas: `https://www.asaas.com/c/icv2c1fiit1781q3`).
 
 ### [v2.4.4] — Canal de Críticas/Sugestões, Whitelist de QA (Acesso Livre) & Link Oficial Fluxo de Caixa
 - **Canal de Críticas e Sugestões dos Clientes:**
