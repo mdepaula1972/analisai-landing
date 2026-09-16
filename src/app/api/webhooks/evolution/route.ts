@@ -23,7 +23,8 @@ import {
 } from '@/lib/solo/trial';
 import { recordWaitlistLead } from '@/lib/solo/waitlist';
 import { linkReferralLead, getReferralShareMessage } from '@/lib/solo/referral';
-import { analyzePatrimonialExpense } from '@/lib/solo/patrimonial-advisor';
+import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
+import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -284,6 +285,25 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
 Assine um de nossos planos e indique 3 amigos ou parceiros empresariais no mesmo plano ou superior para **zerar sua fatura** enquanto eles continuarem ativos!
 
 👉 Para começar agora mesmo, envie uma foto ou PDF de boleto para testar nossa degustação gratuita!`,
+      });
+      return;
+    }
+  }
+
+  // ── Interceptação 1.1: Comando de Dividendos e Retiradas de Lucro (!dividendos) ─
+  if (cleanText === '!dividendos' || cleanText === 'dividendos' || cleanText === '!lucros' || cleanText === 'lucros' || cleanText === '/dividendos') {
+    if (client) {
+      const tracking = await getMonthlyDividendTracking(client.id);
+      await sendEvolutionText({ phone, text: tracking.summaryMessage });
+      return;
+    } else {
+      await sendEvolutionText({
+        phone,
+        text: `📈 *Monitor Diário de Dividendos AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O AnalisAí monitora todo dia suas retiradas de pró-labore e lucros para garantir que você permaneça seguro dentro da faixa de isenção de R$ 50.000,00/mês da Receita Federal.
+
+Assine um de nossos planos para ativar seu CFO digital 24h!`,
       });
       return;
     }
@@ -904,9 +924,20 @@ ${quotaFootnote}`,
 ${quotaFootnote}`,
       });
 
-      // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF)
-      const patrimonialDoc = analyzePatrimonialExpense({
+      // Sincroniza QSA de sócios automaticamente se houver CNPJ da empresa
+      const detectedCnpj = (extracted as any).cnpj || (extracted as any).company_tax_id;
+      if (detectedCnpj && client.id) {
+        syncPartnersFromQsa(client.id, detectedCnpj).catch((qsaErr) => {
+          console.warn('[Evolution Webhook QSA Sync Warning]:', qsaErr);
+        });
+      }
+
+      // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF e Sócio vs Terceiro)
+      const patrimonialDoc = await analyzeBeneficiaryAndExpense(client.id, {
         supplier_name: extracted.counterparty_name,
+        counterparty_name: extracted.counterparty_name,
+        payer_name: (extracted as any).payer_name,
+        payer_tax_id: (extracted as any).payer_tax_id,
         category: extracted.category_suggestion,
         amount: Number(extracted.total_amount),
       });

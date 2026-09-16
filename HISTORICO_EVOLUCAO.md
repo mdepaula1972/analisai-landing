@@ -47,6 +47,19 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 
 ## 3. Linha do Tempo das Versões
 
+### [v2.4.3] — Quadro de Sócios (QSA), Alerta Sócio vs Terceiro, Monitor de Dividendos (<50k) & Blindagem de Caixa no Referral
+- **Quadro de Sócios (QSA) & Tabela `client_partners`:**
+  - Sincronização gratuita com a BrasilAPI via CNPJ para mapear os sócios da empresa.
+  - Diferenciação cirúrgica entre **Boleto do Sócio** (confusão patrimonial -> Pró-labore) e **Boleto de Terceiro Desconhecido** (risco crítico de 35% de IRRF por pagamento sem causa perante a Receita Federal).
+- **Monitor Acumulado Diário de Dividendos (< R$ 50k/mês):**
+  - Módulo `dividend-tracker.ts` que calcula o total de retiradas de lucros/pró-labore no mês corrente.
+  - Barra de progresso visual (`[████████░░░░░░░░] 40%`) e alertas preventivos com base no teto de monitoramento fiscal e da e-Financeira (R$ 50.000,00).
+  - Integrado aos comandos `!status`, `!dividendos` e `!lucros` no WhatsApp.
+- **Blindagem de Caixa no Programa de Indicação (Regra de Ativação Prévia):**
+  - Ajuste na RPC `evaluate_referral_exemption`: o indicador **obrigatoriamente deve ter pago a 1ª mensalidade** (`asaas_payment_id IS NOT NULL`) para ativar o benefício.
+  - Elimina qualquer risco de "loop gratuito/pirâmide" sem entrada de receita no caixa: cada cliente traz dinheiro antes de usufruir da isenção.
+  - Banner e teasers antecipados na Landing Page e no menu pós-degustação comunicando a regra com total transparência e alto poder de conversão.
+
 ### [v2.4.2] — Blindagem de Demanda no DB, Programa de Indicação Automático & Consultoria Patrimonial
 - **Estatísticas de Demanda no DB (Fila de Espera Pro & Super):** 
   - Criação da tabela `plan_waitlist`, da tabela agregada `plan_waitlist_stats` e da view executiva `v_plan_waitlist_summary` no Supabase via Migration 012.

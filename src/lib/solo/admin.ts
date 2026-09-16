@@ -6,6 +6,7 @@ import { formatDueDateDetails } from './date-utils';
 import { getEveReminderMessage, getDueReminderMessage } from './trial';
 import { getWaitlistAdminReport } from './waitlist';
 import { getReferralShareMessage } from './referral';
+import { getMonthlyDividendTracking } from './dividend-tracker';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -94,6 +95,7 @@ Comandos disponíveis para você testar todas as opções:
       .single();
 
     const plan = sub?.plans as any;
+    const dividendStatus = await getMonthlyDividendTracking(clientId);
 
     return {
       handled: true,
@@ -110,6 +112,8 @@ Comandos disponíveis para você testar todas as opções:
 • Lançamentos: ${cycle?.docs_processed_count || 0} / ${plan?.doc_limit || 0} (Estourou: ${cycle?.hit_doc_limit ? 'Sim' : 'Não'})
 • Interações Bot: ${cycle?.bot_interactions_count || 0} / ${plan?.bot_interaction_limit || 0}
 • Análises de Caixa: ${cycle?.cash_flow_analyses_count || 0} / ${plan?.cash_flow_analysis_limit || 0} (Estourou: ${cycle?.hit_analysis_limit ? 'Sim' : 'Não'})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${dividendStatus.summaryMessage}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
     };
   }
@@ -421,6 +425,15 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
     return {
       handled: true,
       message: shareMsg,
+    };
+  }
+
+  // ── !dividendos / !lucros ───────────────────────────────────────────────────
+  if (action === 'dividendos' || action === 'lucros' || action === 'dividendo' || action === 'prolabore' || action === 'pró-labore') {
+    const tracking = await getMonthlyDividendTracking(clientId);
+    return {
+      handled: true,
+      message: tracking.summaryMessage,
     };
   }
 

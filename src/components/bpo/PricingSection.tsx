@@ -178,6 +178,13 @@ export default function PricingSection() {
               </span>
             </div>
 
+            {/* Banner Programa Mensalidade Zero */}
+            <div className="mb-8 mx-auto max-w-3xl rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-emerald-500/10 p-4 text-center shadow-lg shadow-amber-500/5">
+              <p className="text-xs sm:text-sm text-slate-200">
+                🎁 <strong className="text-amber-300">Programa Mensalidade Zero:</strong> Ao ativar seu plano com a 1ª mensalidade, indique 3 amigos empresários no mesmo plano ou superior: <span className="underline decoration-amber-400 font-bold text-white">suas faturas seguintes ficam 100% gratuitas</span> enquanto os 3 continuarem ativos! O AnalisAí se paga sozinho com receita nova real.
+              </p>
+            </div>
+
             {/* Grid dos 5 Planos Self-Service */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto items-stretch mb-14">
               

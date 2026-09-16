@@ -293,6 +293,10 @@ Imagine nunca mais digitar um código de barras, receber avisos diários no seu 
 👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎁 *Sabia que sua mensalidade pode sair 100% DE GRAÇA?*
+Ao ativar seu plano (1ª mensalidade paga), indique 3 empresários parceiros que também ativem um plano: as suas faturas seguintes ficam **100% ISENTAS** enquanto os 3 continuarem ativos no sistema! O AnalisAí se paga sozinho!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💬 *Precisa de ajuda ou tem dúvidas? Pode responder aqui mesmo!*`;
 }
 

@@ -7,6 +7,7 @@ export interface ReferralStatus {
   neededForExemption: number;
   isExempt: boolean;
   referrerPlanName?: string;
+  hasPaidFirstInvoice: boolean;
 }
 
 /**
@@ -19,18 +20,19 @@ export async function getReferralStatus(clientId: string): Promise<ReferralStatu
   // Consulta assinatura e plano do cliente
   const { data: sub } = await supabase
     .from('subscriptions')
-    .select('id, is_referral_exempt, plans(name, monthly_price_cents)')
+    .select('id, is_referral_exempt, asaas_payment_id, status, plans(name, monthly_price_cents)')
     .eq('client_id', clientId)
     .eq('status', 'active')
     .maybeSingle();
 
   const plan = (sub as any)?.plans;
   const isExempt = Boolean(sub?.is_referral_exempt);
+  const hasPaidFirstInvoice = Boolean(sub?.asaas_payment_id);
 
   // Consulta indicados
   const { data: referrals } = await supabase
     .from('referrals')
-    .select('id, status, referred_client_id, subscriptions!referred_client_id(status, plans(monthly_price_cents))')
+    .select('id, status, referred_client_id, subscriptions!referred_client_id(status, asaas_payment_id, plans(monthly_price_cents))')
     .eq('referrer_client_id', clientId);
 
   const total = referrals?.length || 0;
@@ -42,6 +44,7 @@ export async function getReferralStatus(clientId: string): Promise<ReferralStatu
       if (
         ref.status === 'qualified_active' &&
         refSub?.status === 'active' &&
+        refSub?.asaas_payment_id &&
         (refSub.plans?.monthly_price_cents || 0) >= plan.monthly_price_cents
       ) {
         activeQualified++;
@@ -55,6 +58,7 @@ export async function getReferralStatus(clientId: string): Promise<ReferralStatu
     neededForExemption: Math.max(0, 3 - activeQualified),
     isExempt,
     referrerPlanName: plan?.name,
+    hasPaidFirstInvoice,
   };
 }
 
@@ -68,18 +72,28 @@ export async function getReferralShareMessage(clientId: string, phone: string): 
     `Olá! Vim por indicação do cliente ${cleanPhone} para testar o AnalisAí.`
   )}`;
 
-  let txt = `🎁 *Programa de Indicação AnalisAí — Mensalidade Grátis!*\n`;
+  let txt = `🎁 *Programa de Indicação AnalisAí — Mensalidade Zero!*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   txt += `Ajude outros empresários a organizarem suas contas sem estresse!\n\n`;
-  txt += `⭐ *Como funciona a regra de ouro:*\n`;
-  txt += `Se você indicar **3 clientes pagantes** no mesmo plano que o seu (ou superior), a sua assinatura fica **100% GRATUITA** enquanto eles continuarem ativos!\n\n`;
+  txt += `⭐ *Como funciona a regra de ouro:*
+1. Ative seu plano (1ª mensalidade paga).
+2. Compartilhe seu link com parceiros e amigos empresários.
+3. Com **3 indicados pagantes** ativos no mesmo plano que o seu (ou superior), a sua mensalidade fica **100% GRATUITA** a partir do próximo ciclo e enquanto eles continuarem ativos! O AnalisAí se paga sozinho!\n\n`;
+
   txt += `📊 *Seu Progresso Atual:*\n`;
   txt += `• Indicados ativos qualificados: *${status.activeQualified} de 3*\n`;
-  txt += `• Status da sua mensalidade: ${
-    status.isExempt
-      ? '🎉 *ISENTO (100% Gratuito!)*'
-      : `Pagante normal (faltam ${status.neededForExemption} para zerar sua fatura)`
-  }\n\n`;
+  
+  if (!status.hasPaidFirstInvoice) {
+    txt += `• Status do seu plano: ⚠️ *Aguardando 1ª mensalidade paga*\n`;
+    txt += `  _(A isenção é ativada a partir do ciclo seguinte à sua ativação de plano e adesão dos seus 3 indicados)_\n\n`;
+  } else {
+    txt += `• Status da sua mensalidade: ${
+      status.isExempt
+        ? '🎉 *ISENTO (100% Gratuito!)*'
+        : `Pagante normal (faltam ${status.neededForExemption} para zerar sua fatura)`
+    }\n\n`;
+  }
+
   txt += `👉 *Seu link exclusivo para compartilhar com amigos e parceiros:*\n`;
   txt += `${referralLink}\n\n`;
   txt += `_Basta enviar este link no WhatsApp de quem precisa de organização financeira. Quando eles começarem a degustação e assinarem, o sistema computa automaticamente para você!_`;
