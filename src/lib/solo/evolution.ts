@@ -6,7 +6,7 @@
 const EVOLUTION_API_URL =
   process.env.EVOLUTION_API_URL ||
   process.env.WHATSAPP_API_URL ||
-  'https://opening-consumers-advertisement-dan.trycloudflare.com';
+  'https://once-harbour-lights-rarely.trycloudflare.com';
 
 const EVOLUTION_API_KEY =
   process.env.EVOLUTION_API_KEY ||
