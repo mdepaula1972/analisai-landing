@@ -21,7 +21,14 @@ const EVOLUTION_INSTANCE =
   'analisai_solo';
 
 export function formatWhatsAppNumber(phone: string): string {
+  if (phone.includes('@')) {
+    return phone;
+  }
   const digits = phone.replace(/\D/g, '');
+  // Se for um LID do WhatsApp Web (14+ dígitos sem DDI)
+  if (digits.length >= 14 && !digits.startsWith('55')) {
+    return `${digits}@lid`;
+  }
   if (digits.startsWith('55')) {
     return digits;
   }

@@ -291,6 +291,11 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     }
   }
 
+  // Se o cliente já possui número oficial cadastrado, garante o envio para o número oficial
+  if (client?.whatsapp_number) {
+    phone = client.whatsapp_number;
+  }
+
   const message = body.data?.message;
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
   const cleanText = rawText.trim().toLowerCase();
