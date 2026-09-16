@@ -4,6 +4,8 @@ import { executeAndSendSupplierXRay } from './supplier-xray';
 import { escalateToHumanConsultant } from './consultant-escalation';
 import { formatDueDateDetails } from './date-utils';
 import { getEveReminderMessage, getDueReminderMessage } from './trial';
+import { getWaitlistAdminReport } from './waitlist';
+import { getReferralShareMessage } from './referral';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -64,6 +66,8 @@ Comandos disponíveis para você testar todas as opções:
 • *!gerar contas teste* → Cria 4 contas a pagar fictícias para testar o consultor
 • *!simular lembrete vespera* → Dispara o aviso de véspera da degustação (10h)
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
+• *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
+• *!indicar* → Consulta o link de indicação e progresso para mensalidade gratuita
 • *!raio-x* → Dispara a geração e envio imediato do **Raio-X de Fornecedores em PDF**
 • *!pdf* ou *!relatorio* → Emite e envia o **Livro Caixa oficial em PDF**
 • *!escalar* → Simula o **Escalonamento Humano**, disparando o lead no seu WhatsApp
@@ -399,6 +403,24 @@ O arquivo completo com suas contas agendadas, contas vencidas e parecer de caixa
       handled: true,
       message: `📲 *Testando Escalonamento para Consultoria Humana!*
 A ficha estruturada do lead qualificado está sendo despachada agora para o seu WhatsApp (+551331500987).`,
+    };
+  }
+
+  // ── !waitlist / !demanda ───────────────────────────────────────────────────
+  if (action === 'waitlist' || action === 'demanda') {
+    const report = await getWaitlistAdminReport();
+    return {
+      handled: true,
+      message: report,
+    };
+  }
+
+  // ── !indicar / !indicacao ───────────────────────────────────────────────────
+  if (action === 'indicar' || action === 'indicacao' || action === 'indicação') {
+    const shareMsg = await getReferralShareMessage(clientId, client.whatsapp_number);
+    return {
+      handled: true,
+      message: shareMsg,
     };
   }
 

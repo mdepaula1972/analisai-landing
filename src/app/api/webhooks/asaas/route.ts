@@ -196,6 +196,43 @@ export async function POST(req: NextRequest) {
       processed: false,
     });
 
+    // Trata eventos de inadimplência ou cancelamento para reavaliação do programa de indicação
+    const overdueEvents = ['PAYMENT_OVERDUE', 'PAYMENT_DELETED', 'SUBSCRIPTION_INACTIVATED'];
+    if (overdueEvents.includes(event) && payment?.customer) {
+      try {
+        const { data: clientWithRef } = await supabase
+          .from('clients')
+          .select('id, subscriptions(id)')
+          .eq('asaas_customer_id', payment.customer)
+          .maybeSingle();
+
+        if (clientWithRef) {
+          // Atualiza status da assinatura se necessário
+          await supabase
+            .from('subscriptions')
+            .update({ status: event === 'PAYMENT_OVERDUE' ? 'past_due' : 'canceled' })
+            .eq('client_id', clientWithRef.id);
+
+          // Verifica se esse cliente foi indicado por alguém
+          const { data: refRow } = await supabase
+            .from('referrals')
+            .select('referrer_client_id')
+            .eq('referred_client_id', clientWithRef.id)
+            .maybeSingle();
+
+          if (refRow?.referrer_client_id) {
+            // Reavalia se o indicador ainda mantém os 3 pagantes ativos
+            await supabase.rpc('evaluate_referral_exemption', {
+              p_client_id: refRow.referrer_client_id,
+            });
+          }
+        }
+      } catch (overdueErr) {
+        console.error('[Asaas Webhook Overdue Reevaluation Error]:', overdueErr);
+      }
+      return NextResponse.json({ received: true, status: 'overdue_processed' }, { status: 200 });
+    }
+
     // Processa apenas pagamentos confirmados ou recebidos
     const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'];
     if (!validEvents.includes(event) || !payment) {
@@ -509,8 +546,17 @@ Parabéns, ${firstName}! O seu plano *${plan.name}* está 100% ativo.
 🚀 *O que você pode fazer agora:*
 1. Enviar fotos ou PDFs de notas fiscais, cupons e boletos para registro imediato no seu Livro Caixa.
 2. Tirar dúvidas sobre contas a pagar e receber direto no WhatsApp.
-3. Consultar o saldo e o resumo financeiro com o comando *!status*.`,
+3. Consultar o saldo e o resumo financeiro com o comando *!status*.
+4. Indicar amigos com o comando *!indicar* para concorrer a 100% de isenção na sua mensalidade!`,
         });
+      }
+
+      // Qualifica indicação automaticamente se o novo cliente veio de uma indicação
+      try {
+        const { qualifyReferralOnPayment } = await import('@/lib/solo/referral');
+        await qualifyReferralOnPayment(clientId);
+      } catch (refErr) {
+        console.error('[Asaas Webhook] Erro ao qualificar indicação:', refErr);
       }
     }
 

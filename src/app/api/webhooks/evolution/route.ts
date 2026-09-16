@@ -21,6 +21,9 @@ import {
   getTrialConversionMenu,
   BANK_SAFETY_NOTICE,
 } from '@/lib/solo/trial';
+import { recordWaitlistLead } from '@/lib/solo/waitlist';
+import { linkReferralLead, getReferralShareMessage } from '@/lib/solo/referral';
+import { analyzePatrimonialExpense } from '@/lib/solo/patrimonial-advisor';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -158,6 +161,19 @@ Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *r
 ${quotaFootnote}
 O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para manter seu caixa impecável!`,
         });
+
+        // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF)
+        const patrimonial = analyzePatrimonialExpense({
+          supplier_name: entity,
+          category: dreGroup,
+          amount: Math.abs(conv.amount),
+        });
+        if (patrimonial.isPersonalExpense && patrimonial.adviceMessage) {
+          await sendEvolutionText({
+            phone,
+            text: patrimonial.adviceMessage,
+          });
+        }
       }
       return true;
     }
@@ -253,6 +269,72 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
+
+  // ── Interceptação 1: Comando de Indicação (!indicar ou indicar) ───────────
+  if (cleanText === '!indicar' || cleanText === 'indicar' || cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '/indicar') {
+    if (client) {
+      const shareMsg = await getReferralShareMessage(client.id, client.whatsapp_number);
+      await sendEvolutionText({ phone, text: shareMsg });
+      return;
+    } else {
+      await sendEvolutionText({
+        phone,
+        text: `🎁 *Programa de Indicação AnalisAí — Mensalidade 100% Grátis!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Assine um de nossos planos e indique 3 amigos ou parceiros empresariais no mesmo plano ou superior para **zerar sua fatura** enquanto eles continuarem ativos!
+
+👉 Para começar agora mesmo, envie uma foto ou PDF de boleto para testar nossa degustação gratuita!`,
+      });
+      return;
+    }
+  }
+
+  // ── Interceptação 2: Lead vindo de Link de Indicação de Amigo ───────────────
+  const referralMatch = rawText.match(/(?:indica[çc][ãa]o do cliente|indicado por)\s*(\d{10,14})/i);
+  if (referralMatch && referralMatch[1]) {
+    const referrerPhone = referralMatch[1];
+    await linkReferralLead(cleanPhone, referrerPhone);
+    await sendEvolutionText({
+      phone,
+      text: `🎉 *Bem-vindo ao AnalisAí!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que você veio por indicação de um de nossos parceiros!
+Você tem direito à nossa **Degustação Gratuita Imediata**!
+
+📸 Envie uma foto ou PDF de um boleto ou conta a pagar agora mesmo para ver como nossa inteligência artificial organiza seu fluxo de caixa em segundos!`,
+    });
+    return;
+  }
+
+  // ── Interceptação 3: Fila de Espera dos Planos Pro e Super (Sob Demanda) ───
+  const isProOrSuperInterest =
+    (cleanText.includes('pro') || cleanText.includes('super')) &&
+    (cleanText.includes('sob demanda') || cleanText.includes('vagas') || cleanText.includes('fila') || cleanText.includes('espera') || cleanText.includes('interesse') || cleanText.includes('disponibilidade'));
+
+  if (isProOrSuperInterest) {
+    const desiredPlan = cleanText.includes('super') ? 'super' : 'pro';
+    await recordWaitlistLead({
+      whatsappNumber: cleanPhone,
+      desiredPlan,
+      clientName: client?.name || body.data?.pushName,
+    });
+
+    const planTitle = desiredPlan === 'super' ? 'AnalisAí Super (R$ 597/mês)' : 'AnalisAí Pro (R$ 297/mês)';
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Solicitação Registrada com Sucesso na Lista de Espera!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Olá${body.data?.pushName ? `, ${body.data.pushName}` : ''}! Registramos com prioridade seu interesse no plano *${planTitle}*.
+
+🔒 *Por que vagas sob demanda?*
+Para garantir o padrão ouro de qualidade na conciliação semanal e inteligência multi-CNPJs, as licenças corporativas são abertas em lotes seletivos.
+
+📊 Nossa diretoria executiva já recebeu o seu contato e entrará em contato diretamente por aqui para entender sua operação e liberar a sua vaga!
+
+💡 _Enquanto aguarda, você já pode experimentar nossa IA gratuitamente enviando qualquer foto ou PDF de boleto aqui nesta conversa!_`,
+    });
+    return;
+  }
 
   if (!client) {
     // 1.1 Se o usuário enviou exatamente 6 dígitos numéricos, verifica se é o código 2FA para vincular número
@@ -821,6 +903,19 @@ ${quotaFootnote}`,
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${quotaFootnote}`,
       });
+
+      // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF)
+      const patrimonialDoc = analyzePatrimonialExpense({
+        supplier_name: extracted.counterparty_name,
+        category: extracted.category_suggestion,
+        amount: Number(extracted.total_amount),
+      });
+      if (patrimonialDoc.isPersonalExpense && patrimonialDoc.adviceMessage) {
+        await sendEvolutionText({
+          phone,
+          text: patrimonialDoc.adviceMessage,
+        });
+      }
 
       // Se identificou código de barras / linha digitável / Pix, envia em mensagem separada para cópia imediata
       if (extracted.barcode_or_pix && extracted.barcode_or_pix.length >= 20) {

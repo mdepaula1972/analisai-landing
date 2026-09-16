@@ -338,7 +338,7 @@ export default function PricingSection() {
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span><strong>1 CNPJ ou CPF</strong></span>
+                    <span>🛡️ <strong>1 CNPJ + 1 CPF Integrados</strong> (Blindagem contra confusão patrimonial e pró-labore)</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -365,10 +365,10 @@ export default function PricingSection() {
                 </a>
               </div>
 
-              {/* 4. Pro (Novo) */}
+              {/* 4. Pro (Sob Demanda) */}
               <div className="relative flex flex-col rounded-3xl border border-cyan-500/40 bg-gradient-to-b from-cyan-950/20 via-slate-900 to-slate-900 p-6 hover:border-cyan-500/70 transition-all">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-3 py-1 rounded-full mb-4 inline-block w-fit">
-                  Multi-CNPJ & Semanal
+                  Sob Demanda • Vagas Restritas
                 </span>
                 <h3 className="text-xl font-black text-white mb-2">AnalisAí Pro</h3>
                 <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
@@ -410,25 +410,25 @@ export default function PricingSection() {
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                    <span>🎁 <strong>Degustação de até 10 lançamentos</strong></span>
+                    <span>🛡️ <strong>Licença com Acompanhamento Dedicado</strong></span>
                   </div>
                 </div>
 
                 <a
-                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.pro.checkoutUrl : ASAAS_PLANS.annual.pro.checkoutUrl}
+                  href={`https://wa.me/551331500987?text=${encodeURIComponent('Olá! Tenho interesse no Plano Pro (sob demanda) e gostaria de consultar disponibilidade de vagas para a minha empresa.')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/20 bg-cyan-950/30 transition-all hover:-translate-y-0.5"
                 >
-                  Assinar Pro
+                  Consultar Vagas (Sob Demanda)
                   <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               </div>
 
-              {/* 5. Super (Novo) */}
+              {/* 5. Super (Fila de Espera) */}
               <div className="relative flex flex-col rounded-3xl border border-purple-500/40 bg-gradient-to-b from-purple-950/25 via-slate-900 to-slate-900 p-6 hover:border-purple-500/70 transition-all">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300 bg-purple-500/15 border border-purple-500/30 px-3 py-1 rounded-full mb-4 inline-block w-fit">
-                  Escala Total & Máxima
+                  Alta Performance • Fila de Espera
                 </span>
                 <h3 className="text-xl font-black text-white mb-2">AnalisAí Super</h3>
                 <p className="text-xs text-slate-400 mb-5 leading-relaxed min-h-[36px]">
@@ -470,17 +470,17 @@ export default function PricingSection() {
                   </div>
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                    <span>🎁 <strong>Degustação de até 50 lançamentos</strong></span>
+                    <span>🛡️ <strong>Fila de Espera com Diretor de Contas</strong></span>
                   </div>
                 </div>
 
                 <a
-                  href={frequencia === 'mensal' ? ASAAS_PLANS.monthly.super.checkoutUrl : ASAAS_PLANS.annual.super.checkoutUrl}
+                  href={`https://wa.me/551331500987?text=${encodeURIComponent('Olá! Tenho interesse no Plano Super (sob demanda) e gostaria de consultar disponibilidade de vagas para o nosso grupo empresarial.')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-purple-500/40 text-purple-200 hover:bg-purple-500/20 bg-purple-950/30 transition-all hover:-translate-y-0.5"
                 >
-                  Assinar Super
+                  Entrar na Fila de Espera
                   <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               </div>

@@ -47,6 +47,26 @@ Todos os planos do AnalisAí são 100% digitais, automáticos e escaláveis:
 
 ## 3. Linha do Tempo das Versões
 
+### [v2.4.2] — Blindagem de Demanda no DB, Programa de Indicação Automático & Consultoria Patrimonial
+- **Estatísticas de Demanda no DB (Fila de Espera Pro & Super):** 
+  - Criação da tabela `plan_waitlist`, da tabela agregada `plan_waitlist_stats` e da view executiva `v_plan_waitlist_summary` no Supabase via Migration 012.
+  - Trigger em tempo real no PostgreSQL sincronizando empresas aguardando e receita mensal potencial reprimida (MRR).
+  - Alerta instantâneo no WhatsApp do administrador (Marcos) a cada novo interessado registrado.
+  - Comando Admin `!waitlist` e `!demanda` para consulta imediata de estatísticas consolidadas no WhatsApp.
+- **Programa de Indicação 100% Automático e Ativo:**
+  - Vínculo automático de leads que chegam via link de indicação (`linkReferralLead`).
+  - Qualificação automática no Webhook do Asaas no momento da confirmação do primeiro pagamento (`qualifyReferralOnPayment`).
+  - Execução da RPC `evaluate_referral_exemption`: quem indica 3 pagantes ativos no mesmo plano ou superior ganha isenção de 100% da mensalidade (`is_referral_exempt = true`).
+  - Regra de ouro da continuidade: se um dos 3 indicados cancelar ou atrasar, a isenção cai automaticamente.
+  - Comando `!indicar` no WhatsApp para qualquer cliente acompanhar seu saldo de indicados e gerar seu link exclusivo.
+- **Blindagem Patrimonial Pedagógica (1 CNPJ + 1 CPF no Solo Plus):**
+  - Módulo `patrimonial-advisor.ts` com normalização de acentos e detecção de despesas de Pessoa Física (escola, condomínio residencial, farmácia, etc.).
+  - Orientação consultiva didática e acolhedora orientando a transferência prévia da conta PJ para a PF como Pró-Labore ou Lucro antes de pagar o boleto pessoal.
+  - Atualização do card do plano Solo Plus (R$ 157,99) na Landing Page destacando `1 CNPJ + 1 CPF Integrados`.
+- **Posicionamento Sob Demanda dos Planos Corporativos:**
+  - Planos Pro (R$ 297) e Super (R$ 597) posicionados como "Sob Demanda • Vagas Restritas" na Landing Page, com direcionamento para WhatsApp do bot alimentando a lista de espera.
+- **Bateria de Testes Automatizados (15 de 15 Aprovados):** Validação metódica da lista de espera, regra de indicação, consultoria patrimonial e degustação MEI.
+
 ### [v2.4.1] — Degustação Silenciosa por Porte, Anti-Abuso e Lembretes Educativos
 - **Classificação Tributária Automática:** Módulo `tax-classifier.ts` com consulta à BrasilAPI e fallback heurístico para identificar o perfil tributário do lead sem atrito.
 - **Cotas Proporcionais de Degustação:**

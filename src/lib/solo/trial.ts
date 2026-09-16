@@ -82,23 +82,33 @@ export async function recordTrialUsage(
 
   // Se o lead ainda tem o limite padrão inicial (<= 1) e nenhum limite manual forçado:
   if (!grantedLimit && current.docsLimit <= 1) {
-    const rawTaxId = docData.tax_id || docData.payer_tax_id || docData.counterparty_tax_id || null;
-    const companyHint = docData.supplier_name || docData.counterparty_name || docData.payer_name || '';
+    if (docData.tax_profile === 'mei') {
+      detectedLimit = 3;
+      taxType = 'mei';
+      suggestedPlan = 'solo';
+    } else if (docData.tax_profile === 'simples' || docData.tax_profile === 'empresa') {
+      detectedLimit = 10;
+      taxType = docData.tax_profile;
+      suggestedPlan = 'pro';
+    } else {
+      const rawTaxId = docData.cnpj || docData.tax_id || docData.payer_tax_id || docData.counterparty_tax_id || null;
+      const companyHint = docData.supplier_name || docData.counterparty_name || docData.payer_name || '';
 
-    try {
-      const classification = await classifyTaxId(rawTaxId, companyHint);
-      detectedLimit = Math.max(current.docsLimit, classification.trialLimit);
-      taxType = classification.type;
+      try {
+        const classification = await classifyTaxId(rawTaxId, companyHint);
+        detectedLimit = Math.max(current.docsLimit, classification.trialLimit);
+        taxType = classification.type;
 
-      if (classification.type === 'simples' || classification.type === 'empresa') {
-        suggestedPlan = 'pro';
-      } else if (classification.type === 'mei') {
-        suggestedPlan = 'solo';
-      } else {
-        suggestedPlan = 'start';
+        if (classification.type === 'simples' || classification.type === 'empresa') {
+          suggestedPlan = 'pro';
+        } else if (classification.type === 'mei') {
+          suggestedPlan = 'solo';
+        } else {
+          suggestedPlan = 'start';
+        }
+      } catch (classifyErr) {
+        console.warn('[Trial Classification Warning]:', classifyErr);
       }
-    } catch (classifyErr) {
-      console.warn('[Trial Classification Warning]:', classifyErr);
     }
   }
 
