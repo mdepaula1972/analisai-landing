@@ -77,13 +77,43 @@ export async function recordClientFeedback(data: FeedbackData): Promise<{
     console.error('[Feedback] Erro ao registrar feedback no Supabase:', insertError);
   }
 
+  // 3.1 Registra automaticamente na Fila de Tarefas da IA (ai_agent_tasks) com ID sequencial curto
+  let aiTaskId: number | null = null;
+  try {
+    const isBugOrIssue = feedbackType === 'critica' || lower.includes('erro') || lower.includes('bug') || lower.includes('falha');
+    const { data: taskInserted } = await supabase
+      .from('ai_agent_tasks')
+      .insert({
+        task_type: isBugOrIssue ? 'bug' : 'idea',
+        title: `${isBugOrIssue ? '[Bug/Crítica]' : '[Sugestão]'} de ${clientName}`,
+        description: data.message.trim(),
+        source: 'whatsapp_user',
+        creator_phone: cleanPhone,
+        creator_name: clientName,
+        feedback_id: inserted?.id || null,
+        status: 'pending_review',
+      })
+      .select('id')
+      .single();
+
+    if (taskInserted?.id) {
+      aiTaskId = taskInserted.id;
+    }
+  } catch (taskErr) {
+    console.error('[Feedback] Erro ao criar tarefa na fila da IA:', taskErr);
+  }
+
   // 4. Envia notificação imediata no WhatsApp pessoal do Marcos (Administrador)
   try {
     const dataHoraStr = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
-    const emojiType = feedbackType === 'critica' ? '⚠️ CRÍTICA' : feedbackType === 'elogio' ? '⭐ ELOGIO' : '💡 SUGESTÃO';
+    const emojiType = feedbackType === 'critica' ? '⚠️ CRÍTICA / POSSÍVEL BUG' : feedbackType === 'elogio' ? '⭐ ELOGIO' : '💡 SUGESTÃO';
 
-    const adminAlertText = `📬 *Novo Feedback de Cliente no AnalisAí!*
+    const fixCallToAction = aiTaskId
+      ? `\n🤖 *Ação Rápida da IA:*\nSe for um bug para a IA corrigir autonomamente, responda apenas:\n👉 *!fix ${aiTaskId}*\n`
+      : '';
+
+    const adminAlertText = `📬 *Novo Relato de Cliente no AnalisAí!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏷️ *Tipo:* ${emojiType}
 👤 *Cliente:* ${clientName}
@@ -92,9 +122,8 @@ export async function recordClientFeedback(data: FeedbackData): Promise<{
 
 📝 *Mensagem Registrada:*
 "${data.message.trim()}"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-_Salvo no banco de dados (ID: ${inserted?.id || 'salvo'}) para sua avaliação direta._`;
+${fixCallToAction}━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Salvo na Fila da IA (#${aiTaskId || 'novo'}) para sua avaliação direta._`;
 
     await sendEvolutionText({
       phone: ADMIN_PERSONAL_WHATSAPP,

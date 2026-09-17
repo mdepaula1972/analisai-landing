@@ -83,6 +83,11 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!raio-x* → Emite e entrega o Raio-X de Fornecedores em PDF
 • *!waitlist* → Vê a demanda acumulada dos planos Pro e Super
 • *!bypass on* / *!bypass off* → Liga ou desliga modo irrestrito
+
+🤖 *6. PILOTO AUTOMÁTICO DA IA & CRIAÇÃO REMOTA DE IDEIAS*
+• *!fix <id>* → Autoriza a IA a corrigir autonomamente um bug relatado
+• *!ideia <texto>* → Envia uma ideia pelo WhatsApp para a IA começar a construir
+• *!fila* → Exibe todas as tarefas e status no backlog da IA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 _Dica: Digite *!marcos* a qualquer momento para rever este guia!_`,
     };
@@ -525,6 +530,128 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
       txt += `• *${fb.feedback_type.toUpperCase()}* (${fb.client_name || fb.whatsapp_number}):\n"${fb.message}"\n\n`;
     }
     return { handled: true, message: txt };
+  }
+
+  // ── !fix <id> (Aprovação de Correção pela IA Autônoma) ───────────────────────
+  if (action === 'fix') {
+    const taskIdNum = parseInt(arg1, 10);
+    if (!arg1 || isNaN(taskIdNum)) {
+      return {
+        handled: true,
+        message: '⚠️ Informe o número da tarefa a ser corrigida pela IA.\nExemplo: `!fix 1` ou `!fix 15`\nConsulte os IDs ativos digitando `!fila`.',
+      };
+    }
+
+    const { data: task } = await supabase
+      .from('ai_agent_tasks')
+      .select('id, title, description, task_type, status, creator_name')
+      .eq('id', taskIdNum)
+      .maybeSingle();
+
+    if (!task) {
+      return {
+        handled: true,
+        message: `❌ Tarefa #${taskIdNum} não encontrada na fila da IA. Digite \`!fila\` para listar as tarefas disponíveis.`,
+      };
+    }
+
+    await supabase
+      .from('ai_agent_tasks')
+      .update({
+        status: 'approved_by_marcos',
+        approved_at: new Date().toISOString(),
+      })
+      .eq('id', taskIdNum);
+
+    return {
+      handled: true,
+      message: `🤖 *Tarefa #${taskIdNum} Aprovada para a IA!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏷️ *Título:* ${task.title}
+👤 *Origem:* ${task.creator_name || 'Usuário'}
+📝 *Descrição:* "${task.description}"
+⚡ *Status:* Aprovado por Marcos (Fila de Execução)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A IA no seu computador foi acionada. Ela irá:
+1️⃣ Diagnosticar o código fonte
+2️⃣ Aplicar a correção e rodar os testes
+3️⃣ Realizar o deploy na Vercel
+Você receberá uma mensagem aqui assim que o código estiver no ar!`,
+    };
+  }
+
+  // ── !ideia / !tarefa / !feature (Criação Remota de Projetos via WhatsApp) ───
+  if (action === 'ideia' || action === 'tarefa' || action === 'feature') {
+    const ideaText = commandText.replace(/^[!/](ideia|tarefa|feature)\s*/i, '').trim();
+    if (!ideaText) {
+      return {
+        handled: true,
+        message: '💡 Digite sua ideia ou nova funcionalidade após o comando.\nExemplo: `!ideia Criar botão de exportar relatório em Excel`',
+      };
+    }
+
+    const shortTitle = ideaText.length > 50 ? ideaText.slice(0, 50) + '...' : ideaText;
+
+    const { data: newTask, error: insertError } = await supabase
+      .from('ai_agent_tasks')
+      .insert({
+        task_type: 'idea',
+        title: `💡 [Nova Ideia] ${shortTitle}`,
+        description: ideaText,
+        source: 'whatsapp_admin',
+        creator_phone: client.whatsapp_number,
+        creator_name: client.name || 'Marcos Fundador',
+        status: 'approved_by_marcos',
+        approved_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('[Admin Idea] Erro ao salvar ideia:', insertError);
+      return { handled: true, message: '❌ Ocorreu um erro ao registrar sua ideia no banco de dados.' };
+    }
+
+    return {
+      handled: true,
+      message: `💡 *Nova Ideia Registrada com Sucesso! (#${newTask?.id})*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 *Ideia:* "${ideaText}"
+⚡ *Status:* Aprovada e Agendada na Fila da IA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Mesmo longe do computador, sua ideia já está no backlog do projeto! A IA no Antigravity analisará a viabilidade e preparará a estrutura de implementação.`,
+    };
+  }
+
+  // ── !fila / !tarefas (Visualizar Fila da IA) ────────────────────────────────
+  if (action === 'fila' || action === 'tarefas') {
+    const { data: tasks } = await supabase
+      .from('ai_agent_tasks')
+      .select('id, title, task_type, status, created_at')
+      .order('id', { ascending: false })
+      .limit(6);
+
+    if (!tasks || tasks.length === 0) {
+      return { handled: true, message: '📭 Fila da IA vazia! Nenhuma tarefa registrada no momento.' };
+    }
+
+    const statusEmoji: Record<string, string> = {
+      pending_review: '⏳ Aguardando Aprovação',
+      approved_by_marcos: '🚀 Aprovado (Fila de Execução)',
+      in_progress: '⚙️ Em Execução pela IA',
+      completed: '✅ Concluído & No Ar',
+      failed: '❌ Falha / Requer Ajuste',
+    };
+
+    let msg = `🤖 *Fila de Tarefas da IA (${tasks.length}):*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    for (const t of tasks) {
+      const st = statusEmoji[t.status] || t.status;
+      msg += `• *#${t.id}* [${t.task_type.toUpperCase()}]: ${t.title}\n  ↳ Status: ${st}\n`;
+      if (t.status === 'pending_review') {
+        msg += `  👉 Para aprovar: \`!fix ${t.id}\`\n`;
+      }
+    }
+    return { handled: true, message: msg };
   }
 
   // ── !bypass on / !bypass off ────────────────────────────────────────────────
