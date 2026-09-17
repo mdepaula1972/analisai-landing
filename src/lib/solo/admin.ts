@@ -88,6 +88,10 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!fix <id>* → Autoriza a IA a corrigir autonomamente um bug relatado
 • *!ideia <texto>* → Envia uma ideia pelo WhatsApp para a IA começar a construir
 • *!fila* → Exibe todas as tarefas e status no backlog da IA
+
+🛡️ *7. PROTEÇÃO ANTI-LOOPING DE ROBÔS*
+• *!bloqueios* → Lista números suspensos ou recursos de desbloqueio pendentes
+• *!desbloquear <tel>* → Desbloqueia o número e reinicia a escada para o Nível 1
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 _Dica: Digite *!marcos* a qualquer momento para rever este guia!_`,
     };
@@ -652,6 +656,27 @@ Mesmo longe do computador, sua ideia já está no backlog do projeto! A IA no An
       }
     }
     return { handled: true, message: msg };
+  }
+
+  // ── !desbloquear <tel> (Desbloqueio Soberano de Anti-Looping pelo Admin) ─────
+  if (action === 'desbloquear' || action === 'unblock') {
+    const targetPhone = arg1;
+    if (!targetPhone) {
+      return {
+        handled: true,
+        message: '⚠️ Informe o telefone para desbloquear.\nExemplo: `!desbloquear 11999998888`\nConsulte números suspensos com `!bloqueios`.',
+      };
+    }
+    const { unblockNumberByAdmin } = await import('@/lib/solo/anti-loop');
+    const res = await unblockNumberByAdmin(targetPhone);
+    return { handled: true, message: res.message };
+  }
+
+  // ── !bloqueios (Relatório de Números Suspensos) ──────────────────────────────
+  if (action === 'bloqueios' || action === 'bloqueio') {
+    const { listActiveBotBlocks } = await import('@/lib/solo/anti-loop');
+    const report = await listActiveBotBlocks();
+    return { handled: true, message: report };
   }
 
   // ── !bypass on / !bypass off ────────────────────────────────────────────────

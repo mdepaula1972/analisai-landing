@@ -301,6 +301,15 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
 
+  // ── Proteção Anti-Looping de Robôs (Escada de Bloqueio Progressivo) ────────
+  if (!client?.is_admin && !isAdminPhone) {
+    const { checkAntiLoopStatus } = await import('@/lib/solo/anti-loop');
+    const loopStatus = await checkAntiLoopStatus(cleanPhone, rawText);
+    if (!loopStatus.allowed) {
+      return; // Silêncio absoluto para quebrar loop ou recurso já processado
+    }
+  }
+
   // ── Interceptação 0: Feedbacks, Críticas e Sugestões dos Clientes ──────────
   const { isFeedbackMessage, recordClientFeedback } = await import('@/lib/solo/feedback');
   const feedbackCheck = isFeedbackMessage(rawText);
@@ -666,7 +675,16 @@ ${BANK_SAFETY_NOTICE}`,
       }
     }
 
-    // Se o usuário enviou texto comum, apresenta a mensagem de boas-vindas da Degustação
+    // Se o usuário não cadastrado enviou texto comum, registra tentativa infrutífera no anti-looping
+    if (!isAdminPhone) {
+      const { recordFruitlessAttempt } = await import('@/lib/solo/anti-loop');
+      const attemptRes = await recordFruitlessAttempt(cleanPhone, rawText);
+      if (attemptRes.actionTaken !== 'increment') {
+        return; // Ação de encerramento ou bloqueio disparada, interrompe execução
+      }
+    }
+
+    // Se ainda estiver no limite de tolerância, apresenta a mensagem de boas-vindas da Degustação
     await sendEvolutionText({
       phone,
       text: getTrialWelcomeMessage(),
@@ -1518,6 +1536,15 @@ Na véspera do vencimento (às 10h em ponto) eu te lembro aqui para manter seus 
       }
     } catch (convErr) {
       console.warn('[Conversational Text Parsing Warning]:', convErr);
+    }
+  }
+
+  // Registra tentativa infrutífera no anti-looping para clientes cadastrados se não for admin
+  if (!client?.is_admin && !isAdminPhone) {
+    const { recordFruitlessAttempt } = await import('@/lib/solo/anti-loop');
+    const attemptRes = await recordFruitlessAttempt(cleanPhone, rawText);
+    if (attemptRes.actionTaken !== 'increment') {
+      return; // Ação de encerramento ou bloqueio disparada, interrompe execução
     }
   }
 
