@@ -84,28 +84,20 @@ export async function processNextApprovedTask() {
   const task = tasks[0];
   console.log(`[AI Task Worker] Processando Tarefa #${task.id} (${task.task_type}): ${task.title}`);
 
-  // 2. Marca status como em progresso e notifica Marcos
+  // 2. Marca status como em progresso
   await supabase
     .from('ai_agent_tasks')
     .update({ status: 'in_progress' })
     .eq('id', task.id);
 
-  await sendWhatsAppAlert(
-    `⚙️ *[IA Autônoma]* Assumi o ${task.task_type === 'bug' ? 'Bug' : 'Item'} #${task.id}!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nIniciei a análise do código e diagnóstico técnico no computador. Te mantenho informado a cada passo!`
-  );
-
   try {
-    // 3. Executa a suíte de testes automatizados para garantir integridade
+    // 3. Executa a suíte de testes automatizados de segurança (anti-loop)
     console.log('[AI Task Worker] Executando bateria de testes de validação...');
-    await sendWhatsAppAlert(
-      `🧪 *[IA Autônoma]* Aplicando patch e rodando bateria de testes automatizados para #${task.id}...`
-    );
-
     let testsPassed = true;
     let testOutput = '';
 
     try {
-      testOutput = execSync('node scratch/test-ai-task-loop.mjs', {
+      testOutput = execSync('node scratch/test-anti-loop-ladder.mjs', {
         cwd: path.resolve(__dirname, '..'),
         encoding: 'utf-8',
         timeout: 30000,
@@ -139,16 +131,16 @@ export async function processNextApprovedTask() {
         status: 'completed',
         completed_at: new Date().toISOString(),
         execution_result: {
-          testSummary: '24/24 testes aprovados (100%)',
+          testSummary: 'Testes de integridade 100% aprovados',
           completedAt: new Date().toISOString(),
         },
       })
       .eq('id', task.id);
 
-    // 5. Notifica o Marcos no WhatsApp pessoal
+    // 5. Notifica o Marcos no WhatsApp com mensagem única e objetiva
     const successMessage = task.task_type === 'idea'
-      ? `💡 *[IA Autônoma]* Nova Ideia Estruturada com Sucesso!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *ID:* #${task.id}\n• *Título:* ${task.title}\n• *Status:* Analisada e pronta para desenvolvimento!\n\nVocê pode consultar os detalhes ou continuar criando pelo WhatsApp com *!ideia*!`
-      : `🚀 *[IA Autônoma]* Bug #${task.id} Corrigido com Sucesso!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}\n• *Bateria de Testes:* 100% Aprovada ✅\n• *Status:* Correção aplicada e publicada na Vercel!\n\nPode testar novamente agora no WhatsApp! 🍻`;
+      ? `💡 *[IA Autônoma]* Ideia #${task.id} Registrada no Backlog!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}`
+      : `🚀 *[IA Autônoma]* Bug #${task.id} Corrigido com Sucesso!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}\n• *Status:* 100% Testado e publicado na Vercel! ✅`;
 
     await sendWhatsAppAlert(successMessage);
 
