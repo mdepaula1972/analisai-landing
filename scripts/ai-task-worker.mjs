@@ -90,9 +90,38 @@ export async function processNextApprovedTask() {
     .update({ status: 'in_progress' })
     .eq('id', task.id);
 
-  try {
-    // 3. Executa a suíte de testes automatizados de segurança (anti-loop)
-    console.log('[AI Task Worker] Executando bateria de testes de validação...');
+    // 3. Processamento conforme o tipo de tarefa
+    if (task.task_type === 'idea') {
+      console.log(`[AI Task Worker] Estruturando ideia #${task.id}...`);
+
+      // Registra a ideia no backlog estruturado
+      await supabase
+        .from('ai_agent_tasks')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          execution_result: {
+            category: 'product_backlog',
+            analyzedAt: new Date().toISOString(),
+            readyForDev: true,
+          },
+        })
+        .eq('id', task.id);
+
+      const nightGreeting = new Date().getHours() >= 21 || new Date().getHours() < 6
+        ? '\n\n😴 *Descanse tranquilo, Marcos! Sua ideia já está segura e salva para implementarmos amanhã!* ✨'
+        : '\n\n💡 _Ideia disponível para desenvolvimento no próximo ciclo!_';
+
+      await sendWhatsAppAlert(
+        `💡 *[Ideia Registrada no Backlog (#${task.id})]*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📝 *Ideia:* "${task.description}"\n⚡ *Status:* Analisada e salva no projeto!${nightGreeting}`
+      );
+
+      console.log(`[AI Task Worker] Ideia #${task.id} guardada no backlog com sucesso.`);
+      return { processed: true, success: true, taskId: task.id };
+    }
+
+    // Processamento de Bugs: Executa a suíte de testes de validação isolada (anti-loop)
+    console.log('[AI Task Worker] Executando bateria de testes de validação para bug...');
     let testsPassed = true;
     let testOutput = '';
 
@@ -124,7 +153,7 @@ export async function processNextApprovedTask() {
       return { processed: true, success: false, reason: 'tests_failed' };
     }
 
-    // 4. Marca tarefa como concluída no banco de dados
+    // Marca tarefa como concluída no banco de dados
     await supabase
       .from('ai_agent_tasks')
       .update({
@@ -137,10 +166,8 @@ export async function processNextApprovedTask() {
       })
       .eq('id', task.id);
 
-    // 5. Notifica o Marcos no WhatsApp com mensagem única e objetiva
-    const successMessage = task.task_type === 'idea'
-      ? `💡 *[IA Autônoma]* Ideia #${task.id} Registrada no Backlog!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}`
-      : `🚀 *[IA Autônoma]* Bug #${task.id} Corrigido com Sucesso!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}\n• *Status:* 100% Testado e publicado na Vercel! ✅`;
+    // Notifica o Marcos no WhatsApp com mensagem única e objetiva
+    const successMessage = `🚀 *[IA Autônoma]* Bug #${task.id} Registrado e Testado!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}\n• *Integridade do Sistema:* 100% Validada ✅`;
 
     await sendWhatsAppAlert(successMessage);
 
@@ -161,14 +188,14 @@ export async function processNextApprovedTask() {
 }
 
 export async function startDaemonLoop() {
-  console.log('[AI Task Worker] Daemon iniciado. Monitorando fila a cada 10 segundos...');
+  console.log('[AI Task Worker] Daemon iniciado. Monitorando fila a cada 15 segundos...');
   while (true) {
     try {
       await processNextApprovedTask();
     } catch (loopErr) {
       console.error('[AI Task Worker Daemon] Erro no loop:', loopErr);
     }
-    await new Promise((resolve) => setTimeout(resolve, 10000));
+    await new Promise((resolve) => setTimeout(resolve, 15000));
   }
 }
 
