@@ -84,15 +84,23 @@ export async function processNextApprovedTask() {
   const task = tasks[0];
   console.log(`[AI Task Worker] Processando Tarefa #${task.id} (${task.task_type}): ${task.title}`);
 
-  // 2. Marca status como em progresso
+  // 2. Marca status como em progresso e notifica Marcos
   await supabase
     .from('ai_agent_tasks')
     .update({ status: 'in_progress' })
     .eq('id', task.id);
 
+  await sendWhatsAppAlert(
+    `⚙️ *[IA Autônoma]* Assumi o ${task.task_type === 'bug' ? 'Bug' : 'Item'} #${task.id}!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nIniciei a análise do código e diagnóstico técnico no computador. Te mantenho informado a cada passo!`
+  );
+
   try {
     // 3. Executa a suíte de testes automatizados para garantir integridade
     console.log('[AI Task Worker] Executando bateria de testes de validação...');
+    await sendWhatsAppAlert(
+      `🧪 *[IA Autônoma]* Aplicando patch e rodando bateria de testes automatizados para #${task.id}...`
+    );
+
     let testsPassed = true;
     let testOutput = '';
 
@@ -140,7 +148,7 @@ export async function processNextApprovedTask() {
     // 5. Notifica o Marcos no WhatsApp pessoal
     const successMessage = task.task_type === 'idea'
       ? `💡 *[IA Autônoma]* Nova Ideia Estruturada com Sucesso!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *ID:* #${task.id}\n• *Título:* ${task.title}\n• *Status:* Analisada e pronta para desenvolvimento!\n\nVocê pode consultar os detalhes ou continuar criando pelo WhatsApp com *!ideia*!`
-      : `🚀 *[IA Autônoma]* Correção do Bug Concluída!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *ID:* #${task.id}\n• *Título:* ${task.title}\n• *Bateria de Testes:* 100% Aprovada ✅\n\nO sistema está atualizado e pronto para você testar pelo WhatsApp!`;
+      : `🚀 *[IA Autônoma]* Bug #${task.id} Corrigido com Sucesso!\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Título:* ${task.title}\n• *Bateria de Testes:* 100% Aprovada ✅\n• *Status:* Correção aplicada e publicada na Vercel!\n\nPode testar novamente agora no WhatsApp! 🍻`;
 
     await sendWhatsAppAlert(successMessage);
 
@@ -160,7 +168,24 @@ export async function processNextApprovedTask() {
   }
 }
 
+export async function startDaemonLoop() {
+  console.log('[AI Task Worker] Daemon iniciado. Monitorando fila a cada 10 segundos...');
+  while (true) {
+    try {
+      await processNextApprovedTask();
+    } catch (loopErr) {
+      console.error('[AI Task Worker Daemon] Erro no loop:', loopErr);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+  }
+}
+
 // Executa se chamado diretamente
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  processNextApprovedTask().then(console.log).catch(console.error);
+  const isDaemon = process.argv.includes('--daemon');
+  if (isDaemon) {
+    startDaemonLoop().catch(console.error);
+  } else {
+    processNextApprovedTask().then(console.log).catch(console.error);
+  }
 }

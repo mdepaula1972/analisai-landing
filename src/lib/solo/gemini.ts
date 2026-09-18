@@ -307,8 +307,8 @@ Data de referência: 2026-09-13. ${contextText}`;
   const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
-  // Lista de modelos oficiais ativos na conta Google AI Studio
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+  // Lista de modelos oficiais com suporte comprovado a áudio no Google AI Studio
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
   let transcribedText = '';
   let lastError: any = null;
 
