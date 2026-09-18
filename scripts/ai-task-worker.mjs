@@ -90,6 +90,7 @@ export async function processNextApprovedTask() {
     .update({ status: 'in_progress' })
     .eq('id', task.id);
 
+  try {
     // 3. Processamento conforme o tipo de tarefa
     if (task.task_type === 'idea') {
       console.log(`[AI Task Worker] Estruturando ideia #${task.id}...`);
