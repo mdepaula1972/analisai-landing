@@ -85,10 +85,11 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!bypass on* / *!bypass off* → Liga ou desliga modo irrestrito
 
 🤖 *6. PILOTO AUTOMÁTICO DA IA & QA REMOTO*
+• *!projeto <nome> <ideia>* → Cria novo repositório no GitHub, código base e sobe na Vercel
+• *!ideia <texto>* → Envia uma ideia pelo WhatsApp para o backlog da IA
 • *!bug <descrição>* → Relata uma falha presenciada no teste para a IA corrigir na hora
 • *!erro <descrição>* → Sinônimo de !bug
 • *!fix <id>* → Autoriza a IA a corrigir autonomamente um bug relatado
-• *!ideia <texto>* → Envia uma ideia pelo WhatsApp para a IA começar a construir
 • *!fila* → Exibe todas as tarefas e status no backlog da IA
 
 🛡️ *7. PROTEÇÃO ANTI-LOOPING DE ROBÔS*
@@ -109,6 +110,10 @@ Comandos disponíveis para você testar todas as opções:
 
 • *!status* → Exibe seu plano atual, limites consumidos e status
 • *!reset* → Zera todos os contadores do seu ciclo para testar do início
+• *!projeto <nome> <ideia>* → Cria novo SaaS/App do zero (GitHub + Vercel + DB)
+• *!ideia <texto>* → Envia nova ideia pelo WhatsApp para o backlog da IA
+• *!bug <descrição>* → Relata falha no teste para a IA resolver (direto do bar/rua)
+• *!fila* → Lista tarefas e status em execução pela IA
 • *!simular start* → Muda seu plano para **Start** (15 lançamentos, bloqueio de voz e upsell)
 • *!simular solo* → Muda seu plano para **Solo** (30 lançamentos, 2 análises de caixa e áudio)
 • *!simular plus* → Muda seu plano para **Solo Plus** (60 lançamentos, 4 análises de caixa)
@@ -121,9 +126,6 @@ Comandos disponíveis para você testar todas as opções:
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
 • *!indicar* → Consulta o link de indicação e progresso para mensalidade gratuita
-• *!bug <descrição>* → Relata falha no teste para a IA resolver (direto do bar/rua)
-• *!ideia <texto>* → Envia nova ideia pelo WhatsApp para o backlog da IA
-• *!fila* → Lista tarefas e status em execução pela IA
 • *!qa add <cpf/cnpj/tel> [desc]* → Libera CPF/CNPJ/Tel para atuar livremente no app como QA
 • *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
 • *!qa list* → Lista todos os identificadores em modo QA
@@ -678,6 +680,58 @@ A IA no seu computador já recebeu essa notificação, vai analisar o código fo
 ⚡ *Status:* Aprovada e Agendada na Fila da IA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Mesmo longe do computador, sua ideia já está no backlog do projeto! A IA no Antigravity analisará a viabilidade e preparará a estrutura de implementação.`,
+    };
+  }
+
+  // ── !projeto <nome> <ideia> (Criação Autônoma de Novo Projeto: GitHub + Vercel + DB) ──
+  if (action === 'projeto' || action === 'novoprojeto' || action === 'novo-projeto') {
+    const cleanInput = commandText.replace(/^[!/](projeto|novoprojeto|novo-projeto)\s*/i, '').trim();
+    if (!cleanInput) {
+      return {
+        handled: true,
+        message: `🏗️ *Como criar um projeto novo pelo WhatsApp:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Digite \`!projeto <NomeDoProjeto> <descrição da ideia>\`
+
+📝 *Exemplo:*
+\`!projeto BarbeariaApp Plataforma de agendamentos e pagamentos para barbearias\``,
+      };
+    }
+
+    const firstSpace = cleanInput.indexOf(' ');
+    const rawName = firstSpace > -1 ? cleanInput.slice(0, firstSpace) : cleanInput;
+    const projectIdea = firstSpace > -1 ? cleanInput.slice(firstSpace + 1).trim() : 'Novo projeto concebido via WhatsApp';
+
+    const { data: newTask, error: insertError } = await supabase
+      .from('ai_agent_tasks')
+      .insert({
+        task_type: 'create_project',
+        title: `🚀 [Novo Projeto] ${rawName}`,
+        description: projectIdea,
+        source: 'whatsapp_admin',
+        creator_phone: client.whatsapp_number,
+        creator_name: client.name || 'Marcos Fundador',
+        status: 'approved_by_marcos',
+        approved_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('[Admin Project] Erro ao registrar projeto:', insertError);
+      return { handled: true, message: '❌ Ocorreu um erro ao agendar a criação do projeto.' };
+    }
+
+    return {
+      handled: true,
+      message: `🏗️ *Criação de Projeto Iniciada! (#${newTask?.id})*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 *Nome:* ${rawName}
+📝 *Ideia:* "${projectIdea}"
+⚡ *Status:* Provisionando GitHub, Vercel e Supabase...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🍺 *Pode dar mais um gole na gelada!*
+Em menos de 1 minuto o robô te envia o link oficial da Vercel no ar aqui nesta conversa!`,
     };
   }
 

@@ -121,6 +121,26 @@ export async function processNextApprovedTask() {
       return { processed: true, success: true, taskId: task.id };
     }
 
+    // Criação Completa de Novo Projeto (GitHub + Vercel + DB)
+    if (task.task_type === 'create_project') {
+      console.log(`[AI Task Worker] Criando novo projeto #${task.id}: ${task.title}`);
+      const rawName = task.title.replace(/^🚀\s*\[Novo Projeto\]\s*/i, '').trim();
+      const { createFullProject } = await import('./auto-project-creator.mjs');
+      const projectResult = await createFullProject(rawName, task.description);
+
+      await supabase
+        .from('ai_agent_tasks')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          execution_result: projectResult,
+        })
+        .eq('id', task.id);
+
+      console.log(`[AI Task Worker] Projeto #${task.id} criado com sucesso!`);
+      return { processed: true, success: true, taskId: task.id };
+    }
+
     // Processamento de Bugs: Executa a suíte de testes de validação isolada (anti-loop)
     console.log('[AI Task Worker] Executando bateria de testes de validação para bug...');
     let testsPassed = true;
