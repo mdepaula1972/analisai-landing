@@ -84,7 +84,9 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!waitlist* → Vê a demanda acumulada dos planos Pro e Super
 • *!bypass on* / *!bypass off* → Liga ou desliga modo irrestrito
 
-🤖 *6. PILOTO AUTOMÁTICO DA IA & CRIAÇÃO REMOTA DE IDEIAS*
+🤖 *6. PILOTO AUTOMÁTICO DA IA & QA REMOTO*
+• *!bug <descrição>* → Relata uma falha presenciada no teste para a IA corrigir na hora
+• *!erro <descrição>* → Sinônimo de !bug
 • *!fix <id>* → Autoriza a IA a corrigir autonomamente um bug relatado
 • *!ideia <texto>* → Envia uma ideia pelo WhatsApp para a IA começar a construir
 • *!fila* → Exibe todas as tarefas e status no backlog da IA
@@ -119,6 +121,9 @@ Comandos disponíveis para você testar todas as opções:
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
 • *!indicar* → Consulta o link de indicação e progresso para mensalidade gratuita
+• *!bug <descrição>* → Relata falha no teste para a IA resolver (direto do bar/rua)
+• *!ideia <texto>* → Envia nova ideia pelo WhatsApp para o backlog da IA
+• *!fila* → Lista tarefas e status em execução pela IA
 • *!qa add <cpf/cnpj/tel> [desc]* → Libera CPF/CNPJ/Tel para atuar livremente no app como QA
 • *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
 • *!qa list* → Lista todos os identificadores em modo QA
@@ -581,6 +586,55 @@ A IA no seu computador foi acionada. Ela irá:
 2️⃣ Aplicar a correção e rodar os testes
 3️⃣ Realizar o deploy na Vercel
 Você receberá uma mensagem aqui assim que o código estiver no ar!`,
+    };
+  }
+
+  // ── !bug / !erro / !problema / !defeito (Reporte Direto de Falhas via WhatsApp) ─
+  if (action === 'bug' || action === 'erro' || action === 'problema' || action === 'defeito') {
+    const bugText = commandText.replace(/^[!/](bug|erro|problema|defeito)\s*/i, '').trim();
+    if (!bugText) {
+      return {
+        handled: true,
+        message: `⚠️ *Como relatar um problema pelo WhatsApp:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Basta digitar \`!bug\` ou \`!erro\` seguido do que você presenciou no teste.
+
+📝 *Exemplo:*
+\`!bug Enviei um áudio de conta da CPFL, ele só transcreveu e não fez o lançamento nem respondeu\``,
+      };
+    }
+
+    const shortTitle = bugText.length > 50 ? bugText.slice(0, 50) + '...' : bugText;
+
+    const { data: newTask, error: insertError } = await supabase
+      .from('ai_agent_tasks')
+      .insert({
+        task_type: 'bug',
+        title: `🚨 [Bug QA] ${shortTitle}`,
+        description: bugText,
+        source: 'whatsapp_admin_qa',
+        creator_phone: client.whatsapp_number,
+        creator_name: client.name || 'Marcos Fundador',
+        status: 'approved_by_marcos',
+        approved_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('[Admin Bug] Erro ao salvar bug na fila da IA:', insertError);
+      return { handled: true, message: '❌ Ocorreu um erro ao registrar o bug no banco de dados.' };
+    }
+
+    return {
+      handled: true,
+      message: `🚨 *Bug Reportado com Sucesso! (#${newTask?.id})*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 *Relato:* "${bugText}"
+⚡ *Status:* Enviado com prioridade máxima para a IA!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🍻 *Pode continuar aproveitando sua cerveja gelada!*
+A IA no seu computador já recebeu essa notificação, vai analisar o código fonte, aplicar a correção e rodar os testes. Assim que a correção estiver no ar na Vercel, te aviso aqui no WhatsApp!`,
     };
   }
 

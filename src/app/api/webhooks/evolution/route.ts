@@ -83,7 +83,8 @@ async function processConversationalEntry(
 
     if (conv.amount && conv.due_date) {
       const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
-      const isEntryQa = client.is_admin || await isQaWhitelisted(cleanPhone) || await isQaWhitelisted(client.tax_id);
+      const cleanNumber = phone.replace(/\D/g, '');
+      const isEntryQa = client.is_admin || await isQaWhitelisted(cleanNumber) || await isQaWhitelisted(client.tax_id);
 
       if (!quotaCheck.allowed && !isEntryQa) {
         await sendEvolutionText({
@@ -195,11 +196,6 @@ export async function POST(req: NextRequest) {
     const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
     const isAudio = body.data?.messageType === 'audioMessage' || !!message?.audioMessage;
 
-    // Ignora fromMe apenas se NÃO for um comando de administração explícito e NÃO for áudio gravado
-    if (body.data?.key?.fromMe && !isCommand && !isAudio) {
-      return NextResponse.json({ ignored: true, reason: 'from_me' }, { status: 200 });
-    }
-
     const key = body.data?.key || ({} as any);
     const remoteJid = key.remoteJid || '';
     const remoteJidAlt = key.remoteJidAlt || (body.data as any)?.remoteJidAlt || '';
@@ -221,6 +217,13 @@ export async function POST(req: NextRequest) {
 
     if (!phone) {
       return NextResponse.json({ ignored: true, reason: 'no_phone' }, { status: 200 });
+    }
+
+    const isAdminTester = phone === '5514930855878' || phone.includes('930855878');
+
+    // Ignora fromMe apenas se NÃO for o Marcos Administrador testando, NÃO for comando e NÃO for áudio
+    if (body.data?.key?.fromMe && !isAdminTester && !isCommand && !isAudio) {
+      return NextResponse.json({ ignored: true, reason: 'from_me' }, { status: 200 });
     }
 
     // Aguarda o processamento para que a Vercel Serverless não congele a execução antes da resposta
