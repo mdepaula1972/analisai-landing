@@ -73,7 +73,7 @@ export default function BpoLandingPage() {
   const faqs = [
     {
       question: 'Como funciona a degustação gratuita no WhatsApp?',
-      answer: 'Você não precisa cadastrar cartão de crédito nem preencher formulários longos. Basta clicar em "Testar no WhatsApp", mandar um "Olá" e enviar a foto ou PDF de um boleto/nota, ou simplesmente ditar por áudio ou digitar o valor e vencimento da sua despesa. Em 2 segundos a IA lê os dados, cadastra a conta e te dá as boas-vindas com seus lembretes programados.',
+      answer: 'Você não precisa cadastrar cartão de crédito nem preencher formulários longos. Basta clicar em "Testar no WhatsApp", mandar um "Olá" e enviar a foto ou PDF de um boleto/nota, ou simplesmente ditar por áudio ou digitar o valor e vencimento da sua despesa. Em segundos a IA lê os dados, cadastra a conta e te dá as boas-vindas com seus lembretes programados.',
     },
     {
       question: 'O que é considerado um lançamento no meu plano?',

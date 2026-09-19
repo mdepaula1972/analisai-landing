@@ -484,12 +484,14 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   // 1.1 Identifica se o remetente é um Membro de Equipe (Operador) previamente cadastrado pelo titular
   let isOperator = false;
   let operatorName = '';
+  let operatorRecord: any = null;
   if (!client) {
     const userContext = await resolveUserAndClient(cleanPhone);
     if (userContext?.isTeamMember && userContext.client) {
       client = userContext.client;
       isOperator = true;
       operatorName = userContext.memberName || 'Operador(a)';
+      operatorRecord = userContext.teamMember || null;
     }
   }
 
@@ -542,6 +544,40 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   if (isOperator) {
     const isGreeting = /^(oi|ola|olá|bom dia|boa tarde|boa noite|oii|oie|opa|começar|iniciar|ativar|teste)[!.]*$/i.test(cleanText);
     if (isGreeting) {
+      // PONTO 3: Notificar o Dono na ativação formal do operador para permitir cobrança de omissões
+      if (operatorRecord && !operatorRecord.activated_at) {
+        const { markTeamMemberActivated } = await import('@/lib/solo/team');
+        await markTeamMemberActivated(operatorRecord.id);
+
+        await recordAuditLog({
+          clientId: client.id,
+          actorPhone: cleanPhone,
+          action: 'TEAM_MEMBER_ACTIVATED',
+          entityType: 'client_team_members',
+          entityId: operatorRecord.id,
+          details: {
+            operatorName,
+            operatorPhone: cleanPhone,
+            activatedAt: new Date().toISOString(),
+          },
+        });
+
+        if (client.whatsapp_number && client.whatsapp_number !== cleanPhone) {
+          const nowBr = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          await sendEvolutionText({
+            phone: client.whatsapp_number,
+            text: `✅ *Confirmação de Equipe — ${client.name || 'Sua Empresa'}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*${operatorName}* (WhatsApp: +${cleanPhone}) acabou de ativar seu acesso e iniciar o uso do AnalisAí como **Operadora** da sua empresa!
+
+📅 *Ativação:* ${nowBr}
+🛡️ *Status:* Habilitada para enviar fotos de notas, boletos e áudios de despesas.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Registro formalizado para controle interno e auditoria de equipe._`,
+          });
+        }
+      }
+
       await sendEvolutionText({
         phone,
         text: `Olá, ${operatorName}! 👋 Identifiquei que você faz parte da equipe de *${client.name || 'sua empresa'}*!\n\nA partir de agora, você pode me enviar fotos de notas, boletos ou áudios de despesas que eu organizo tudo no caixa da empresa no piloto automático!`,
@@ -549,7 +585,7 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       return;
     }
 
-    // Bloqueio de Comandos Estratégicos Restritos ao Titular
+    // PONTO 4: Tentativa de acesso a recursos além do perfil -> Alerta de Segurança ao Dono + Bloqueio + Log
     if (
       cleanText.startsWith('!dre') || cleanText === 'dre' ||
       cleanText.startsWith('!saldo') || cleanText === 'saldo' ||
@@ -557,11 +593,44 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       cleanText.startsWith('!lucros') || cleanText === 'lucros' ||
       cleanText.startsWith('!equipe') || cleanText.startsWith('/equipe') ||
       cleanText.includes('dre') || cleanText.includes('quanto temos de saldo') ||
-      cleanText.startsWith('!reset')
+      cleanText.startsWith('!reset') || cleanText.startsWith('/reset') ||
+      cleanText.includes('excluir conta') || cleanText.includes('apagar conta')
     ) {
+      // 1. Grava no log forense de auditoria
+      await recordAuditLog({
+        clientId: client.id,
+        actorPhone: cleanPhone,
+        action: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+        entityType: 'client_team_members',
+        entityId: operatorRecord?.id || 'unknown',
+        details: {
+          operatorName,
+          operatorPhone: cleanPhone,
+          attemptedCommand: rawText,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      // 2. Dispara notificação imediata ao Dono da conta
+      if (client.whatsapp_number && client.whatsapp_number !== cleanPhone) {
+        const nowBr = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        await sendEvolutionText({
+          phone: client.whatsapp_number,
+          text: `⚠️ *Alerta de Segurança da Equipe — AnalisAí*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A operadora *${operatorName}* (+${cleanPhone}) tentou acessar uma função restrita ao titular:
+📋 *Comando solicitado:* "${rawText.slice(0, 80)}"
+⏰ *Horário:* ${nowBr}
+🛡️ *Ação do Sistema:* Acesso **bloqueado** preventivamente.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Caso deseje promover esta operadora ou alterar as permissões de acesso, digite !equipe nesta conversa._`,
+        });
+      }
+
+      // 3. Responde educadamente à operadora
       await sendEvolutionText({
         phone,
-        text: `🔒 *Acesso Restrito ao Titular*\n\nOlá, ${operatorName}! Relatórios gerenciais consolidados, demonstrativos de DRE e configurações da equipe são visíveis exclusivamente para o titular da conta (*${client.name || 'Dono'}*).\n\nVocê tem autorização para me enviar fotos de notas, boletos e áudios de despesas do dia a dia! 🚀`,
+        text: `🔒 *Acesso Restrito ao Titular*\n\nOlá, ${operatorName}! Relatórios gerenciais consolidados, demonstrativos de DRE e configurações da equipe são visíveis exclusivamente para o titular da conta (*${client.name || 'Dono'}*).\n\nUma notificação de segurança foi registrada. Você tem autorização para me enviar fotos de notas, boletos e áudios de despesas do dia a dia! 🚀`,
       });
       return;
     }
@@ -599,8 +668,20 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     }
   }
 
-  // ── Interceptação 1: Comando de Indicação (!indicar ou indicar) ───────────
-  if (cleanText === '!indicar' || cleanText === 'indicar' || cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '/indicar') {
+  // ── Interceptação 1: Comando de Indicação (!indicar ou indicar) & Pioneiros VIP ───
+  if (
+    cleanText === '!indicar' || cleanText === 'indicar' ||
+    cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '/indicar' ||
+    cleanText === '!vip' || cleanText === 'vip' ||
+    cleanText === '!pioneiro' || cleanText === 'pioneiro'
+  ) {
+    const { getPioneerShareMessage } = await import('@/lib/solo/trial');
+    const shareMsg = getPioneerShareMessage(cleanPhone);
+    await sendEvolutionText({ phone, text: shareMsg });
+    return;
+  }
+
+  if (false) {
     if (client) {
       const shareMsg = await getReferralShareMessage(client.id, client.whatsapp_number);
       await sendEvolutionText({ phone, text: shareMsg });
@@ -838,6 +919,7 @@ Aguarde alguns segundos enquanto nossa inteligência artificial faz a leitura co
         return;
       }
 
+      const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
       const extraction = await extractDocumentWithGemini(base64, mimeType);
       const isFinancial =
         extraction.is_financial_doc !== false &&
@@ -1429,6 +1511,22 @@ Na véspera de cada uma delas (às 10h em ponto) eu vou te avisar aqui para voc�
 ${quotaFootnote}`,
       });
 
+      // PONTO 2: Modo Onisciência - Notifica o Dono em tempo real sobre ação da equipe
+      if (isOperator && operatorRecord?.notify_owner_on_action !== false && client.whatsapp_number && client.whatsapp_number !== phone) {
+        await sendEvolutionText({
+          phone: client.whatsapp_number,
+          text: `🔔 *Ação da Equipe — ${client.name || 'Sua Empresa'}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A operadora *${operatorName}* acabou de registrar um novo lançamento:
+• *Fornecedor:* ${extracted.counterparty_name}
+• *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
+• *Vencimento:* ${formattedDueDate}
+• *Classificação:* ${extracted.category_suggestion}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Lançamento auditado e integrado ao seu Livro Caixa no piloto automático._`,
+        });
+      }
+
       // Sincroniza QSA de sócios automaticamente se houver CNPJ da empresa
       const detectedCnpj = (extracted as any).cnpj || (extracted as any).company_tax_id;
       if (detectedCnpj && client.id) {
@@ -1801,6 +1899,7 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
   }
 
   // 7. Mensagens de Texto
+  const lowerText = cleanText.toLowerCase();
 
   // 7.3 Exclusão de Lançamentos por Texto (Ex: "Excluir conta da Sabesp", "Apagar conta Copel", "Remover lançamento")
   if (
@@ -1824,7 +1923,6 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
   }
 
   // 7.1 Listagem de Contas a Pagar por Texto
-  const lowerText = cleanText.toLowerCase();
   if (
     lowerText.includes('contas cadastradas') ||
     lowerText.includes('contas a vencer') ||

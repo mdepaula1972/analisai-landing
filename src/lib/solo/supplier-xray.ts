@@ -342,7 +342,7 @@ export async function executeAndSendSupplierXRay(clientId: string) {
   await sendEvolutionText({
     phone: client.whatsapp_number,
     text: `⏳ *Gerando seu Raio-X de Fornecedores...*
-Nossa IA com busca ativa está pesquisando o mercado e formatando seu documento em PDF com a marca AnalisAí. Isso levará cerca de 10 a 15 segundos.`,
+Nossa IA com busca ativa está pesquisando o mercado e formatando seu documento em PDF com a marca AnalisAí. Isso levará apenas alguns segundos.`,
   });
 
   const companyName = client.company_name || client.name;

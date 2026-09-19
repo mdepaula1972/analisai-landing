@@ -112,7 +112,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
                     <span className="text-[10px] font-bold text-slate-500 block mb-1">Passo 2</span>
                     <strong className="text-emerald-300 block mb-0.5">🤖 IA Organiza</strong>
-                    <span className="text-slate-400 text-[11px] leading-snug">Lê valor, vencimento e credor em 2 segundos.</span>
+                    <span className="text-slate-400 text-[11px] leading-snug">Lê valor, vencimento e credor em segundos.</span>
                   </div>
                   <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
                     <span className="text-[10px] font-bold text-slate-500 block mb-1">Passo 3</span>

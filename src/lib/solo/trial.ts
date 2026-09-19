@@ -1,3 +1,28 @@
+
+/**
+ * Retorna o link de convite oficial para o pioneiro VIP indicar parceiros
+ */
+export function getPioneerShareLink(phone: string): string {
+  const clean = phone.replace(/\D/g, '');
+  const botNumber = '5514930855878';
+  const text = encodeURIComponent(`Olá! Fui indicado pelo parceiro VIP ${clean} para garantir uma das 50 Vagas VIP Gratuitas do AnalisAí Solo!`);
+  return `https://wa.me/${botNumber}?text=${text}`;
+}
+
+export function getPioneerShareMessage(phone: string): string {
+  const link = getPioneerShareLink(phone);
+  return `👑 *Compartilhe sua Vaga VIP e Ganhe Mensalidade Grátis!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você faz parte da Safra dos 50 Pioneiros VIP do AnalisAí.
+
+🎁 *Como zerar sua assinatura:*
+Indique 3 amigos, clientes ou parceiros empresariais para testarem o AnalisAí. Enquanto eles continuarem ativos no plano Solo ou superior, **sua mensalidade fica 100% por nossa conta**!
+
+👉 *Seu link exclusivo para compartilhar no WhatsApp:*
+${link}
+
+_Encaminhe este link para seus contatos empresariais. Ao clicarem, o sistema reconhece sua indicação na hora!_`;
+}
 export const MAX_BETA_VIP_USERS = 50;
 export const BETA_VIP_DOCS_LIMIT = 10;
 export const BETA_VIP_DAYS = 30;
@@ -149,6 +174,25 @@ export async function recordTrialUsage(
 
   const newLimit = grantedLimit || detectedLimit;
 
+  // Recupera lista de contas já cadastradas para não perder histórico de múltiplos boletos
+  const { data: leadRecord } = await supabase
+    .from('trial_leads')
+    .select('bills_list')
+    .eq('whatsapp_number', cleanPhone)
+    .maybeSingle();
+
+  const billsList: any[] = Array.isArray(leadRecord?.bills_list) ? leadRecord.bills_list : [];
+  billsList.push({
+    id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    supplier_name: docData.supplier_name || docData.counterparty_name || 'Fornecedor',
+    amount: docData.amount ? Number(docData.amount) : null,
+    due_date: docData.due_date || null,
+    barcode_or_pix: docData.barcode_or_pix || null,
+    reminder_eve_sent: false,
+    reminder_due_sent: false,
+    created_at: new Date().toISOString(),
+  });
+
   await supabase
     .from('trial_leads')
     .upsert(
@@ -163,6 +207,7 @@ export async function recordTrialUsage(
         trial_docs_count: newCount,
         trial_docs_limit: newLimit,
         interested_plan: suggestedPlan,
+        bills_list: billsList,
         reminder_eve_sent: false,
         reminder_due_sent: false,
         trial_completed_at: new Date().toISOString(),
@@ -188,7 +233,7 @@ Você foi contemplado com uma das **50 Vagas VIP Gratuitas** para ter seu assist
 👉 *Para começar agora mesmo:*
 Envie uma foto ou PDF do seu primeiro **boleto ou nota fiscal**, ou mande um áudio/texto dizendo o que pagar (ex: *"Pagar aluguel R$ 1.500 dia 10"*).
 
-Em 15 segundos eu leio e já organizo seu primeiro lançamento!
+Em segundos eu leio e já organizo seu primeiro lançamento!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 *Deseja ativar seu plano oficial agora mesmo?*
@@ -432,16 +477,16 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
   let eveCount = 0;
   let dueCount = 0;
 
-  // 1. Processa Lembretes de VÉSPERA (due_date == tomorrow)
-  const { data: eveLeads } = await supabase
+  // Processa Lembretes de VÉSPERA e DIA DO VENCIMENTO para TODAS as contas de cada Lead
+  // Mesmo que o lead já tenha atingido o teto de 10 contas ou os 30 dias de trial,
+  // continuamos informando pontualmente cada vencimento e oferecendo o plano Solo!
+  const { data: allTrialLeads } = await supabase
     .from('trial_leads')
-    .select('id, whatsapp_number, supplier_name, amount, due_date, barcode_or_pix')
-    .eq('due_date', tomorrowIso)
-    .eq('reminder_eve_sent', false)
+    .select('id, whatsapp_number, supplier_name, amount, due_date, barcode_or_pix, bills_list, reminder_eve_sent, reminder_due_sent')
     .eq('converted_to_client', false);
 
-  if (eveLeads && eveLeads.length > 0) {
-    for (const lead of eveLeads) {
+  if (allTrialLeads && allTrialLeads.length > 0) {
+    for (const lead of allTrialLeads) {
       const { data: activeClient } = await supabase
         .from('clients')
         .select('id')
@@ -449,47 +494,61 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
         .eq('status', 'active')
         .maybeSingle();
 
-      if (!activeClient) {
-        const msg = getEveReminderMessage(lead);
-        await sendEvolutionText({ phone: lead.whatsapp_number, text: msg });
-        await supabase
-          .from('trial_leads')
-          .update({ reminder_eve_sent: true, reminder_eve_sent_at: new Date().toISOString() })
-          .eq('id', lead.id);
-        eveCount++;
-      } else {
+      if (activeClient) {
         await supabase.from('trial_leads').update({ converted_to_client: true }).eq('id', lead.id);
+        continue;
       }
-    }
-  }
 
-  // 2. Processa Lembretes do DIA DO VENCIMENTO (due_date == today)
-  const { data: dueLeads } = await supabase
-    .from('trial_leads')
-    .select('id, whatsapp_number, supplier_name, amount, due_date, barcode_or_pix')
-    .eq('due_date', todayIso)
-    .eq('reminder_due_sent', false)
-    .eq('converted_to_client', false);
+      let billsList: any[] = Array.isArray(lead.bills_list) && lead.bills_list.length > 0
+        ? [...lead.bills_list]
+        : [];
 
-  if (dueLeads && dueLeads.length > 0) {
-    for (const lead of dueLeads) {
-      const { data: activeClient } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('whatsapp_number', lead.whatsapp_number)
-        .eq('status', 'active')
-        .maybeSingle();
+      // Se bills_list estiver vazio mas o lead tiver a conta principal cadastrada:
+      if (billsList.length === 0 && lead.due_date) {
+        billsList.push({
+          id: 'root_bill',
+          supplier_name: lead.supplier_name,
+          amount: lead.amount,
+          due_date: lead.due_date,
+          barcode_or_pix: lead.barcode_or_pix,
+          reminder_eve_sent: lead.reminder_eve_sent,
+          reminder_due_sent: lead.reminder_due_sent,
+        });
+      }
 
-      if (!activeClient) {
-        const msg = getDueReminderMessage(lead);
-        await sendEvolutionText({ phone: lead.whatsapp_number, text: msg });
+      let billsUpdated = false;
+
+      for (const bill of billsList) {
+        // 1. Lembrete de Véspera (vence amanhã)
+        if (bill.due_date === tomorrowIso && !bill.reminder_eve_sent) {
+          const msg = getEveReminderMessage(bill);
+          await sendEvolutionText({ phone: lead.whatsapp_number, text: msg });
+          bill.reminder_eve_sent = true;
+          bill.reminder_eve_sent_at = new Date().toISOString();
+          billsUpdated = true;
+          eveCount++;
+        }
+
+        // 2. Lembrete do Dia (vence hoje)
+        if (bill.due_date === todayIso && !bill.reminder_due_sent) {
+          const msg = getDueReminderMessage(bill);
+          await sendEvolutionText({ phone: lead.whatsapp_number, text: msg });
+          bill.reminder_due_sent = true;
+          bill.reminder_due_sent_at = new Date().toISOString();
+          billsUpdated = true;
+          dueCount++;
+        }
+      }
+
+      if (billsUpdated) {
         await supabase
           .from('trial_leads')
-          .update({ reminder_due_sent: true, reminder_due_sent_at: new Date().toISOString() })
+          .update({
+            bills_list: billsList,
+            reminder_eve_sent: billsList.some(b => b.reminder_eve_sent),
+            reminder_due_sent: billsList.some(b => b.reminder_due_sent),
+          })
           .eq('id', lead.id);
-        dueCount++;
-      } else {
-        await supabase.from('trial_leads').update({ converted_to_client: true }).eq('id', lead.id);
       }
     }
   }
