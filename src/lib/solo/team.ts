@@ -194,3 +194,165 @@ export async function updateTeamMember(
     message: `Operador atualizado com sucesso!\n• Nome: *${updates.member_name || member.member_name}*\n• Telefone: *${updates.whatsapp_number || member.whatsapp_number}*`,
   };
 }
+
+/**
+ * Processa comandos de gestão de equipe em LINGUAGEM NATURAL pura (texto e voz)
+ * Exemplos:
+ * - "Adiciona a Maria 14 99999-8888 na equipe"
+ * - "Tira o João da equipe"
+ * - "Errei o número da Maria, o novo é 14 98888-7777"
+ * - "Quem está na minha equipe?"
+ */
+export async function handleNaturalLanguageTeamCommand(
+  clientId: string,
+  rawText: string
+): Promise<{ handled: boolean; message?: string }> {
+  const lower = rawText.toLowerCase().trim();
+
+  // 1. Consulta / Listagem de Equipe em Linguagem Natural
+  if (
+    lower.includes('quem está na minha equipe') ||
+    lower.includes('quem esta na minha equipe') ||
+    lower.includes('mostrar equipe') ||
+    lower.includes('ver equipe') ||
+    lower.includes('minha equipe') ||
+    lower.includes('quais operadores') ||
+    lower.includes('membros da equipe') ||
+    lower === 'equipe'
+  ) {
+    const members = await listTeamMembers(clientId);
+    if (members.length === 0) {
+      return {
+        handled: true,
+        message: `👥 *Sua Equipe:*\nVocê ainda não possui operadores adicionais cadastrados.\n\nPara adicionar alguém da sua equipe, basta me dizer ou digitar:\n👉 *"Adiciona a Maria 14 99999-8888 na equipe"*\n\n💡 Cada operador adicional tem uma taxa de apenas R$ 29,90/mês no link:\nhttps://www.asaas.com/c/kurk0fge7wqim8lv`,
+      };
+    }
+
+    const listStr = members.map((m, i) => `${i + 1}. *${m.member_name}* (${m.whatsapp_number})`).join('\n');
+    return {
+      handled: true,
+      message: `👥 *Membros da Sua Equipe Autorizados:*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${listStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💡 *Comandos fáceis em conversa:*\n• *"Adiciona o João [Telefone]"*\n• *"Trocar número da Maria para [Novo Telefone]"*\n• *"Remover o João da equipe"*`,
+    };
+  }
+
+  // 2. Correção / Edição de Número em Linguagem Natural
+  // Ex: "errei o número da Maria, o novo é 14 98888-7777" ou "mudar telefone da Maria para 14 98888 7777"
+  if (
+    lower.includes('errei o número') ||
+    lower.includes('errei o numero') ||
+    lower.includes('mudar telefone') ||
+    lower.includes('mudar o telefone') ||
+    lower.includes('mudar o número') ||
+    lower.includes('mudar o numero') ||
+    lower.includes('alterar telefone') ||
+    lower.includes('corrigir telefone') ||
+    lower.includes('trocar número') ||
+    lower.includes('trocar o número')
+  ) {
+    // Extrai o novo número (sequência de dígitos com pelo menos 10 dígitos)
+    const phoneMatches = rawText.match(/(?:\(?d{2}\)?s*)?9?d{4}[-s]?d{4}/g);
+    const cleanDigits = phoneMatches ? phoneMatches[phoneMatches.length - 1].replace(/\D/g, '') : '';
+
+    // Extrai o nome do membro (ex: "da Maria", "do João")
+    const nameMatch = rawText.match(/(?:d[ao]|membro|operador[a]?)\s+([A-Za-zÀ-ÖØ-öø-ÿ]+)/i);
+    const memberName = nameMatch ? nameMatch[1].trim() : '';
+
+    if (cleanDigits && cleanDigits.length >= 10 && memberName) {
+      const supabase = createServiceRoleClient();
+      const { data: member } = await supabase
+        .from('client_team_members')
+        .select('*')
+        .eq('client_id', clientId)
+        .ilike('member_name', `%${memberName}%`)
+        .maybeSingle();
+
+      if (member) {
+        const fullPhone = cleanDigits.length <= 11 && !cleanDigits.startsWith('55') ? `55${cleanDigits}` : cleanDigits;
+        await supabase
+          .from('client_team_members')
+          .update({ whatsapp_number: fullPhone })
+          .eq('id', member.id);
+
+        return {
+          handled: true,
+          message: `✅ *Telefone Corrigido com Sucesso!*\nAtualizei o WhatsApp da *${member.member_name}* para *${fullPhone}*.\n\nPeça para ela salvar nosso contato e nos enviar um *"Oi"* para começar!`,
+        };
+      }
+    }
+  }
+
+  // 3. Remoção / Exclusão de Membro em Linguagem Natural
+  // Ex: "remover a Maria da equipe", "tira o João da equipe", "excluir a secretária Ana"
+  if (
+    lower.includes('remover') ||
+    lower.includes('tirar') ||
+    lower.includes('excluir') ||
+    lower.includes('apagar') ||
+    lower.includes('deletar')
+  ) {
+    if (lower.includes('equipe') || lower.includes('operador') || lower.includes('secretária') || lower.includes('secretaria') || lower.includes('membro')) {
+      const nameMatch = rawText.match(/(?:remover|tirar|excluir|apagar|deletar)\s+(?:a|o|operador[a]?|secret[aá]ria)?\s*([A-Za-zÀ-ÖØ-öø-ÿ]+)/i);
+      const targetName = nameMatch ? nameMatch[1].trim() : '';
+
+      if (targetName && targetName.length >= 2 && !['conta', 'boleto', 'lançamento', 'lancamento'].includes(targetName.toLowerCase())) {
+        const supabase = createServiceRoleClient();
+        const { data: member } = await supabase
+          .from('client_team_members')
+          .select('*')
+          .eq('client_id', clientId)
+          .ilike('member_name', `%${targetName}%`)
+          .maybeSingle();
+
+        if (member) {
+          await supabase
+            .from('client_team_members')
+            .delete()
+            .eq('id', member.id);
+
+          return {
+            handled: true,
+            message: `🗑️ *Membro Removido com Sucesso!*\n*${member.member_name}* foi removido(a) da sua equipe e não poderá mais enviar despesas para a sua empresa.`,
+          };
+        }
+      }
+    }
+  }
+
+  // 4. Adicionar Membro da Equipe em Linguagem Natural
+  // Ex: "Adiciona a Maria 14 99999-8888 na equipe" ou "Cadastrar operador João 14988887777"
+  if (
+    lower.includes('adiciona') ||
+    lower.includes('adicionar') ||
+    lower.includes('cadastrar') ||
+    lower.includes('colocar') ||
+    lower.includes('incluir')
+  ) {
+    if (lower.includes('equipe') || lower.includes('operador') || lower.includes('secretária') || lower.includes('secretaria') || lower.includes('membro') || lower.includes('ajudante') || lower.includes('sócio') || lower.includes('socio')) {
+      // Extrai número de telefone (10 a 13 dígitos)
+      const phoneMatches = rawText.match(/(?:\(?d{2}\)?s*)?9?d{4}[-s]?d{4}/g);
+      const cleanPhone = phoneMatches ? phoneMatches[0].replace(/\D/g, '') : '';
+
+      // Extrai o nome da pessoa
+      const nameMatch = rawText.match(/(?:adiciona|adicionar|cadastrar|colocar|incluir)\s+(?:a|o|operador[a]?|secret[aá]ria)?\s*([A-Za-zÀ-ÖØ-öø-ÿ]+)/i);
+      let memberName = nameMatch ? nameMatch[1].trim() : 'Operador';
+      if (['na', 'no', 'equipe', 'operador', 'secretaria', 'secretária'].includes(memberName.toLowerCase())) {
+        memberName = 'Operador';
+      }
+
+      if (cleanPhone && cleanPhone.length >= 10) {
+        const fullPhone = cleanPhone.length <= 11 && !cleanPhone.startsWith('55') ? `55${cleanPhone}` : cleanPhone;
+        const res = await addTeamMember(clientId, fullPhone, memberName);
+        if (res.success) {
+          return {
+            handled: true,
+            message: `✅ *Prontinho! Adicionei ${memberName} à sua equipe!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n• *Nome:* ${memberName}\n• *WhatsApp:* ${fullPhone}\n• *Permissão:* Enviar fotos de boletos, notas e despesas avulsas\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👉 *Passo seguinte:* Peça para ${memberName} salvar este contato e mandar um simples *"Oi"* aqui no WhatsApp. O robô a reconhecerá automaticamente!\n\n💡 _Taxa do operador adicional (+R$ 29,90/mês):_\nhttps://www.asaas.com/c/kurk0fge7wqim8lv`,
+          };
+        } else {
+          return { handled: true, message: res.message };
+        }
+      }
+    }
+  }
+
+  return { handled: false };
+}

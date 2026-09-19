@@ -6,7 +6,7 @@ import {
   processVoiceCommandWithGemini,
   parseConversationalFinancialEntry,
 } from '@/lib/solo/gemini';
-import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember } from '@/lib/solo/team';
+import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
@@ -1735,6 +1735,13 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
   ) {
     const supToDelete = cleanText.replace(/^(excluir|apagar|remover)\s+(a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta)?\s*/i, '').trim();
     await handleDeleteBill(client.id, phone, supToDelete);
+    return;
+  }
+
+  // ── GESTÃO DE EQUIPE EM LINGUAGEM NATURAL (TEXTO OU TRANSCRIÇÃO DE VOZ) ──
+  const teamResult = await handleNaturalLanguageTeamCommand(client.id, cleanText);
+  if (teamResult.handled && teamResult.message) {
+    await sendEvolutionText({ phone, text: teamResult.message });
     return;
   }
 
