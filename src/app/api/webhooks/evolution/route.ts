@@ -6,6 +6,7 @@ import {
   processVoiceCommandWithGemini,
   parseConversationalFinancialEntry,
 } from '@/lib/solo/gemini';
+import { recordAuditLog } from '@/lib/solo/audit';
 import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
@@ -1070,6 +1071,20 @@ O valor de *R$ ${Number(payload.total_amount).toFixed(2)}* referente a *${payloa
           })
           .eq('id', payload.bill_id);
 
+        await recordAuditLog({
+          clientId: client.id,
+          actorPhone: phone,
+          action: 'UPDATE_DUE_DATE',
+          entityType: 'payables_receivables',
+          entityId: payload.bill_id,
+          details: {
+            supplier: payload.supplier,
+            amount: payload.amount,
+            old_due_date: payload.old_due_date,
+            new_due_date: payload.new_due_date,
+          },
+        });
+
         await sendEvolutionText({
           phone,
           text: `✅ *Vencimento Alterado com Sucesso!*
@@ -1087,10 +1102,28 @@ Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
       if (pendingAction.action_type === 'delete_bill') {
         const payload = pendingAction.proposed_payload as any;
 
+        // Exclusão Lógica com fé pericial forense (preserva a prova no banco)
         await supabase
           .from('payables_receivables')
-          .delete()
+          .update({
+            status: 'canceled',
+            notes: `Conta cancelada/excluída expressamente via confirmação WhatsApp por ${phone} em ${new Date().toISOString()}`,
+          })
           .eq('id', payload.bill_id);
+
+        await recordAuditLog({
+          clientId: client.id,
+          actorPhone: phone,
+          action: 'DELETE_BILL',
+          entityType: 'payables_receivables',
+          entityId: payload.bill_id,
+          details: {
+            supplier: payload.supplier,
+            amount: payload.amount,
+            due_date: payload.due_date,
+            confirmation_type: isAffirmative ? 'user_confirmed' : 'unknown',
+          },
+        });
 
         if (payload.document_id) {
           await supabase
