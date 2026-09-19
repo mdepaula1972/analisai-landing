@@ -580,7 +580,16 @@ _Registro formalizado para controle interno e auditoria de equipe._`,
 
       await sendEvolutionText({
         phone,
-        text: `Olá, ${operatorName}! 👋 Identifiquei que você faz parte da equipe de *${client.name || 'sua empresa'}*!\n\nA partir de agora, você pode me enviar fotos de notas, boletos ou áudios de despesas que eu organizo tudo no caixa da empresa no piloto automático!`,
+        text: `Olá, ${operatorName}! 👋 Identifiquei que você faz parte da equipe de *${client.name || 'sua empresa'}*!
+
+📋 *Instruções & Regras de Uso da Equipe:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣ *Boletos e Notas:* Basta tirar uma foto nítida (ou mandar o PDF) aqui nesta conversa. Eu leio o valor, vencimento e código de barras em segundos.
+2️⃣ *Despesas do Dia a Dia:* Pode mandar um áudio simples (ex: _"Comprei R$ 45 de material de limpeza no dinheiro"_) ou digitar o valor.
+3️⃣ *Confirmação Automática:* Cada lançamento entra diretamente no Livro Caixa da empresa.
+4️⃣ *Privacidade & Diretrizes:* Por segurança corporativa, demonstrativos consolidados, saldos e extratos bancários são visíveis exclusivamente para a diretoria.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 *Seu acesso está ativo e registrado para auditoria interna.* Pode me enviar sua primeira nota ou boleto agora mesmo!`,
       });
       return;
     }
@@ -889,7 +898,7 @@ Verifique se digitou corretamente ou escolha um dos nossos planos para começar 
       if (trialStatus.hasUsedTrial) {
         await sendEvolutionText({
           phone,
-          text: getTrialLimitReachedMessage(trialStatus.docsLimit),
+          text: getTrialLimitReachedMessage(trialStatus.docsLimit, trialStatus.docsCount),
         });
         return;
       }
@@ -978,7 +987,7 @@ ${BANK_SAFETY_NOTICE}`,
         if (trialStatus.hasUsedTrial) {
           await sendEvolutionText({
             phone,
-            text: getTrialLimitReachedMessage(trialStatus.docsLimit),
+            text: getTrialLimitReachedMessage(trialStatus.docsLimit, trialStatus.docsCount),
           });
           return;
         }

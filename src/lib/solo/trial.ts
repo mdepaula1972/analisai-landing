@@ -248,20 +248,46 @@ Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta co
  * Mensagem quando o lead esgotou sua cota de degustação gratuita
  * com adequação inteligente ao porte do cliente
  */
-export function getTrialLimitReachedMessage(trialLimit: number = 1): string {
-  // 1. Perfil VIP dos 50 Pioneiros (10 contas ou 30 dias concluídos)
-  if (trialLimit >= 10) {
-    return `🎉 *Parabéns! Durante o seu período VIP, o AnalisAí protegeu seu caixa e acompanhou 10 contas da sua empresa sem nenhum atraso!*
+export function getTrialLimitReachedMessage(trialLimit: number = 1, actualDocsCount: number = 0): string {
+  // 1. Se o usuário tem consumo leve/moderado (até 5 contas cadastradas)
+  // Destaca o plano Start (R$ 39,90) como campeão de economia para não forçar planos caros
+  if (actualDocsCount > 0 && actualDocsCount <= 5) {
+    return `🎉 *Parabéns! O AnalisAí acompanhou e protegeu suas ${actualDocsCount} contas no período de testes!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você experimentou a tranquilidade de não ser pego de surpresa na véspera de vencimentos e ter seu livro caixa organizado no piloto automático sem planilhas.
+Pelo seu volume de despesas, o plano perfeito e mais econômico para o seu negócio é o:
 
-Para continuar com seus lembretes diários pontuais e relatórios em PDF ativos no próximo mês, confirme sua assinatura por apenas **menos de R$ 2,90/dia** (R$ 87,99/mês):
+⭐ *1️⃣ AnalisAí Start — Apenas R$ 39,90/mês* (menos de R$ 1,35/dia!)
+👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
+_(Até 15 lançamentos/mês, livro caixa oficial e lembretes diários pontuais no WhatsApp)_
 
-👉 *Assinar AnalisAí Solo:*
-${ASAAS_PLANS.monthly.solo.checkoutUrl}
+🚀 *Prefere comandos por voz, áudio e consultor financeiro de caixa?*
+• *2️⃣ AnalisAí Solo — R$ 87,99/mês* (30 lançamentos/mês + Inteligência de Caixa):
+👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
 🎁 *Dica de Ouro — Mensalidade Grátis:*
-Indique 3 amigos ou parceiros empresariais para o AnalisAí e a sua assinatura fica totalmente por nossa conta enquanto eles continuarem ativos!
+Indique 3 amigos empresários e a sua assinatura fica 100% por nossa conta enquanto eles estiverem ativos!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*(Suas contas e relatórios continuam guardados a sete chaves aguardando sua confirmação.)*`;
+  }
+
+  // 2. Perfil VIP dos 50 Pioneiros com maior volume (> 5 até 10 contas)
+  // O Solo é ideal porque o Start (15) ficaria apertado para quem já lançou 6 a 10 contas em poucos dias
+  if (trialLimit >= 10 || actualDocsCount > 5) {
+    return `🎉 *Parabéns! Durante o seu período VIP, o AnalisAí protegeu seu caixa e acompanhou suas contas sem nenhum atraso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Pelo seu ritmo de lançamentos, recomendamos o plano que garante capacidade ideal para sua rotina:
+
+⭐ *1️⃣ AnalisAí Solo — R$ 87,99/mês* (menos de R$ 2,90/dia — Mais Escolhido)
+👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
+_(Até 30 lançamentos/mês, comandos por áudio e texto, consultor de caixa e DRE completo em PDF)_
+
+💡 *Seu volume é menor e prefere pagar ainda menos?*
+• *2️⃣ AnalisAí Start — R$ 39,90/mês* (Até 15 lançamentos/mês):
+👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
+
+🎁 *Dica de Ouro — Mensalidade Grátis:*
+Indique 3 amigos ou parceiros empresariais para o AnalisAí e sua assinatura fica 100% gratuita!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 *(Suas contas e relatórios continuam guardados a sete chaves aguardando sua confirmação.)*`;
