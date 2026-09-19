@@ -32,12 +32,12 @@ Com esses boletos agendados, quando você perguntar *"qual conta devo atrasar?"*
 👉 Envie uma foto ou PDF de boleto agora para começarmos!`;
   }
 
-  const totalOpen = openBills.reduce((acc, b) => acc + Number(b.amount), 0);
+  const totalOpen = openBills.reduce((acc: number, b: any) => acc + Number(b.amount), 0);
 
   // 2. Monta o contexto para o raciocínio do Gemini com data exata e dia da semana
   const billsContext = openBills
     .map(
-      (b, idx) =>
+      (b: any, idx: number) =>
         `${idx + 1}. Fornecedor: "${b.counterparty_name}" | Valor: R$ ${Number(b.amount).toFixed(2)} | Vencimento: ${formatDueDateDetails(b.current_due_date)} | Criticidade (1-5): ${b.criticality_score || 3} | Notas: ${b.notes || 'Nenhuma'}`
     )
     .join('\n');
@@ -84,12 +84,12 @@ ${billsContext}`;
     // Fallback heurístico inteligente de sensibilidade crítica
     const highRiskTerms = ['pensão', 'pensao', 'acordo', 'judicial', 'processo', 'trt', 'financiamento', 'veículo', 'veiculo', 'parcela', 'inss', 'fgts', 'energia', 'copel', 'enel', 'água', 'sabesp', 'sanepar'];
     
-    const flexibleBills = openBills.filter(b => {
+    const flexibleBills = openBills.filter((b: any) => {
       const name = b.counterparty_name.toLowerCase();
       return !highRiskTerms.some(term => name.includes(term));
     });
 
-    const criticalBills = openBills.filter(b => {
+    const criticalBills = openBills.filter((b: any) => {
       const name = b.counterparty_name.toLowerCase();
       return highRiskTerms.some(term => name.includes(term));
     });
@@ -105,7 +105,7 @@ ${billsContext}`;
     if (criticalBills.length > 0) {
       fallbackText += `🛡️ *Proteja Imediatamente (Risco Crítico ou Jurídico):*
 `;
-      criticalBills.forEach(b => {
+      criticalBills.forEach((b: any) => {
         fallbackText += `• *${b.counterparty_name}* (R$ ${Number(b.amount).toFixed(2)} - ${formatDueDateDetails(b.current_due_date)})
 `;
       });

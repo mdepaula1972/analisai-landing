@@ -102,7 +102,7 @@ export async function addTeamMember(
     return { success: false, message: 'Erro ao cadastrar membro de equipe no banco de dados.' };
   }
 
-  return { success: true, message: `Membro da equipe *${memberName.trim()}* cadastrado com sucesso!` };
+  return { success: true, message: `✅ *${memberName.trim()}* cadastrada com sucesso como Operadora da sua empresa!\n\n👉 *Para ativar:* Basta pedir para ${memberName.trim()} salvar nosso contato e nos enviar um simples *"Oi"* aqui no WhatsApp.` };
 }
 
 /**

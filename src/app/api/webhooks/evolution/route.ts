@@ -481,6 +481,18 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     .limit(1)
     .maybeSingle();
 
+  // 1.1 Identifica se o remetente é um Membro de Equipe (Operador) previamente cadastrado pelo titular
+  let isOperator = false;
+  let operatorName = '';
+  if (!client) {
+    const userContext = await resolveUserAndClient(cleanPhone);
+    if (userContext?.isTeamMember && userContext.client) {
+      client = userContext.client;
+      isOperator = true;
+      operatorName = userContext.memberName || 'Operador(a)';
+    }
+  }
+
   // Garante privilégios de Administrador se for o número pessoal do Marcos
   const isAdminPhone = cleanPhone === '5514930855878' || altPhone === '5514930855878' || cleanPhone.includes('930855878');
   if (isAdminPhone) {
@@ -512,15 +524,48 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     }
   }
 
-  // Se o cliente já possui número oficial cadastrado, garante o envio para o número oficial
-  if (client?.whatsapp_number) {
+  // Se o cliente titular possui número oficial cadastrado, garante o envio para ele
+  if (!isOperator && client?.whatsapp_number) {
     phone = client.whatsapp_number;
+  }
+  // Se for operador de equipe, o retorno DEVE ser enviado diretamente para o operador
+  if (isOperator) {
+    phone = cleanPhone;
   }
 
   const message = body.data?.message;
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
+
+  // ── Interceptação Operador de Equipe: Primeiro Contato / Saudação Inbound ──
+  if (isOperator) {
+    const isGreeting = /^(oi|ola|olá|bom dia|boa tarde|boa noite|oii|oie|opa|começar|iniciar|ativar|teste)[!.]*$/i.test(cleanText);
+    if (isGreeting) {
+      await sendEvolutionText({
+        phone,
+        text: `Olá, ${operatorName}! 👋 Identifiquei que você faz parte da equipe de *${client.name || 'sua empresa'}*!\n\nA partir de agora, você pode me enviar fotos de notas, boletos ou áudios de despesas que eu organizo tudo no caixa da empresa no piloto automático!`,
+      });
+      return;
+    }
+
+    // Bloqueio de Comandos Estratégicos Restritos ao Titular
+    if (
+      cleanText.startsWith('!dre') || cleanText === 'dre' ||
+      cleanText.startsWith('!saldo') || cleanText === 'saldo' ||
+      cleanText.startsWith('!dividendos') || cleanText === 'dividendos' ||
+      cleanText.startsWith('!lucros') || cleanText === 'lucros' ||
+      cleanText.startsWith('!equipe') || cleanText.startsWith('/equipe') ||
+      cleanText.includes('dre') || cleanText.includes('quanto temos de saldo') ||
+      cleanText.startsWith('!reset')
+    ) {
+      await sendEvolutionText({
+        phone,
+        text: `🔒 *Acesso Restrito ao Titular*\n\nOlá, ${operatorName}! Relatórios gerenciais consolidados, demonstrativos de DRE e configurações da equipe são visíveis exclusivamente para o titular da conta (*${client.name || 'Dono'}*).\n\nVocê tem autorização para me enviar fotos de notas, boletos e áudios de despesas do dia a dia! 🚀`,
+      });
+      return;
+    }
+  }
 
   // ── Proteção Anti-Looping de Robôs (Escada de Bloqueio Progressivo) ────────
   if (!client?.is_admin && !isAdminPhone) {

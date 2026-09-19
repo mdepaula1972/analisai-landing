@@ -133,12 +133,12 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Divide em Vencidas e A Vencer
-  const overdueBills = allBills.filter(b => b.status === 'open' && b.current_due_date < todayStr);
-  const upcomingBills = allBills.filter(b => (b.status === 'open' || b.status === 'postponed') && b.current_due_date >= todayStr);
+  const overdueBills = allBills.filter((b: any) => b.status === 'open' && b.current_due_date < todayStr);
+  const upcomingBills = allBills.filter((b: any) => (b.status === 'open' || b.status === 'postponed') && b.current_due_date >= todayStr);
 
-  const totalOpen = allBills.filter(b => b.status === 'open' || b.status === 'postponed').reduce((acc, b) => acc + Number(b.amount || 0), 0);
-  const overdueTotal = overdueBills.reduce((acc, b) => acc + Number(b.amount || 0), 0);
-  const upcomingTotal = upcomingBills.reduce((acc, b) => acc + Number(b.amount || 0), 0);
+  const totalOpen = allBills.filter((b: any) => b.status === 'open' || b.status === 'postponed').reduce((acc: number, b: any) => acc + Number(b.amount || 0), 0);
+  const overdueTotal = overdueBills.reduce((acc: number, b: any) => acc + Number(b.amount || 0), 0);
+  const upcomingTotal = upcomingBills.reduce((acc: number, b: any) => acc + Number(b.amount || 0), 0);
 
   // 3. Montagem do PDF com pdf-lib (Formato A4: 595.28 x 841.89 pt)
   const pdfDoc = await PDFDocument.create();
@@ -526,6 +526,13 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   });
 
   // ── PÁGINA 2: DEMONSTRATIVO DRE, GRÁFICOS VISUAIS E DIAGNÓSTICO DIDÁTICO ──
+  const { data: entriesData } = await supabase
+    .from('cash_ledger_entries')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('entry_date', { ascending: false });
+  const ledgerEntries: any[] = entriesData || [];
+
   const page2 = pdfDoc.addPage([595.28, 841.89]);
   const p2Width = page2.getSize().width;
   const p2Height = page2.getSize().height;

@@ -1,3 +1,7 @@
+export const MAX_BETA_VIP_USERS = 50;
+export const BETA_VIP_DOCS_LIMIT = 10;
+export const BETA_VIP_DAYS = 30;
+
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
@@ -42,23 +46,43 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 
   const { data } = await supabase
     .from('trial_leads')
-    .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit, interested_plan')
+    .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit, interested_plan, created_at, first_interaction_at')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
   if (!data) {
+    // Verifica se ainda há vagas abertas no lote das 50 Vagas VIP
+    const { count } = await supabase
+      .from('trial_leads')
+      .select('*', { count: 'exact', head: true });
+
+    const totalLeads = count || 0;
+    const isVipEligible = totalLeads < MAX_BETA_VIP_USERS;
+    const initialLimit = isVipEligible ? BETA_VIP_DOCS_LIMIT : 1;
+
     return {
       hasUsedTrial: false,
       docsCount: 0,
-      docsLimit: 1,
-      remainingDocs: 1,
+      docsLimit: initialLimit,
+      remainingDocs: initialLimit,
     };
   }
 
   const docsLimit = Number(data.trial_docs_limit) || 1;
   const docsCount = Number(data.trial_docs_count) || (data.doc_processed ? 1 : 0);
   const remainingDocs = Math.max(0, docsLimit - docsCount);
-  const hasUsedTrial = remainingDocs <= 0;
+
+  // Expiração após ciclo dos 30 Dias VIP
+  const createdAt = data.first_interaction_at || data.created_at;
+  let isExpiredByDays = false;
+  if (createdAt) {
+    const daysSinceCreated = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceCreated > BETA_VIP_DAYS) {
+      isExpiredByDays = true;
+    }
+  }
+
+  const hasUsedTrial = remainingDocs <= 0 || isExpiredByDays;
 
   return {
     hasUsedTrial,
@@ -151,25 +175,26 @@ export async function recordTrialUsage(
  * Mensagem de boas-vindas com convite para a Degustação Gratuita (sem fricção)
  */
 export function getTrialWelcomeMessage(): string {
-  return `Olá! 👋 Bem-vindo ao *AnalisAí*.
+  return `👑 *Bem-vindo à Safra dos 50 Pioneiros VIP — AnalisAí Solo!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você foi contemplado com uma das **50 Vagas VIP Gratuitas** para ter seu assistente financeiro no piloto automático!
 
-🎁 *Que tal experimentar uma degustação gratuita agora mesmo?*
-Envie uma foto ou PDF de qualquer **boleto ou nota fiscal**, ou simplesmente digite seu lançamento aqui (ex: *"Pagar fornecedor R$ 350 dia 25"*).
+✨ *O que você ganha durante seus 30 dias VIP:*
+• *Até 10 contas e boletos* cadastrados por foto, PDF, áudio ou texto;
+• *Lembretes diários no WhatsApp* às 10h da véspera com código Pix pronto para cópia (evite juros e multas de atraso);
+• *Relatório de Livro Caixa e DRE em PDF* com gráficos gerenciais direto no seu celular;
+• *Zero planilhas e zero burocracia.*
 
-Em menos de 15 segundos, nosso robô com inteligência artificial vai:
-1️⃣ Ler e auditar todos os dados do seu lançamento;
-2️⃣ Entregar o código de barras limpo para você pagar no seu banco;
-3️⃣ Calcular o vencimento exato e gerar seu primeiro relatório demonstrativo!
+👉 *Para começar agora mesmo:*
+Envie uma foto ou PDF do seu primeiro **boleto ou nota fiscal**, ou mande um áudio/texto dizendo o que pagar (ex: *"Pagar aluguel R$ 1.500 dia 10"*).
+
+Em 15 segundos eu leio e já organizo seu primeiro lançamento!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚀 *Já quer assinar seu plano direto pelo WhatsApp?*
+🚀 *Deseja ativar seu plano oficial agora mesmo?*
+• *AnalisAí Solo* (R$ 87,99/mês — menos de R$ 2,90/dia): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 • *AnalisAí Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
-• *AnalisAí Solo* (R$ 87,99/mês - Áudio & IA de Caixa): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-• *AnalisAí Solo Plus* (R$ 157,99/mês): ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-• *AnalisAí Pro* (R$ 297,00/mês - Multi-CNPJ & Conciliação Semanal): ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-• *AnalisAí Super* (R$ 597,00/mês - 1.000 lançamentos & Até 4 CNPJs): ${ASAAS_PLANS.monthly.super.checkoutUrl}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 *Já é cliente e trocou de número?*
 Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta com segurança via verificação por e-mail (LGPD).`;
 }
@@ -179,29 +204,22 @@ Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta co
  * com adequação inteligente ao porte do cliente
  */
 export function getTrialLimitReachedMessage(trialLimit: number = 1): string {
-  // 1. Perfil Corporativo / Simples Nacional (já desfrutou de até 10 lançamentos)
+  // 1. Perfil VIP dos 50 Pioneiros (10 contas ou 30 dias concluídos)
   if (trialLimit >= 10) {
-    return `🏢 *Você concluiu sua degustação empresarial do AnalisAí!*
+    return `🎉 *Parabéns! Durante o seu período VIP, o AnalisAí protegeu seu caixa e acompanhou 10 contas da sua empresa sem nenhum atraso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você testou a velocidade e a precisão da nossa inteligência contábil em lote na rotina da sua empresa.
+Você experimentou a tranquilidade de não ser pego de surpresa na véspera de vencimentos e ter seu livro caixa organizado no piloto automático sem planilhas.
 
-Para ter autonomia total com múltiplos CNPJs, conciliação bancária periódica e suporte contínuo sem limites, escolha seu plano:
+Para continuar com seus lembretes diários pontuais e relatórios em PDF ativos no próximo mês, confirme sua assinatura por apenas **menos de R$ 2,90/dia** (R$ 87,99/mês):
 
-1️⃣ *AnalisAí Pro* — R$ 297,00/mês ⭐ *Empresarial*
-👉 ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-_(Até 500 lançamentos/mês, até 2 CNPJs, conciliação semanal para 2 bancos e 10 análises de caixa)_
+👉 *Assinar AnalisAí Solo:*
+${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
-2️⃣ *AnalisAí Super* — R$ 597,00/mês 🚀 *Escala Total*
-👉 ${ASAAS_PLANS.monthly.super.checkoutUrl}
-_(Até 1.000 lançamentos/mês, até 4 CNPJs, conciliação semanal contínua para 4 bancos e 20 análises de caixa)_
-
-3️⃣ *AnalisAí Solo Plus* — R$ 157,99/mês
-👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-_(Até 60 lançamentos/mês, 1 CNPJ e conciliação mensal)_
+🎁 *Dica de Ouro — Mensalidade Grátis:*
+Indique 3 amigos ou parceiros empresariais para o AnalisAí e a sua assinatura fica totalmente por nossa conta enquanto eles continuarem ativos!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💳 *A liberação do seu plano é instantânea após o pagamento no Asaas!*
-Dúvidas ou faturamento corporativo? Pode responder aqui mesmo!`;
+*(Suas contas e relatórios continuam guardados a sete chaves aguardando sua confirmação.)*`;
   }
 
   // 2. Perfil MEI (já desfrutou de 3 lançamentos)
