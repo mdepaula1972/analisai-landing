@@ -180,7 +180,8 @@ ${dividendStatus.summaryMessage}
   }
 
   // ── !reset ──────────────────────────────────────────────────────────────────
-  if (action === 'reset') {
+  if (action === 'reset' || action === 'limpar' || action === 'zerar') {
+    // 1. Zera limites e contadores de uso mensal
     await supabase
       .from('usage_cycles')
       .update({
@@ -196,10 +197,35 @@ ${dividendStatus.summaryMessage}
       })
       .eq('client_id', clientId);
 
+    // 2. Limpa contas a pagar/receber de testes do usuário
+    await supabase
+      .from('payables_receivables')
+      .delete()
+      .eq('client_id', clientId);
+
+    // 3. Limpa lançamentos do livro caixa de testes
+    await supabase
+      .from('cash_ledger_entries')
+      .delete()
+      .eq('client_id', clientId);
+
+    // 4. Limpa confirmações pendentes
+    await supabase
+      .from('bot_action_confirmations')
+      .update({ status: 'rejected' })
+      .eq('client_id', clientId)
+      .eq('status', 'pending');
+
     return {
       handled: true,
-      message: `🔄 *Contadores Resetados com Sucesso!*
-Todos os seus limites deste mês foram zerados para testes. Você pode começar novos testes agora.`,
+      message: `🔄 *Reset Completo Realizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ *Contadores zerados:* 0/30 documentos, 0 análises
+🗑️ *Contas e Livro Caixa limpos:* Todas as contas a pagar, receber e lançamentos anteriores foram removidos.
+🧹 *Confirmações pendentes limpas:* Nenhuma ação anterior está aguardando.
+
+Seu perfil está 100% limpo, exatamente como o de um cliente que acabou de se cadastrar!
+💡 Para recriar o cenário de testes com 5 contas demonstrativas a qualquer momento, digite: *!gerar contas*`,
     };
   }
 
