@@ -210,3 +210,54 @@ export async function fetchMediaBase64FromEvolution(messageData: any): Promise<s
     return null;
   }
 }
+
+export interface SendEvolutionPollParams {
+  phone: string;
+  question: string;
+  options: string[];
+  selectableCount?: number;
+}
+
+/**
+ * Envia uma enquete interativa nativa do WhatsApp (botões de clique direto)
+ * com fallback transparente para texto se o dispositivo ou endpoint não suportar.
+ */
+export async function sendEvolutionPoll({
+  phone,
+  question,
+  options,
+  selectableCount = 1,
+}: SendEvolutionPollParams) {
+  const formattedPhone = formatWhatsAppNumber(phone);
+
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}/message/sendPoll/${EVOLUTION_INSTANCE}`, {
+      method: 'POST',
+      headers: {
+        apikey: EVOLUTION_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        number: formattedPhone,
+        name: question,
+        selectableCount,
+        values: options,
+        options: {
+          delay: 1000,
+          presence: 'composing',
+        },
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, data };
+    }
+  } catch (pollErr) {
+    console.warn('[Evolution API] Falha ao enviar enquete nativa, aplicando fallback de texto:', pollErr);
+  }
+
+  // Fallback garantido: Envia como texto formatado com instruções claras
+  const fallbackText = `${question}\n\n${options.map((opt, idx) => `👉 ${opt}`).join('\n')}\n\n_(Você também pode responder digitando *Sim* ou *Não*)_`;
+  return sendEvolutionText({ phone, text: fallbackText });
+}

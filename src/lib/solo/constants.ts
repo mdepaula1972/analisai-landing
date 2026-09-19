@@ -136,6 +136,14 @@ export const ASAAS_PLANS = {
 export const ADMIN_PERSONAL_WHATSAPP = '5514930855878';
 
 export const ASAAS_ONE_OFF = {
+  extraUser: {
+    code: 'extra_user_seat',
+    name: 'Usuário Adicional (Operador)',
+    priceCents: 2990,
+    priceFormatted: 'R$ 29,90/mês',
+    checkoutUrl: 'https://www.asaas.com/c/kurk0fge7wqim8lv',
+    slug: 'kurk0fge7wqim8lv',
+  },
   cashFlowAnalysis: {
     code: 'cash_flow_extra',
     name: 'Análise de Fluxo de Caixa (Avulsa)',

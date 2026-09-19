@@ -129,6 +129,9 @@ function identifyProduct(payment: NonNullable<AsaasPaymentPayload['payment']>) {
   if (value === 2799) {
     return { type: 'one_off', orderType: 'dre_consolidated_multi_cnpj', name: 'DRE Agrupado Multi-CNPJ' };
   }
+  if (value === 2990 || link.includes('kurk0fge7wqim8lv')) {
+    return { type: 'one_off', orderType: 'extra_user_seat', name: 'Usuário Adicional (Operador)' };
+  }
   if (value === 3700) {
     return { type: 'one_off', orderType: 'bank_reconciliation_extra', name: 'Conciliação Bancária Extra' };
   }
@@ -553,7 +556,15 @@ Parabéns, ${firstName}! O seu plano *${plan.name}* está 100% ativo.
 1. Enviar fotos ou PDFs de notas fiscais, cupons e boletos para registro imediato no seu Livro Caixa.
 2. Tirar dúvidas sobre contas a pagar e receber direto no WhatsApp.
 3. Consultar o saldo e o resumo financeiro com o comando *!status*.
-4. Indicar amigos com o comando *!indicar* para concorrer a 100% de isenção na sua mensalidade!`,
+4. Pedir seu relatório oficial DRE com gráficos em PDF digitando *relatório*.
+5. Usar o Consultor Estratégico de Caixa perguntando *"qual conta devo adiar?"*.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎁 *Benefício Exclusivo de Assinante Ativo — Mensalidade Zero:*
+Ao indicar 3 amigos empresários com o seu link exclusivo, enquanto os 3 estiverem com assinaturas ativas, a sua própria mensalidade fica **100% GRATUITA**!
+
+Seu Link Oficial de Indicação:
+👉 https://analisai.me/assinar?ref=${clientId}`,
         });
       }
 

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { sendEvolutionText, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
+import { sendEvolutionText, sendEvolutionPoll, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
 import {
   extractDocumentWithGemini,
   processVoiceCommandWithGemini,
   parseConversationalFinancialEntry,
 } from '@/lib/solo/gemini';
+import { resolveUserAndClient, addTeamMember, listTeamMembers } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
@@ -333,6 +334,73 @@ async function handleAmountChange(clientId: string, phone: string, supplierQuery
 • *Vencimento:* ${dueFmt}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Seus relatórios, fluxo de caixa e lembretes já foram sincronizados com o novo valor de ${newFmt}.`,
+  });
+}
+
+
+async function handleDeleteBill(clientId: string, phone: string, supplierQuery: string) {
+  const supabase = createServiceRoleClient();
+  const { data: bills } = await supabase
+    .from('payables_receivables')
+    .select('*')
+    .eq('client_id', clientId)
+    .in('status', ['open', 'postponed'])
+    .order('created_at', { ascending: false });
+
+  if (!bills || bills.length === 0) {
+    await sendEvolutionText({
+      phone,
+      text: 'Não localizei contas em aberto cadastradas no seu Livro Caixa para exclusão.',
+    });
+    return;
+  }
+
+  let matchedBill: any = null;
+  const cleanQuery = supplierQuery ? supplierQuery.toLowerCase().trim() : '';
+
+  if (cleanQuery.includes('último') || cleanQuery.includes('ultimo') || cleanQuery.includes('recente') || !cleanQuery) {
+    matchedBill = bills[0];
+  } else {
+    const stopWords = ['conta', 'fornecedor', 'boleto', 'de', 'da', 'do', 'a', 'o', 'excluir', 'apagar', 'remover'];
+    const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+
+    matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
+    if (!matchedBill && tokens.length > 0) {
+      matchedBill = bills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+    }
+  }
+
+  if (!matchedBill) {
+    const listStr = bills.map((b: any) => `• *${b.counterparty_name}* (R$ ${Number(b.amount).toFixed(2)})`).join('\n');
+    await sendEvolutionText({
+      phone,
+      text: `Não localizei a conta correspondente a "${supplierQuery}".\n\nSuas contas cadastradas são:\n${listStr}\n\nEnvie o nome exato da conta que deseja excluir.`,
+    });
+    return;
+  }
+
+  await supabase.from('bot_action_confirmations').insert({
+    client_id: clientId,
+    action_type: 'delete_bill',
+    target_entity_id: matchedBill.id,
+    proposed_payload: {
+      bill_id: matchedBill.id,
+      supplier: matchedBill.counterparty_name,
+      amount: matchedBill.amount,
+      due_date: matchedBill.current_due_date,
+      document_id: matchedBill.document_id,
+    },
+    status: 'pending',
+    expires_at: addMinutes(new Date(), 10).toISOString(),
+  });
+
+  const dueFmt = formatDueDateDetails(matchedBill.current_due_date);
+  const amtFmt = Number(matchedBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  await sendEvolutionPoll({
+    phone,
+    question: `🗑️ *Confirmação de Exclusão de Lançamento*\n\n• Fornecedor: *${matchedBill.counterparty_name}*\n• Valor: *${amtFmt}*\n• Vencimento: *${dueFmt}*\n\nDeseja realmente excluir esta conta do seu Livro Caixa?`,
+    options: ['Sim, confirmar exclusão', 'Não, cancelar'],
   });
 }
 
@@ -853,6 +921,52 @@ ${BANK_SAFETY_NOTICE}`,
     }
   }
 
+  // Comando de Gestão de Equipe / Multiusuários
+  if (cleanText.startsWith('!equipe') || cleanText.startsWith('/equipe')) {
+    const parts = cleanText.trim().split(/\s+/);
+    const subAction = parts[1]?.toLowerCase();
+
+    if (subAction === 'adicionar' || subAction === 'add') {
+      const memberPhone = parts[2];
+      const memberName = parts.slice(3).join(' ') || 'Operador';
+      if (!memberPhone) {
+        await sendEvolutionText({
+          phone,
+          text: '⚠️ Formato: *!equipe adicionar [DDD+Telefone] [Nome]*\nEx: *!equipe adicionar 14999998888 Maria*',
+        });
+        return;
+      }
+
+      const res = await addTeamMember(client.id, memberPhone, memberName);
+      await sendEvolutionText({ phone, text: res.message });
+      return;
+    }
+
+    if (subAction === 'listar' || subAction === 'lista') {
+      const members = await listTeamMembers(client.id);
+      if (members.length === 0) {
+        await sendEvolutionText({
+          phone,
+          text: '👥 *Sua Equipe:*\nVocê ainda não possui operadores adicionais cadastrados.\n\nPara adicionar um operador, contrate o acesso por R$ 29,90/mês no link:\n👉 https://www.asaas.com/c/kurk0fge7wqim8lv\n\nE adicione com: *!equipe adicionar [Telefone] [Nome]*',
+        });
+        return;
+      }
+
+      const listStr = members.map((m, i) => `${i + 1}. *${m.member_name}* (${m.whatsapp_number}) — Perfil: ${m.role.toUpperCase()}`).join('\n');
+      await sendEvolutionText({
+        phone,
+        text: `👥 *Membros da Sua Equipe Autorizados:*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${listStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💡 Operadores podem cadastrar notas e despesas avulsas, mas não visualizam saldos nem DRE.`,
+      });
+      return;
+    }
+
+    await sendEvolutionText({
+      phone,
+      text: `👥 *Gestão de Equipe & Multiusuários AnalisAí*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nPermita que secretárias ou funcionários enviem comprovantes sem ver o saldo da sua empresa!\n\n• *!equipe adicionar [Telefone] [Nome]* → Cadastra novo operador\n• *!equipe listar* → Mostra sua equipe ativa\n• *Contratação avulsa (+R$ 29,90/mês):*\n👉 https://www.asaas.com/c/kurk0fge7wqim8lv`,
+    });
+    return;
+  }
+
   // 3. Verifica se o cliente possui uma ação pendente de confirmação (TTL 10 min)
   const { data: pendingAction } = await supabase
     .from('bot_action_confirmations')
@@ -935,6 +1049,29 @@ O valor de *R$ ${Number(payload.total_amount).toFixed(2)}* referente a *${payloa
 • Nova data de vencimento: *${formatDueDateDetails(payload.new_due_date)}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Seus relatórios e lembretes diários já foram sincronizados com a nova data.`,
+        });
+        return;
+      }
+
+      // Confirmação de Exclusão de Conta
+      if (pendingAction.action_type === 'delete_bill') {
+        const payload = pendingAction.proposed_payload as any;
+
+        await supabase
+          .from('payables_receivables')
+          .delete()
+          .eq('id', payload.bill_id);
+
+        if (payload.document_id) {
+          await supabase
+            .from('cash_ledger_entries')
+            .delete()
+            .eq('document_id', payload.document_id);
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `🗑️ *Conta Excluída com Sucesso!*\n\nO lançamento referente a *${payload.supplier}* (R$ ${Number(payload.amount).toFixed(2)}) foi removido do seu Livro Caixa e da sua agenda de pagamentos.`,
         });
         return;
       }
@@ -1557,6 +1694,20 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
 
   // 7. Mensagens de Texto
 
+  // 7.3 Exclusão de Lançamentos por Texto (Ex: "Excluir conta da Sabesp", "Apagar conta Copel", "Remover lançamento")
+  if (
+    lowerText.startsWith('excluir ') ||
+    lowerText.startsWith('apagar ') ||
+    lowerText.startsWith('remover ') ||
+    lowerText.includes('excluir conta') ||
+    lowerText.includes('apagar conta') ||
+    lowerText.includes('remover conta')
+  ) {
+    const supToDelete = cleanText.replace(/^(excluir|apagar|remover)\s+(a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta)?\s*/i, '').trim();
+    await handleDeleteBill(client.id, phone, supToDelete);
+    return;
+  }
+
   // 7.1 Listagem de Contas a Pagar por Texto
   const lowerText = cleanText.toLowerCase();
   if (
@@ -1830,8 +1981,11 @@ Na véspera do vencimento (às 10h em ponto) eu te lembro aqui para manter seus 
     phone,
     text: `Olá, ${client.name.split(' ')[0]}! 😊
 Como posso te ajudar hoje?
-• Envie uma **foto ou PDF de boleto/nota** para eu lançar no seu Livro Caixa
-• Digite ou mande áudio: *"Pagar Fornecedor de Embalagens R$ 350 dia 25"* ou *"Receber R$ 1.500 do Cliente Pedro amanhã"*
+• 📸 Envie **foto ou PDF de boleto/nota** para agendar pagamentos
+• 🎙️ Fale por áudio ou digite **despesas e receitas do dia a dia** (Livro Caixa em tempo real):
+  Ex: *"Gastei 45 de combustível"* ou *"Recebi 850 do cliente João via Pix"*
+• 📊 Peça seu **Livro Caixa e DRE com gráficos em PDF** digitando *relatório*
+• 🗑️ Exclua lançamentos dizendo *"Excluir conta da Sabesp"*
 • Envie um **áudio** alterando vencimento de uma conta ou pedindo conselho de caixa
 • Digite *relatório* ou *PDF* para receber seu Livro Caixa oficial em anexo
 • Pergunte *"qual conta devo atrasar?"* para analisar seu aperto de caixa

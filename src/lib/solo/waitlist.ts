@@ -51,19 +51,23 @@ export async function recordWaitlistLead(entry: WaitlistEntry): Promise<void> {
   const planPrice = entry.desiredPlan === 'pro' ? '297,00' : '597,00';
   const company = entry.companyName || entry.clientName || cleanPhone;
 
-  // 4. Notifica o Marcos no WhatsApp informando o crescimento da demanda
+  // 4. Notifica o Marcos no WhatsApp com dados individuais + termômetro acumulado
   try {
-    const alertMsg = `🚨 *Radar de Demanda AnalisAí — Lista de Espera em Alta!*
+    const summary = await getWaitlistSummary();
+    const alertMsg = `🚨 *Radar de Demanda AnalisAí — Novo Interessado!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏢 *Nova manifestação de interesse:*
-• *Plano Desejado:* ${planUpper} (R$ ${planPrice}/mês)
-• *Contato/Empresa:* ${company} (${cleanPhone})
-${entry.cnpj ? `• *CNPJ:* ${entry.cnpj}\n` : ''}
-📊 *Estatísticas Atualizadas no Banco de Dados:*
-• Empresas na fila do ${planUpper}: *${totalWaiting} empresa(s)*
-• Demanda mensal reprimida: *R$ ${Number(estimatedMrr).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês*
-
-💡 *Dica Estratégica:* A demanda pelo plano ${planUpper} está crescendo! Digite *!waitlist* aqui no WhatsApp a qualquer momento para ver a lista completa e analisar a liberação de vagas seletivas.`;
+🏢 *Dados do Novo Interessado:*
+• *Plano:* ${planUpper} (R$ ${planPrice}/mês)
+• *Contato:* ${entry.clientName || 'Interessado'} (${cleanPhone})
+• *Empresa:* ${entry.companyName || 'Não informada'}
+${entry.cnpj ? `• *CNPJ:* ${entry.cnpj}\n` : ''}${entry.monthlyDocEstimate ? `• *Demanda Estimada:* ${entry.monthlyDocEstimate} documentos/mês\n` : ''}
+📈 *Termômetro Acumulado da Demanda:*
+• Fila do Plano Pro (R$ 297/mês): *${summary.proCount} empresa(s)*
+• Fila do Plano Super (R$ 597/mês): *${summary.superCount} empresa(s)*
+• *Total Geral Aguardando:* *${summary.total} empresas*
+💰 *Demanda Mensal Acumulada (MRR):* *R$ ${summary.totalEstimatedMrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *Ação Rápida:* Para ver o histórico consolidado de interessados, digite *!waitlist* aqui no WhatsApp.`;
 
     await sendEvolutionText({
       phone: ADMIN_PHONE,
