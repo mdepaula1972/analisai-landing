@@ -187,6 +187,155 @@ O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para mante
   return false;
 }
 
+async function renderBillsList(clientId: string, phone: string, filter?: string) {
+  const supabase = createServiceRoleClient();
+  const { data: bills, error } = await supabase
+    .from('payables_receivables')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('type', 'payable')
+    .in('status', ['open', 'postponed'])
+    .order('current_due_date', { ascending: true });
+
+  if (error || !bills || bills.length === 0) {
+    await sendEvolutionText({
+      phone,
+      text: '📋 *Suas Contas a Pagar:*\n\nParabéns! Você não possui nenhuma conta a pagar pendente cadastrada no momento. 🎉',
+    });
+    return;
+  }
+
+  const todayYMD = new Date().toISOString().split('T')[0];
+  const overdueBills: any[] = [];
+  const upcomingBills: any[] = [];
+  let totalOverdue = 0;
+  let totalUpcoming = 0;
+
+  for (const b of bills) {
+    const dueDate = b.current_due_date || b.original_due_date;
+    const isOverdue = dueDate < todayYMD;
+    if (isOverdue) {
+      overdueBills.push(b);
+      totalOverdue += Number(b.amount || 0);
+    } else {
+      upcomingBills.push(b);
+      totalUpcoming += Number(b.amount || 0);
+    }
+  }
+
+  let text = '📋 *Painel de Contas a Pagar Cadastradas*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+
+  if (overdueBills.length > 0 && filter !== 'upcoming') {
+    text += `🔴 *VENCIDAS (${overdueBills.length}):*\n`;
+    for (const b of overdueBills) {
+      const amtFmt = Number(b.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      text += `• *${b.counterparty_name}*\n  Valor: *${amtFmt}* | Vencimento: ${formatDueDateDetails(b.current_due_date)}\n`;
+    }
+    text += `Subtotal Vencido: *${totalOverdue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n\n`;
+  }
+
+  if (upcomingBills.length > 0 && filter !== 'overdue') {
+    text += `🟡 *A VENCER (${upcomingBills.length}):*\n`;
+    for (const b of upcomingBills) {
+      const amtFmt = Number(b.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      text += `• *${b.counterparty_name}*\n  Valor: *${amtFmt}* | Vencimento: ${formatDueDateDetails(b.current_due_date)}\n`;
+    }
+    text += `Subtotal a Vencer: *${totalUpcoming.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n\n`;
+  }
+
+  const grandTotal = (totalOverdue + totalUpcoming).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💰 *Total Geral a Pagar:* *${grandTotal}*\n\n💡 *Dica:* Para alterar valor ou data de qualquer conta, fale ou digite:\nEx: _"Mudar valor da Sabesp para 85,00"_ ou _"Adiar Copel para dia 25"_`;
+
+  await sendEvolutionText({ phone, text });
+}
+
+async function handleAmountChange(clientId: string, phone: string, supplierQuery: string, newAmount: number) {
+  const supabase = createServiceRoleClient();
+  if (!supplierQuery || isNaN(newAmount) || newAmount <= 0) {
+    await sendEvolutionText({
+      phone,
+      text: '⚠️ Não consegui identificar o fornecedor ou o novo valor. Por favor, envie no formato:\n*"Mudar valor da Sabesp para 85,00"*',
+    });
+    return;
+  }
+
+  const { data: openBills } = await supabase
+    .from('payables_receivables')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('type', 'payable')
+    .in('status', ['open', 'postponed'])
+    .order('current_due_date', { ascending: true });
+
+  if (!openBills || openBills.length === 0) {
+    await sendEvolutionText({
+      phone,
+      text: 'Não localizei contas a pagar cadastradas em aberto no seu Livro Caixa.',
+    });
+    return;
+  }
+
+  const cleanQuery = supplierQuery.toLowerCase().trim();
+  const stopWords = ['conta', 'fornecedor', 'boleto', 'de', 'da', 'do', 'o', 'a', 'valor', 'reais'];
+  const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+
+  let matchedBill = openBills.find((b: any) =>
+    b.counterparty_name.toLowerCase().includes(cleanQuery)
+  );
+
+  if (!matchedBill && tokens.length > 0) {
+    matchedBill = openBills.find((b: any) =>
+      tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t))
+    );
+  }
+
+  if (!matchedBill) {
+    const listStr = openBills
+      .map((b: any) => `• *${b.counterparty_name}* (R$ ${Number(b.amount).toFixed(2)})`)
+      .join('\n');
+    await sendEvolutionText({
+      phone,
+      text: `Não localizei nenhuma conta correspondente a "${supplierQuery}".\n\nSuas contas cadastradas são:\n${listStr}\n\nEnvie o nome correto da conta que deseja alterar.`,
+    });
+    return;
+  }
+
+  const oldAmount = Number(matchedBill.amount);
+
+  await supabase
+    .from('payables_receivables')
+    .update({
+      amount: newAmount,
+      notes: `Valor alterado de R$ ${oldAmount.toFixed(2)} para R$ ${newAmount.toFixed(2)} em ${new Date().toLocaleDateString('pt-BR')}`,
+    })
+    .eq('client_id', clientId)
+    .ilike('counterparty_name', `%${matchedBill.counterparty_name}%`)
+    .in('status', ['open', 'postponed']);
+
+  if (matchedBill.document_id) {
+    await supabase
+      .from('cash_ledger_entries')
+      .update({ amount: -Math.abs(newAmount) })
+      .eq('document_id', matchedBill.document_id);
+  }
+
+  const oldFmt = oldAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const newFmt = newAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const dueFmt = formatDueDateDetails(matchedBill.current_due_date);
+
+  await sendEvolutionText({
+    phone,
+    text: `✅ *Valor de Conta Atualizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Fornecedor:* ${matchedBill.counterparty_name}
+• *Valor Anterior:* ${oldFmt}
+• *Novo Valor Corrigido:* *${newFmt}*
+• *Vencimento:* ${dueFmt}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Seus relatórios, fluxo de caixa e lembretes já foram sincronizados com o novo valor de ${newFmt}.`,
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
@@ -716,8 +865,10 @@ ${BANK_SAFETY_NOTICE}`,
     .single();
 
   if (pendingAction && rawText) {
-    const isAffirmative = /^(sim|s|confirmo|pode|correto|ok|positivo)/i.test(cleanText);
-    const isNegative = /^(não|nao|n|cancela|cancelar|errado|incorreto)/i.test(cleanText);
+    const trimmed = cleanText.trim().toLowerCase();
+    const isAffirmative = /^(sim\b|s\b|confirmo\b|pode\b|correto\b|ok\b|positivo\b|com\s*certeza\b)/i.test(trimmed) && trimmed.length <= 20;
+    const isNegative = /^(n[aã]o\b|n\b|cancela\b|cancelar\b|errado\b|incorreto\b|deixa\b)/i.test(trimmed) && trimmed.length <= 20;
+    
 
     if (isAffirmative) {
       await supabase
@@ -1146,6 +1297,19 @@ Deseja migrar para o Solo agora?
       if (audioResult.functionCalls.length > 0) {
         const call = audioResult.functionCalls[0];
 
+        // 0) Function Call: Listar Contas por Voz
+        if (call.name === 'list_bills') {
+          await renderBillsList(client.id, phone, (call.args as any)?.filter);
+          return;
+        }
+
+        // 1) Function Call: Alterar Valor de Conta por Voz
+        if (call.name === 'propose_amount_change') {
+          const vArgs = call.args as any;
+          await handleAmountChange(client.id, phone, vArgs?.supplier_name, Number(vArgs?.new_amount));
+          return;
+        }
+
         // A) Function Call: Alterar Vencimento por Voz
         if (call.name === 'propose_due_date_change') {
           const args = call.args as any;
@@ -1193,10 +1357,10 @@ Deseja migrar para o Solo agora?
               });
             }
 
-            // 3. Fallback para termo "embalagem"
-            if (!matchedBill && (cleanQuery.includes('embalage') || cleanQuery.includes('fornecedor'))) {
+            // 3. Busca parcial por palavras do fornecedor solicitado (sem forçar fornecedor aleatório)
+            if (!matchedBill && cleanQuery.length >= 3) {
               matchedBill = openBills.find((b: any) =>
-                b.counterparty_name.toLowerCase().includes('embalage')
+                cleanQuery.includes(b.counterparty_name.toLowerCase().slice(0, 4))
               );
             }
           }
@@ -1392,6 +1556,45 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
   }
 
   // 7. Mensagens de Texto
+
+  // 7.1 Listagem de Contas a Pagar por Texto
+  const lowerText = cleanText.toLowerCase();
+  if (
+    lowerText.includes('contas cadastradas') ||
+    lowerText.includes('contas a vencer') ||
+    lowerText.includes('contas vencidas') ||
+    lowerText.includes('mostrar contas') ||
+    lowerText.includes('mostre as contas') ||
+    lowerText.includes('mostrar as contas') ||
+    lowerText.includes('mostre-me todas as contas') ||
+    lowerText.includes('listar contas') ||
+    lowerText.includes('todas as contas') ||
+    lowerText.includes('quais contas') ||
+    lowerText === 'contas' ||
+    (lowerText.includes('contas') && (lowerText.includes('vencer') || lowerText.includes('vencida')))
+  ) {
+    let filter = 'all';
+    if (lowerText.includes('vencida') && !lowerText.includes('a vencer')) filter = 'overdue';
+    else if (lowerText.includes('a vencer') && !lowerText.includes('vencida')) filter = 'upcoming';
+    await renderBillsList(client.id, phone, filter);
+    return;
+  }
+
+  // 7.2 Alteração de Valor de Conta por Texto (Ex: "Sabesp, mudar valor de 89 para 85,45" ou "Mudar valor da Sabesp para 85")
+  const textAmountMatch =
+    cleanText.match(/(?:mudar|alterar|corrigir|trocar)s+(?:os+)?valors+(?:d[ao]s+)?([a-zA-Z0-9s]+?)s+(?:des+[d.,]+s+)?paras+([0-9.,]+)/i) ||
+    cleanText.match(/([a-zA-Z0-9s]+?)[,;:s]+(?:mudar|alterar|corrigir|trocar)s+(?:os+)?valors+(?:des+[d.,]+s+)?paras+([0-9.,]+)/i) ||
+    cleanText.match(/(?:mudar|alterar)s+([a-zA-Z0-9s]+?)s+paras+([0-9.,]+)s+reais/i);
+
+  if (textAmountMatch) {
+    const rawSup = textAmountMatch[1].replace(/^(contas+d[ao]|fornecedors+d[ao]|conta)s+/i, '').trim();
+    const rawValStr = textAmountMatch[2].replace(/./g, '').replace(',', '.');
+    const parsedVal = parseFloat(rawValStr);
+    if (!isNaN(parsedVal) && parsedVal > 0 && rawSup.length >= 2) {
+      await handleAmountChange(client.id, phone, rawSup, parsedVal);
+      return;
+    }
+  }
 
   // Consultor de Caixa por Texto
   if (

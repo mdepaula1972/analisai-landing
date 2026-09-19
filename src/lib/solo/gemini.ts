@@ -234,14 +234,45 @@ export async function processVoiceCommandWithGemini(
 
   const functionDeclarations = [
     {
-      name: 'propose_due_date_change',
-      description: 'Invocada quando o cliente pede para alterar, adiar ou prorrogar o vencimento de uma conta a pagar cadastrada.',
+      name: 'list_bills',
+      description: 'Invocada quando o cliente quer consultar, listar ou ver suas contas a pagar cadastradas, contas a vencer ou contas vencidas.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          filter: {
+            type: SchemaType.STRING,
+            description: '"all" para todas as contas em aberto, "overdue" para apenas vencidas, ou "upcoming" para a vencer.',
+          },
+        },
+      },
+    },
+    {
+      name: 'propose_amount_change',
+      description: 'Invocada quando o cliente pede para alterar, mudar ou atualizar o VALOR monetário (em R$) de uma conta a pagar cadastrada. (Ex: "mudar valor da Sabesp para 85,00" ou "Sabesp alterar para 85 reais")',
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
           supplier_name: {
             type: SchemaType.STRING,
-            description: 'Nome do fornecedor ou palavra-chave identificadora (ex: Copel, Vivo, Embalagens, Aluguel)',
+            description: 'Nome do fornecedor ou identificador da conta (ex: Sabesp, Copel, Vivo, etc.)',
+          },
+          new_amount: {
+            type: SchemaType.NUMBER,
+            description: 'Novo valor numérico em reais (ex: 85.00 ou 85.45)',
+          },
+        },
+        required: ['supplier_name', 'new_amount'],
+      },
+    },
+    {
+      name: 'propose_due_date_change',
+      description: 'Invocada quando o cliente pede para alterar, adiar ou prorrogar a DATA DE VENCIMENTO de uma conta a pagar cadastrada. NÃO usar quando o pedido for para mudar o VALOR monetário.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          supplier_name: {
+            type: SchemaType.STRING,
+            description: 'Nome do fornecedor ou palavra-chave identificadora (ex: Copel, Vivo, Sabesp, Aluguel)',
           },
           target_date: {
             type: SchemaType.STRING,
@@ -296,19 +327,12 @@ export async function processVoiceCommandWithGemini(
     },
   ];
 
-  const systemInstruction = `Você é o assistente financeiro do AnalisAí Solo.
-Você compreende perfeitamente comandos por áudio em português do Brasil, incluindo ruídos e sotaques.
-Ao ouvir as instruções do cliente, você deve identificar a intenção financeira e acionar a ferramenta correta.
-Se o cliente pedir para prorrogar uma conta (ex: "mude o vencimento do fornecedor de embalagens para dia 25"), extraia "fornecedor de embalagens" (ou "embalagens") e converta "dia 25" para a data no formato 2026-09-25.
-Se o cliente pedir conselho sobre aperto de caixa ou qual conta atrasar, acione request_cash_flow_postpone_advice.
-Data de referência: 2026-09-13. ${contextText}`;
-
-    // Limpa o MIME type para o formato estrito aceito pelo Google (ex: 'audio/ogg')
+  // Limpa o MIME type para o formato estrito aceito pelo Google (ex: 'audio/ogg')
   let cleanMime = mimeType ? mimeType.split(';')[0].trim().toLowerCase() : 'audio/ogg';
   if (cleanMime === 'audio/opus') cleanMime = 'audio/ogg';
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
-  // Lista de modelos oficiais com suporte nativo a áudio multimodal (ignora totalmente família 1.5 depreciada/404)
+  // Lista de modelos oficiais com suporte nativo a áudio multimodal (Gemini 3 oficial)
   const modelsToTry = [
     'gemini-3.6-flash',
     'gemini-3.7-flash',
@@ -338,7 +362,7 @@ Data de referência: 2026-09-13. ${contextText}`;
       if (txt && txt.trim()) {
         transcribedText = txt.trim();
         console.log(`[Voice Gemini Transcription] Sucesso com ${modelName}: "${transcribedText}"`);
-        break; // Sucesso na transcrição
+        break;
       }
     } catch (err: any) {
       const msg = err?.message || String(err);
@@ -359,28 +383,27 @@ Data de referência: 2026-09-13. ${contextText}`;
   let functionCalls: any[] = [];
   const lower = transcribedText.toLowerCase();
 
-  // Regra A: Alterar Vencimento
+  // 1. Consulta / Listagem de Contas a Pagar por Voz
   if (
-    (lower.includes('muda') || lower.includes('mude') || lower.includes('alter') || lower.includes('adia') || lower.includes('prorroga') || lower.includes('passa')) &&
-    (lower.includes('embalag') || lower.includes('fornecedor') || lower.includes('copel') || lower.includes('vivo') || lower.includes('aluguel') || lower.includes('conta'))
+    lower.includes('contas cadastradas') ||
+    lower.includes('contas a vencer') ||
+    lower.includes('contas vencidas') ||
+    lower.includes('mostrar contas') ||
+    lower.includes('mostre as contas') ||
+    lower.includes('mostrar as contas') ||
+    lower.includes('mostre-me todas as contas') ||
+    lower.includes('listar contas') ||
+    lower.includes('quais contas') ||
+    lower.includes('todas as contas') ||
+    (lower.includes('contas') && (lower.includes('vencer') || lower.includes('vencida')))
   ) {
-    let sup = 'embalagens';
-    if (lower.includes('copel') || lower.includes('luz') || lower.includes('energia')) sup = 'copel';
-    else if (lower.includes('vivo') || lower.includes('fibra') || lower.includes('internet')) sup = 'vivo';
-    else if (lower.includes('aluguel') || lower.includes('imobiliaria')) sup = 'aluguel';
-
-    let tDate = '2026-09-25';
-    const matchDay = lower.match(/(?:dia|para)\s*(\d{1,2})/);
-    if (matchDay) {
-      tDate = `2026-09-${matchDay[1].padStart(2, '0')}`;
-    }
+    let filter = 'all';
+    if (lower.includes('vencida') && !lower.includes('a vencer')) filter = 'overdue';
+    else if (lower.includes('a vencer') && !lower.includes('vencida')) filter = 'upcoming';
 
     functionCalls.push({
-      name: 'propose_due_date_change',
-      args: {
-        supplier_name: sup,
-        target_date: tDate,
-      },
+      name: 'list_bills',
+      args: { filter },
     });
 
     return {
@@ -389,14 +412,65 @@ Data de referência: 2026-09-13. ${contextText}`;
     };
   }
 
-  // Regra B: Consultor de Caixa por Voz
+  // 2. Alteração de VALOR de Conta por Voz (ex: "mudar valor da Sabesp para 85,00" ou "alterar valor Sabesp para 85")
+  const amountMatch =
+    lower.match(/(?:mudar|alterar|corrigir|trocar)\s+(?:o\s+)?valor\s+(?:d[ao]\s+)?([a-z0-9\s]+?)\s+(?:de\s+[\d.,]+\s+)?para\s+([0-9.,]+)/i) ||
+    lower.match(/([a-z0-9\s]+?)[,;\s]+(?:mudar|alterar|corrigir)\s+valor\s+(?:de\s+[\d.,]+\s+)?para\s+([0-9.,]+)/i) ||
+    lower.match(/(?:mudar|alterar)\s+([a-z0-9\s]+?)\s+para\s+([0-9.,]+)\s+reais/i);
+
+  if (amountMatch) {
+    const rawSupplier = amountMatch[1].replace(/^(conta\s+d[ao]|fornecedor\s+d[ao]|conta)\s+/i, '').trim();
+    const rawValStr = amountMatch[2].replace(/\./g, '').replace(',', '.');
+    const parsedVal = parseFloat(rawValStr);
+    if (!isNaN(parsedVal) && parsedVal > 0 && rawSupplier.length >= 2) {
+      functionCalls.push({
+        name: 'propose_amount_change',
+        args: {
+          supplier_name: rawSupplier,
+          new_amount: parsedVal,
+        },
+      });
+
+      return {
+        functionCalls,
+        textResponse: transcribedText,
+      };
+    }
+  }
+
+  // 3. Alteração de DATA DE VENCIMENTO por Voz (ex: "mudar vencimento da Copel para dia 25")
+  if (
+    (lower.includes('vencimento') || lower.includes('adiar') || lower.includes('postergar') || lower.includes('prorrogar') || lower.includes('passar')) &&
+    !lower.includes('valor')
+  ) {
+    const supplierMatch = lower.match(/(?:conta|fornecedor|do|da)\s+([a-z0-9\s]+?)\s+(?:para|pro|dia)/i);
+    let sup = supplierMatch ? supplierMatch[1].trim() : '';
+    const matchDay = lower.match(/(?:dia|para)\s*(\d{1,2})/);
+    let tDate = matchDay ? `2026-09-${matchDay[1].padStart(2, '0')}` : '2026-09-25';
+
+    if (sup.length >= 2) {
+      functionCalls.push({
+        name: 'propose_due_date_change',
+        args: {
+          supplier_name: sup,
+          target_date: tDate,
+        },
+      });
+
+      return {
+        functionCalls,
+        textResponse: transcribedText,
+      };
+    }
+  }
+
+  // 4. Consultor de Caixa por Voz
   if (
     lower.includes('atrasar') ||
     lower.includes('postergar') ||
     lower.includes('sem dinheiro') ||
     lower.includes('qual conta') ||
-    lower.includes('aperto') ||
-    lower.includes('adiar')
+    lower.includes('aperto')
   ) {
     functionCalls.push({
       name: 'request_cash_flow_postpone_advice',
@@ -409,7 +483,7 @@ Data de referência: 2026-09-13. ${contextText}`;
     };
   }
 
-  // Regra C: Pedido de PDF / Livro Caixa por Voz
+  // 5. Pedido de PDF / Livro Caixa por Voz
   if (
     lower.includes('pdf') ||
     lower.includes('relatório') ||
@@ -428,14 +502,17 @@ Data de referência: 2026-09-13. ${contextText}`;
     };
   }
 
-  // Regra D: Se nenhuma regra heurística direta disparou, usa o Gemini de texto com Function Calling
+  // 6. Gemini 3.6 Flash com Function Calling para extração precisa
   try {
     const textModel = genAI.getGenerativeModel({
       model: 'gemini-3.6-flash',
       tools: [{ functionDeclarations: functionDeclarations as any }],
       systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
 Classifique o comando do usuário e acione a ferramenta correta.
-Data de referência: 2026-09-13.`,
+Se o usuário pedir para listar contas, acione list_bills.
+Se pedir para mudar o valor em dinheiro, acione propose_amount_change com supplier_name e new_amount.
+Se pedir para adiar ou prorrogar a data, acione propose_due_date_change com supplier_name e target_date.
+Data de referência: 2026-09-19.`,
     });
 
     const textResult = await textModel.generateContent(`Comando do cliente: "${transcribedText}"`);
@@ -452,4 +529,3 @@ Data de referência: 2026-09-13.`,
     textResponse: transcribedText,
   };
 }
-
