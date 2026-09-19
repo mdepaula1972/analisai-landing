@@ -20,7 +20,7 @@ export async function extractDocumentWithGemini(
 ): Promise<ExtractedDocumentData> {
   const genAI = getGeminiClient();
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: ({
@@ -146,7 +146,7 @@ export async function parseConversationalFinancialEntry(
 ) {
   const genAI = getGeminiClient();
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: ({
@@ -310,10 +310,10 @@ Data de referência: 2026-09-13. ${contextText}`;
 
   // Lista de modelos oficiais com suporte nativo a áudio multimodal (ignora totalmente família 1.5 depreciada/404)
   const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.5-pro',
-    'gemini-2.0-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.7-flash',
+    'gemini-3.1-pro-preview',
+    'gemini-3.5-flash-lite',
   ];
   let transcribedText = '';
   const attemptedErrors: string[] = [];
@@ -431,7 +431,7 @@ Data de referência: 2026-09-13. ${contextText}`;
   // Regra D: Se nenhuma regra heurística direta disparou, usa o Gemini de texto com Function Calling
   try {
     const textModel = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       tools: [{ functionDeclarations: functionDeclarations as any }],
       systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
 Classifique o comando do usuário e acione a ferramenta correta.
@@ -452,3 +452,4 @@ Data de referência: 2026-09-13.`,
     textResponse: transcribedText,
   };
 }
+
