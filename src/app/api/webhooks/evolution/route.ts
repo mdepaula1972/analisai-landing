@@ -1307,29 +1307,40 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
               lower.startsWith('projeto ') ||
               lower.startsWith('criar projeto ') ||
               lower.startsWith('crie um projeto ') ||
-              lower.startsWith('novo projeto ')
+              lower.startsWith('novo projeto ') ||
+              lower.startsWith('iniciar projeto ') ||
+              lower.startsWith('fazer um projeto ')
             ) {
               const ideaContent = cleanTranscribed.replace(
-                /^(crie um projeto|criar projeto|novo projeto|projeto)\s*/i,
+                /^(crie um projeto|criar projeto|novo projeto|iniciar projeto|fazer um projeto|projeto)\s*[:,-]?\s*/i,
                 ''
               );
               commandToRun = `!projeto ${ideaContent}`;
             } else if (
               lower.startsWith('bug ') ||
               lower.startsWith('reportar bug ') ||
-              lower.startsWith('novo bug ')
+              lower.startsWith('novo bug ') ||
+              lower.startsWith('tem um bug ') ||
+              lower.startsWith('achei um bug ') ||
+              lower.startsWith('erro ') ||
+              lower.startsWith('reportar erro ') ||
+              lower.startsWith('problema ') ||
+              lower.startsWith('defeito ')
             ) {
               const bugContent = cleanTranscribed.replace(
-                /^(reportar bug|novo bug|bug)\s*/i,
+                /^(reportar bug|novo bug|tem um bug|achei um bug|bug|reportar erro|erro|problema|defeito)\s*[:,-]?\s*/i,
                 ''
               );
               commandToRun = `!bug ${bugContent}`;
             } else if (
               lower.startsWith('ideia ') ||
-              lower.startsWith('nova ideia ')
+              lower.startsWith('nova ideia ') ||
+              lower.startsWith('tive uma ideia ') ||
+              lower.startsWith('sugestao ') ||
+              lower.startsWith('sugestão ')
             ) {
               const ideaContent = cleanTranscribed.replace(
-                /^(nova ideia|ideia)\s*/i,
+                /^(tive uma ideia|nova ideia|ideia|sugestao|sugestão)\s*[:,-]?\s*/i,
                 ''
               );
               commandToRun = `!ideia ${ideaContent}`;
