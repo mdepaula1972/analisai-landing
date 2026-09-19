@@ -1137,7 +1137,11 @@ Deseja migrar para o Solo agora?
     }
 
     try {
-      const audioResult = await processVoiceCommandWithGemini(audioBase64);
+      const rawMimeType =
+        body.data?.message?.audioMessage?.mimetype ||
+        body.data?.mimetype ||
+        'audio/ogg';
+      const audioResult = await processVoiceCommandWithGemini(audioBase64, rawMimeType);
 
       if (audioResult.functionCalls.length > 0) {
         const call = audioResult.functionCalls[0];
@@ -1290,7 +1294,64 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
         }
       }
 
-      if (audioResult.textResponse && audioResult.textResponse.trim().length >= 4) {
+      if (audioResult.textResponse && audioResult.textResponse.trim().length >= 2) {
+        const cleanTranscribed = audioResult.textResponse.trim();
+
+        // 🌟 Se for Administrador (Marcos), aceita e executa comandos de criação de projetos, bugs e ideias por voz!
+        if (client.is_admin) {
+          let commandToRun = cleanTranscribed;
+          const lower = cleanTranscribed.toLowerCase();
+
+          if (!cleanTranscribed.startsWith('!') && !cleanTranscribed.startsWith('/')) {
+            if (
+              lower.startsWith('projeto ') ||
+              lower.startsWith('criar projeto ') ||
+              lower.startsWith('crie um projeto ') ||
+              lower.startsWith('novo projeto ')
+            ) {
+              const ideaContent = cleanTranscribed.replace(
+                /^(crie um projeto|criar projeto|novo projeto|projeto)\s*/i,
+                ''
+              );
+              commandToRun = `!projeto ${ideaContent}`;
+            } else if (
+              lower.startsWith('bug ') ||
+              lower.startsWith('reportar bug ') ||
+              lower.startsWith('novo bug ')
+            ) {
+              const bugContent = cleanTranscribed.replace(
+                /^(reportar bug|novo bug|bug)\s*/i,
+                ''
+              );
+              commandToRun = `!bug ${bugContent}`;
+            } else if (
+              lower.startsWith('ideia ') ||
+              lower.startsWith('nova ideia ')
+            ) {
+              const ideaContent = cleanTranscribed.replace(
+                /^(nova ideia|ideia)\s*/i,
+                ''
+              );
+              commandToRun = `!ideia ${ideaContent}`;
+            } else if (lower === 'reset' || lower === 'limpar' || lower === 'zerar') {
+              commandToRun = '!reset';
+            } else if (lower === 'ajuda' || lower === 'comandos' || lower === 'roteiro') {
+              commandToRun = '!ajuda';
+            }
+          }
+
+          if (commandToRun.startsWith('!') || commandToRun.startsWith('/')) {
+            const adminResponse = await handleAdminCommands(client.id, commandToRun);
+            if (adminResponse.handled && adminResponse.message) {
+              await sendEvolutionText({
+                phone,
+                text: `🎙️ _Comando por voz reconhecido: "${cleanTranscribed}"_\n\n${adminResponse.message}`,
+              });
+              return;
+            }
+          }
+        }
+
         const handledAudioEntry = await processConversationalEntry(
           client,
           plan,

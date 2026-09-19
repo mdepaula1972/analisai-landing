@@ -303,14 +303,20 @@ Se o cliente pedir para prorrogar uma conta (ex: "mude o vencimento do fornecedo
 Se o cliente pedir conselho sobre aperto de caixa ou qual conta atrasar, acione request_cash_flow_postpone_advice.
 Data de referência: 2026-09-13. ${contextText}`;
 
-  // Limpa o MIME type para o formato estrito aceito pelo Google (ex: 'audio/ogg')
-  const cleanMime = mimeType ? mimeType.split(';')[0].trim() : 'audio/ogg';
+    // Limpa o MIME type para o formato estrito aceito pelo Google (ex: 'audio/ogg')
+  let cleanMime = mimeType ? mimeType.split(';')[0].trim().toLowerCase() : 'audio/ogg';
+  if (cleanMime === 'audio/opus') cleanMime = 'audio/ogg';
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
-  // Lista de modelos oficiais com suporte comprovado a áudio no Google AI Studio
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+  // Lista de modelos oficiais com suporte nativo a áudio multimodal (ignora totalmente família 1.5 depreciada/404)
+  const modelsToTry = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash-lite',
+  ];
   let transcribedText = '';
-  let lastError: any = null;
+  const attemptedErrors: string[] = [];
 
   // ETAPA 1: Transcrição pura do áudio (sem tools na chamada multimodal para evitar incompatibilidade da API)
   for (const modelName of modelsToTry) {
@@ -324,23 +330,27 @@ Data de referência: 2026-09-13. ${contextText}`;
           },
         },
         {
-          text: 'Transcreva com precisão o que foi falado neste áudio em português. Retorne estritamente o texto falado, sem introduções ou explicações.',
+          text: 'Transcreva com precisão o que foi falado neste áudio em português do Brasil. Retorne estritamente o texto falado, sem introduções, aspas ou explicações adicionais.',
         },
       ]);
 
       const txt = result.response.text();
       if (txt && txt.trim()) {
         transcribedText = txt.trim();
+        console.log(`[Voice Gemini Transcription] Sucesso com ${modelName}: "${transcribedText}"`);
         break; // Sucesso na transcrição
       }
-    } catch (err) {
-      console.warn(`[Voice Gemini Transcription] Falha com ${modelName}:`, err);
-      lastError = err;
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      console.warn(`[Voice Gemini Transcription] Falha com ${modelName}:`, msg);
+      attemptedErrors.push(`[${modelName}]: ${msg}`);
     }
   }
 
   if (!transcribedText) {
-    throw lastError || new Error('Não foi possível transcrever o áudio com os modelos disponíveis.');
+    throw new Error(
+      `Não foi possível transcrever o áudio com os modelos disponíveis.\nModelos testados:\n${attemptedErrors.join('\n')}`
+    );
   }
 
   console.log('[Voice Command] Áudio transcrito com sucesso:', transcribedText);
