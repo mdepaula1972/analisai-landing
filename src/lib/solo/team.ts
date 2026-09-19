@@ -118,3 +118,79 @@ export async function listTeamMembers(clientId: string): Promise<TeamMemberRecor
 
   return data || [];
 }
+
+/**
+ * Remove / Desvincula um membro da equipe
+ */
+export async function removeTeamMember(
+  clientId: string,
+  rawPhone: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceRoleClient();
+  const cleanPhone = rawPhone.replace(/\D/g, '');
+
+  const { data: member } = await supabase
+    .from('client_team_members')
+    .select('*')
+    .eq('client_id', clientId)
+    .ilike('whatsapp_number', `%${cleanPhone.slice(-8)}%`)
+    .maybeSingle();
+
+  if (!member) {
+    return { success: false, message: `Não localizei nenhum membro de equipe com o telefone final ${cleanPhone.slice(-4)}.` };
+  }
+
+  const { error } = await supabase
+    .from('client_team_members')
+    .delete()
+    .eq('id', member.id);
+
+  if (error) {
+    return { success: false, message: 'Erro ao remover operador da equipe.' };
+  }
+
+  return { success: true, message: `Membro *${member.member_name}* (${member.whatsapp_number}) foi removido da sua equipe.` };
+}
+
+/**
+ * Atualiza / Corrige número ou nome de um membro da equipe caso digitado errado
+ */
+export async function updateTeamMember(
+  clientId: string,
+  oldPhoneRaw: string,
+  newPhoneRaw: string,
+  newName?: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceRoleClient();
+  const oldPhone = oldPhoneRaw.replace(/\D/g, '');
+  const newPhone = newPhoneRaw.replace(/\D/g, '');
+
+  const { data: member } = await supabase
+    .from('client_team_members')
+    .select('*')
+    .eq('client_id', clientId)
+    .ilike('whatsapp_number', `%${oldPhone.slice(-8)}%`)
+    .maybeSingle();
+
+  if (!member) {
+    return { success: false, message: `Não localizei nenhum operador com o telefone final ${oldPhone.slice(-4)} para editar.` };
+  }
+
+  const updates: any = {};
+  if (newPhone && newPhone.length >= 10) updates.whatsapp_number = newPhone;
+  if (newName && newName.trim().length >= 2) updates.member_name = newName.trim();
+
+  const { error } = await supabase
+    .from('client_team_members')
+    .update(updates)
+    .eq('id', member.id);
+
+  if (error) {
+    return { success: false, message: 'Erro ao atualizar dados do operador.' };
+  }
+
+  return {
+    success: true,
+    message: `Operador atualizado com sucesso!\n• Nome: *${updates.member_name || member.member_name}*\n• Telefone: *${updates.whatsapp_number || member.whatsapp_number}*`,
+  };
+}

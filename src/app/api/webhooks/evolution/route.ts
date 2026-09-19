@@ -6,7 +6,7 @@ import {
   processVoiceCommandWithGemini,
   parseConversationalFinancialEntry,
 } from '@/lib/solo/gemini';
-import { resolveUserAndClient, addTeamMember, listTeamMembers } from '@/lib/solo/team';
+import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
 import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
@@ -942,6 +942,36 @@ ${BANK_SAFETY_NOTICE}`,
       return;
     }
 
+    if (subAction === 'remover' || subAction === 'excluir' || subAction === 'del') {
+      const targetPhone = parts[2];
+      if (!targetPhone) {
+        await sendEvolutionText({
+          phone,
+          text: '⚠️ Formato: *!equipe remover [Telefone]*\nEx: *!equipe remover 14999998888*',
+        });
+        return;
+      }
+      const res = await removeTeamMember(client.id, targetPhone);
+      await sendEvolutionText({ phone, text: res.message });
+      return;
+    }
+
+    if (subAction === 'editar' || subAction === 'corrigir') {
+      const oldPhone = parts[2];
+      const newPhone = parts[3];
+      const newName = parts.slice(4).join(' ');
+      if (!oldPhone || !newPhone) {
+        await sendEvolutionText({
+          phone,
+          text: '⚠️ Formato: *!equipe editar [Telefone_Antigo] [Telefone_Novo] [Novo_Nome]*\nEx: *!equipe editar 14999998888 14988887777 Maria*',
+        });
+        return;
+      }
+      const res = await updateTeamMember(client.id, oldPhone, newPhone, newName);
+      await sendEvolutionText({ phone, text: res.message });
+      return;
+    }
+
     if (subAction === 'listar' || subAction === 'lista') {
       const members = await listTeamMembers(client.id);
       if (members.length === 0) {
@@ -955,7 +985,7 @@ ${BANK_SAFETY_NOTICE}`,
       const listStr = members.map((m, i) => `${i + 1}. *${m.member_name}* (${m.whatsapp_number}) — Perfil: ${m.role.toUpperCase()}`).join('\n');
       await sendEvolutionText({
         phone,
-        text: `👥 *Membros da Sua Equipe Autorizados:*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${listStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💡 Operadores podem cadastrar notas e despesas avulsas, mas não visualizam saldos nem DRE.`,
+        text: `👥 *Membros da Sua Equipe Autorizados:*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${listStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💡 *Comandos de Gestão:*\n• *!equipe editar [Tel_Antigo] [Tel_Novo] [Nome]*\n• *!equipe remover [Telefone]*`,
       });
       return;
     }
