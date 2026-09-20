@@ -5,7 +5,7 @@
 
 const configuredUrl = process.env.EVOLUTION_API_URL || process.env.WHATSAPP_API_URL || '';
 const EVOLUTION_API_URL =
-  !configuredUrl || configuredUrl.includes('once-harbour-lights-rarely') || configuredUrl.includes('localhost')
+  !configuredUrl || !configuredUrl.includes('punk-photographers-windsor-love')
     ? 'https://punk-photographers-windsor-love.trycloudflare.com'
     : configuredUrl;
 
