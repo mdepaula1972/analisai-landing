@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-export const dynamic = 'force-dynamic';
-
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText, sendEvolutionPoll, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
 import {
