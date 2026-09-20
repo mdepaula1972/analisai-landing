@@ -7,10 +7,16 @@ import {
   parseConversationalFinancialEntry,
 } from '@/lib/solo/gemini';
 import { recordAuditLog } from '@/lib/solo/audit';
-import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand } from '@/lib/solo/team';
+import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand, markTeamMemberActivated } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
 import { handleAdminCommands } from '@/lib/solo/admin';
-import { generateCashFlowPostponeAdvice } from '@/lib/solo/cash-flow-advisor';
+import {
+  generateCashFlowPostponeAdvice,
+  isLongTermCashFlowQuery,
+  isWeeklyBillsQuery,
+  getExtendedCashFlowProposalMessage,
+  getUpcomingBillsSummary,
+} from '@/lib/solo/cash-flow-advisor';
 import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { solicitarTrocaNumeroCom2FA, validarCodigo2FATrocaNumero } from '@/lib/solo/phone-change';
@@ -546,7 +552,7 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     if (isGreeting) {
       // PONTO 3: Notificar o Dono na ativação formal do operador para permitir cobrança de omissões
       if (operatorRecord && !operatorRecord.activated_at) {
-        const { markTeamMemberActivated } = await import('@/lib/solo/team');
+        // markTeamMemberActivated imported statically
         await markTeamMemberActivated(operatorRecord.id);
 
         await recordAuditLog({
@@ -647,7 +653,7 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
 
   // ── Proteção Anti-Looping de Robôs (Escada de Bloqueio Progressivo) ────────
   if (!client?.is_admin && !isAdminPhone) {
-    const { checkAntiLoopStatus } = await import('@/lib/solo/anti-loop');
+    // checkAntiLoopStatus imported statically
     const loopStatus = await checkAntiLoopStatus(cleanPhone, rawText);
     if (!loopStatus.allowed) {
       return; // Silêncio absoluto para quebrar loop ou recurso já processado
@@ -655,7 +661,7 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
   }
 
   // ── Interceptação 0: Feedbacks, Críticas e Sugestões dos Clientes ──────────
-  const { isFeedbackMessage, recordClientFeedback } = await import('@/lib/solo/feedback');
+  // isFeedbackMessage, recordClientFeedback imported statically
   const feedbackCheck = isFeedbackMessage(rawText);
   if (feedbackCheck.isFeedback) {
     const res = await recordClientFeedback({
@@ -684,7 +690,7 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     cleanText === '!vip' || cleanText === 'vip' ||
     cleanText === '!pioneiro' || cleanText === 'pioneiro'
   ) {
-    const { getPioneerShareMessage } = await import('@/lib/solo/trial');
+    // getPioneerShareMessage imported statically
     const shareMsg = getPioneerShareMessage(cleanPhone);
     await sendEvolutionText({ phone, text: shareMsg });
     return;
@@ -730,12 +736,7 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
   // ── Interceptação 1.2: Projeção Estendida de Fluxo de Caixa (> 7 dias / Mês) ────
   // Se o cliente ou lead solicitar prazo maior que uma semana, recusa educadamente
   // e apresenta o Relatório de Fluxo de Caixa Futuro avulso (R$ 49,00)
-  const {
-    isLongTermCashFlowQuery,
-    isWeeklyBillsQuery,
-    getExtendedCashFlowProposalMessage,
-    getUpcomingBillsSummary,
-  } = await import('@/lib/solo/cash-flow-advisor');
+  // cash-flow-advisor helpers imported statically
 
   const hasMonetaryPattern = /(?:r\$\s*|reais|\b\d+[,.]\d{2}\b)/i.test(rawText);
   const isFinancialAction = /(?:pagar|receber|comprei|gastei|transferir|lance|lançar)/i.test(cleanText);
@@ -966,7 +967,7 @@ ${BANK_SAFETY_NOTICE}`,
 
       // 3. Envia Demonstrativo Contábil em PDF para causar forte impressão profissional (Fisgar o lead)
       try {
-        const { sendTrialPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+        // sendTrialPdfToWhatsApp imported statically
         await sendTrialPdfToWhatsApp(cleanPhone, extraction);
       } catch (trialPdfErr) {
         console.warn('[Trial PDF Generation Warning]:', trialPdfErr);
@@ -1015,7 +1016,7 @@ ${BANK_SAFETY_NOTICE}`,
           await sendEvolutionText({ phone, text: summaryText });
 
           try {
-            const { sendTrialPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+            // sendTrialPdfToWhatsApp imported statically
             await sendTrialPdfToWhatsApp(cleanPhone, mockExtracted);
           } catch (trialPdfErr) {
             console.warn('[Trial Text PDF Generation Warning]:', trialPdfErr);
@@ -1118,7 +1119,7 @@ ${BANK_SAFETY_NOTICE}`,
           });
 
           try {
-            const { sendTrialPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+            // sendTrialPdfToWhatsApp imported statically
             await sendTrialPdfToWhatsApp(cleanPhone, mockExtracted);
           } catch (trialPdfErr) {
             console.warn('[Trial Audio PDF Generation Warning]:', trialPdfErr);
@@ -1165,7 +1166,7 @@ Como posso te ajudar agora?`,
 
     // Se o usuário não cadastrado enviou texto comum, registra tentativa infrutífera no anti-looping
     if (!isAdminPhone && rawText.trim().length > 0) {
-      const { recordFruitlessAttempt } = await import('@/lib/solo/anti-loop');
+      // recordFruitlessAttempt imported statically
       const attemptRes = await recordFruitlessAttempt(cleanPhone, rawText);
       if (attemptRes.actionTaken !== 'increment') {
         return; // Ação de encerramento ou bloqueio disparada, interrompe execução
@@ -1933,7 +1934,7 @@ ${client.is_admin ? '👑 _Modo Admin Irrestrito_' : `Análise ${analysisCheck.c
 O documento executivo com seus dados cadastrais, contas em atraso e cronograma de pagamentos está sendo emitido e chegará em anexo em instantes.`,
           });
 
-          const { sendCashLedgerPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+          // sendCashLedgerPdfToWhatsApp imported statically
           sendCashLedgerPdfToWhatsApp(client.id, phone).catch((pdfErr) => {
             console.error('[Voice PDF Generation Error]:', pdfErr);
           });
@@ -2213,7 +2214,7 @@ Relatório completo em PDF por apenas **${ASAAS_ONE_OFF.supplierXray.priceFormat
 
   // Escalonamento para Consultoria Humana (Marcos)
   if (cleanText.includes('consultoria') || cleanText.includes('marcos') || cleanText.includes('especialista') || cleanText.includes('humano')) {
-    const { escalateToHumanConsultant } = await import('@/lib/solo/consultant-escalation');
+    // escalateToHumanConsultant imported statically
     await escalateToHumanConsultant(client.id, 'whatsapp_chat');
     return;
   }
@@ -2232,7 +2233,7 @@ Relatório completo em PDF por apenas **${ASAAS_ONE_OFF.supplierXray.priceFormat
 O documento executivo com seus dados cadastrais, contas em atraso e cronograma de pagamentos está sendo processado e chegará em anexo em instantes.`,
     });
 
-    const { sendCashLedgerPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+    // sendCashLedgerPdfToWhatsApp imported statically
     sendCashLedgerPdfToWhatsApp(client.id, phone).catch((err) => {
       console.error('[WhatsApp Text PDF Generation Error]:', err);
     });
@@ -2323,7 +2324,7 @@ Na véspera do vencimento (às 10h em ponto) eu te lembro aqui para manter seus 
 
   // Registra tentativa infrutífera no anti-looping para clientes cadastrados se não for admin
   if (!client?.is_admin && !isAdminPhone) {
-    const { recordFruitlessAttempt } = await import('@/lib/solo/anti-loop');
+    // recordFruitlessAttempt imported statically
     const attemptRes = await recordFruitlessAttempt(cleanPhone, rawText);
     if (attemptRes.actionTaken !== 'increment') {
       return; // Ação de encerramento ou bloqueio disparada, interrompe execução
