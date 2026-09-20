@@ -179,8 +179,8 @@ ${dividendStatus.summaryMessage}
     };
   }
 
-  // ── !reset ──────────────────────────────────────────────────────────────────
-  if (action === 'reset' || action === 'limpar' || action === 'zerar') {
+  // ── !reset / !apagar / !limpar ──────────────────────────────────────────────
+  if (action === 'reset' || action === 'limpar' || action === 'zerar' || action === 'apagar') {
     // 1. Zera limites e contadores de uso mensal
     await supabase
       .from('usage_cycles')
@@ -202,6 +202,14 @@ ${dividendStatus.summaryMessage}
       .from('payables_receivables')
       .delete()
       .eq('client_id', clientId);
+
+    // 2.1 Limpa dados de degustação (trial) se houver
+    if (client.whatsapp_number) {
+      await supabase
+        .from('trial_leads')
+        .delete()
+        .eq('whatsapp_number', client.whatsapp_number);
+    }
 
     // 3. Limpa lançamentos do livro caixa de testes
     await supabase

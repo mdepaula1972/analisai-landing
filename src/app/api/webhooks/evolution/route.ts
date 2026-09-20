@@ -551,6 +551,60 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
 
+  // ── Interceptação Universal: Reset / Apagar / Limpar Contas de Teste ───────
+  const isResetCommand =
+    cleanText === '!apagar' || cleanText === 'apagar' ||
+    cleanText === '!reset' || cleanText === 'reset' ||
+    cleanText === '!limpar' || cleanText === 'limpar' ||
+    cleanText === '!zerar' || cleanText === 'zerar' ||
+    cleanText === '!excluir' || cleanText === 'excluir' ||
+    cleanText === 'apagar tudo' || cleanText === 'limpar tudo' || cleanText === 'zerar tudo';
+
+  if (isResetCommand) {
+    // 1. Limpa registros de degustação (trial) para este número
+    await supabase
+      .from('trial_leads')
+      .delete()
+      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+
+    // 2. Limpa tracking anti-looping
+    await supabase
+      .from('bot_loop_tracking')
+      .delete()
+      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+
+    // 3. Se for cliente cadastrado, limpa contas e contadores de uso
+    if (client) {
+      await supabase.from('payables_receivables').delete().eq('client_id', client.id);
+      await supabase.from('cash_ledger_entries').delete().eq('client_id', client.id);
+      await supabase.from('bot_action_confirmations').delete().eq('client_id', client.id);
+      await supabase
+        .from('usage_cycles')
+        .update({
+          docs_processed_count: 0,
+          bot_interactions_count: 0,
+          cash_flow_analyses_count: 0,
+          hit_doc_limit: false,
+          hit_bot_limit: false,
+          hit_analysis_limit: false,
+          upsell_status: 'none',
+        })
+        .eq('client_id', client.id);
+    }
+
+    await sendEvolutionText({
+      phone,
+      text: `🗑️ *Tudo limpo e zerado com sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Contas a pagar e histórico de testes foram completamente apagados.
+✅ Seu perfil de teste foi restaurado para o estado inicial.
+✅ Cota de 10 lançamentos gratuitos dos 50 Pioneiros VIP 100% renovada!
+
+Pode me enviar seu novo lançamento por voz, texto ou foto de boleto agora mesmo! 🚀`,
+    });
+    return;
+  }
+
   // ── Interceptação Operador de Equipe: Primeiro Contato / Saudação Inbound ──
   if (isOperator) {
     const isGreeting = /^(oi|ola|olá|bom dia|boa tarde|boa noite|oii|oie|opa|começar|iniciar|ativar|teste)[!.]*$/i.test(cleanText);
