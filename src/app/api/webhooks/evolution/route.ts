@@ -1032,8 +1032,125 @@ ${BANK_SAFETY_NOTICE}`,
       }
     }
 
+    // 1.5 Degustação Gratuita (Trial) - Processamento de ÁUDIO
+    const isAudioMsg = body.data?.messageType === 'audioMessage' || !!message?.audioMessage;
+    if (isAudioMsg) {
+      const trialStatus = await checkTrialStatus(cleanPhone);
+      if (trialStatus.hasUsedTrial) {
+        await sendEvolutionText({
+          phone,
+          text: getTrialLimitReachedMessage(trialStatus.docsLimit, trialStatus.docsCount),
+        });
+        return;
+      }
+
+      let audioBase64 =
+        body.data?.base64 ||
+        body.data?.message?.base64 ||
+        body.data?.message?.audioMessage?.base64 ||
+        message?.base64 ||
+        message?.audioMessage?.base64 ||
+        '';
+
+      if (!audioBase64) {
+        audioBase64 = (await fetchMediaBase64FromEvolution(body.data)) || '';
+      }
+
+      if (!audioBase64) {
+        await sendEvolutionText({
+          phone,
+          text: `🎙️ Recebi seu áudio, mas não foi possível carregá-lo pelo WhatsApp. Por favor, envie novamente falando próximo ao microfone ou digite sua despesa por texto.`,
+        });
+        return;
+      }
+
+      try {
+        const rawMimeType =
+          body.data?.message?.audioMessage?.mimetype ||
+          body.data?.mimetype ||
+          'audio/ogg';
+
+        const audioResult = await processVoiceCommandWithGemini(audioBase64, rawMimeType);
+        const cleanTranscribed = (audioResult.textResponse || '').trim();
+
+        if (!cleanTranscribed) {
+          await sendEvolutionText({
+            phone,
+            text: `🎙️ Não consegui compreender com nitidez o que foi falado no áudio. Por favor, envie novamente ou digite o fornecedor, valor e vencimento por texto.`,
+          });
+          return;
+        }
+
+        // Tenta interpretar o áudio como lançamento financeiro
+        const conv = await parseConversationalFinancialEntry(cleanTranscribed);
+        if (conv.is_financial_entry && conv.amount && conv.due_date) {
+          const isIncome = conv.entry_type === 'receivable';
+          const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+          const mockExtracted = {
+            is_financial_doc: true,
+            doc_type: isIncome ? 'recibo' : 'outro',
+            supplier_name: entity,
+            counterparty_name: entity,
+            total_amount: Number(conv.amount),
+            amount: Number(conv.amount),
+            due_date: conv.due_date,
+            document_type: isIncome ? 'Recebimento' : 'Conta a Pagar',
+            category: conv.category_suggestion || (isIncome ? 'Receita Operacional' : 'Despesa Administrativa'),
+            barcode_or_pix: null,
+            confidence: 0.95,
+          };
+
+          await recordTrialUsage(cleanPhone, mockExtracted);
+
+          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
+          const summaryText = formatTrialDocSummary(mockExtracted, remainingAfter);
+
+          await sendEvolutionText({
+            phone,
+            text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n${summaryText}`,
+          });
+
+          try {
+            const { sendTrialPdfToWhatsApp } = await import('@/lib/solo/cash-ledger-pdf');
+            await sendTrialPdfToWhatsApp(cleanPhone, mockExtracted);
+          } catch (trialPdfErr) {
+            console.warn('[Trial Audio PDF Generation Warning]:', trialPdfErr);
+          }
+
+          await sendEvolutionText({
+            phone,
+            text: getTrialConversionMenu(),
+          });
+          return;
+        } else {
+          // O áudio foi reconhecido, mas não contém dados de conta a pagar/receber (ex: bate-papo informal ou teste)
+          await sendEvolutionText({
+            phone,
+            text: `🎙️ _Entendi seu áudio: "${cleanTranscribed}"_
+
+💡 *Como agendar na sua Degustação Gratuita VIP:*
+Para registrar uma conta por voz, basta dizer o fornecedor, valor e data.
+Exemplos:
+• *"Pagar aluguel de R$ 1.500 no dia 25"*
+• *"Conta de luz de 380 reais vence amanhã"*
+• Ou tire uma foto nítida de qualquer boleto ou conta de consumo!
+
+Como posso te ajudar agora?`,
+          });
+          return;
+        }
+      } catch (trialAudioErr) {
+        console.error('[Trial Voice Error]:', trialAudioErr);
+        await sendEvolutionText({
+          phone,
+          text: `🎙️ Tive uma oscilação momentânea ao processar seu áudio. Por favor, tente enviar novamente ou digite o valor e vencimento por texto (ex: *"Pagar aluguel R$ 1.500 dia 25"*).`,
+        });
+        return;
+      }
+    }
+
     // Se o usuário não cadastrado enviou texto comum, registra tentativa infrutífera no anti-looping
-    if (!isAdminPhone) {
+    if (!isAdminPhone && rawText.trim().length > 0) {
       const { recordFruitlessAttempt } = await import('@/lib/solo/anti-loop');
       const attemptRes = await recordFruitlessAttempt(cleanPhone, rawText);
       if (attemptRes.actionTaken !== 'increment') {

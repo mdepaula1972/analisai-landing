@@ -141,11 +141,11 @@ export async function recordFruitlessAttempt(
         last_message_text: rawText.slice(0, 300),
       })
       .select('*')
-      .single();
-    record = created;
+      .maybeSingle();
+    record = created || { cycle_level: 1, current_attempts: 0 };
   }
 
-  const currentLevel = record.cycle_level || 1;
+  const currentLevel = record?.cycle_level || 1;
   const newAttempts = (record.current_attempts || 0) + 1;
   const maxAllowed = getMaxAttemptsForLevel(currentLevel);
 
