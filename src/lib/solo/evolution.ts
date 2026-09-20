@@ -3,10 +3,11 @@
  * Gerencia envio de mensagens, documentos, mídias e áudios nativos.
  */
 
+const configuredUrl = process.env.EVOLUTION_API_URL || process.env.WHATSAPP_API_URL || '';
 const EVOLUTION_API_URL =
-  process.env.EVOLUTION_API_URL ||
-  process.env.WHATSAPP_API_URL ||
-  'https://punk-photographers-windsor-love.trycloudflare.com';
+  !configuredUrl || configuredUrl.includes('once-harbour-lights-rarely') || configuredUrl.includes('localhost')
+    ? 'https://punk-photographers-windsor-love.trycloudflare.com'
+    : configuredUrl;
 
 const EVOLUTION_API_KEY =
   process.env.EVOLUTION_API_KEY ||
