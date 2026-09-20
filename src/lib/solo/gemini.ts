@@ -206,6 +206,10 @@ export async function parseConversationalFinancialEntry(
                 description: 'Categoria contábil DRE (ex: receita_operacional, despesa_administrativa, custo_mercadoria_servico)',
                 nullable: true,
               },
+              is_provision: {
+                type: SchemaType.BOOLEAN,
+                description: 'True se for um compromisso variável, provisão, valor estimado ou agendamento para não esquecer antes da fatura real chegar (ex: conta de luz estimada, cartão, provisão de imposto, valor aproximado).',
+              },
               missing_fields: {
                 type: SchemaType.ARRAY,
                 description: 'Lista dos campos vitais ausentes: "amount", "supplier_or_customer", "due_date"',
@@ -213,7 +217,7 @@ export async function parseConversationalFinancialEntry(
               },
               needs_clarification: {
                 type: SchemaType.BOOLEAN,
-                description: 'True se faltar pelo menos um dos 3 dados essenciais (amount, supplier_or_customer, due_date)',
+                description: 'True se faltar pelo menos um dado vital e NÃO for uma provisão permitida.',
               },
               clarification_prompt: {
                 type: SchemaType.STRING,
@@ -224,25 +228,34 @@ export async function parseConversationalFinancialEntry(
             required: [
               'is_financial_entry',
               'entry_type',
+              'is_provision',
               'missing_fields',
               'needs_clarification',
             ],
           } as any),
         },
         systemInstruction: `Você é o parceiro de trincheira financeiro do AnalisAí.
-Seu objetivo é registrar contas a pagar e contas a receber informadas pelo usuário em linguagem natural (texto ou voz).
+Seu objetivo é registrar contas a pagar, contas a receber e PROVISÕES financeiras informadas pelo usuário em linguagem natural (texto ou voz).
 Data de referência de hoje: ${referenceDateStr}.
 
 REGRAS:
-1. Para cada lançamento, precisamos de 3 dados essenciais:
+1. Para cada lançamento definitivo, precisamos de 3 dados:
    - Valor (amount)
-   - Favorecido / Cliente (supplier_or_customer)
+   - Favorecido / Fornecedor ou Cliente (supplier_or_customer)
    - Vencimento / Data (due_date no formato YYYY-MM-DD). Se ele falar "amanhã", "sexta", "dia 20", calcule com base na data de referência.
-2. Se faltar qualquer um desses 3 dados:
+2. PROVISÕES / COMPROMISSOS VARIÁVEIS:
+   - Se o usuário disser "provisão", "previsão", "estimado", "mais ou menos", "em torno de", "uns X reais", ou quiser registrar para não esquecer contas variáveis (luz, água, cartão, impostos, comissões) antes da fatura real chegar:
+     * is_provision = true
+     * Se informou um valor aproximado (ex: "uns 250 reais"), preencha amount = 250.
+     * Se disse "valor a confirmar" ou não deu valor, preencha amount = 0.
+     * Se indicou a data ou estimativa de dia (ex: "dia 20", "fim do mês"), preencha due_date.
+     * Para provisões, needs_clarification = false se tiver fornecedor e data (ou estimativa), pois a provisão serve justamente para antecipar o compromisso no fluxo de caixa e será conciliada quando a conta real chegar!
+3. Se NÃO for provisão e faltar qualquer um dos 3 dados essenciais:
+   - is_provision = false
    - needs_clarification = true
    - adicione os nomes em missing_fields
    - formule um clarification_prompt leve, direto e parceiro perguntando o dado faltante.
-3. Se todos os dados estiverem presentes:
+4. Se todos os dados estiverem presentes e definidos:
    - needs_clarification = false
    - clarification_prompt = null.`,
       });

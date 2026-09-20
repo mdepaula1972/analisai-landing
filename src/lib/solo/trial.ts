@@ -182,16 +182,47 @@ export async function recordTrialUsage(
     .maybeSingle();
 
   const billsList: any[] = Array.isArray(leadRecord?.bills_list) ? leadRecord.bills_list : [];
-  billsList.push({
-    id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    supplier_name: docData.supplier_name || docData.counterparty_name || 'Fornecedor',
-    amount: docData.amount ? Number(docData.amount) : null,
-    due_date: docData.due_date || null,
-    barcode_or_pix: docData.barcode_or_pix || null,
-    reminder_eve_sent: false,
-    reminder_due_sent: false,
-    created_at: new Date().toISOString(),
-  });
+  const supplierCandidate = (docData.supplier_name || docData.counterparty_name || 'Fornecedor').trim();
+  const isProvision = Boolean(docData.is_provision);
+
+  // Se for uma conta definitiva com valor real e existir uma provisão prévia para o mesmo fornecedor, concilia!
+  let reconciled = false;
+  if (!isProvision && docData.amount && Number(docData.amount) > 0) {
+    const existingIndex = billsList.findIndex((b: any) => {
+      const bName = (b.supplier_name || '').toLowerCase();
+      const candName = supplierCandidate.toLowerCase();
+      return (b.is_provision || bName.includes(candName) || candName.includes(bName)) &&
+             (bName.includes(candName) || candName.includes(bName) || bName.slice(0, 4) === candName.slice(0, 4));
+    });
+
+    if (existingIndex >= 0) {
+      const old = billsList[existingIndex];
+      billsList[existingIndex] = {
+        ...old,
+        supplier_name: supplierCandidate,
+        amount: Number(docData.amount),
+        due_date: docData.due_date || old.due_date,
+        barcode_or_pix: docData.barcode_or_pix || old.barcode_or_pix,
+        is_provision: false,
+        reconciled_at: new Date().toISOString(),
+      };
+      reconciled = true;
+    }
+  }
+
+  if (!reconciled) {
+    billsList.push({
+      id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      supplier_name: supplierCandidate,
+      amount: docData.amount ? Number(docData.amount) : null,
+      due_date: docData.due_date || null,
+      barcode_or_pix: docData.barcode_or_pix || null,
+      is_provision: isProvision,
+      reminder_eve_sent: false,
+      reminder_due_sent: false,
+      created_at: new Date().toISOString(),
+    });
+  }
 
   await supabase
     .from('trial_leads')
@@ -204,7 +235,7 @@ export async function recordTrialUsage(
         amount: docData.amount ? Number(docData.amount) : null,
         due_date: docData.due_date || null,
         barcode_or_pix: docData.barcode_or_pix || null,
-        trial_docs_count: newCount,
+        trial_docs_count: reconciled ? (leadRecord as any)?.trial_docs_count || newCount : newCount,
         trial_docs_limit: newLimit,
         interested_plan: suggestedPlan,
         bills_list: billsList,
@@ -581,3 +612,178 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
 
   return { eveCount, dueCount };
 }
+
+/**
+ * Retorna as contas ativas cadastradas pelo lead durante o período de degustação
+ */
+export async function getTrialBills(phone: string): Promise<any[]> {
+  const supabase = createServiceRoleClient();
+  const cleanPhone = phone.replace(/\D/g, '');
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('bills_list')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  return Array.isArray(lead?.bills_list) ? lead.bills_list : [];
+}
+
+/**
+ * Atualiza uma conta ou provisão de degustação
+ */
+export async function updateTrialBill(
+  phone: string,
+  identifier: string,
+  updates: Partial<{ amount: number; due_date: string; is_provision: boolean; is_paid: boolean; supplier_name: string }>
+): Promise<{ updated: boolean; oldBill?: any; newBill?: any }> {
+  const supabase = createServiceRoleClient();
+  const cleanPhone = phone.replace(/\D/g, '');
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('id, bills_list')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  if (!lead || !Array.isArray(lead.bills_list) || lead.bills_list.length === 0) {
+    return { updated: false };
+  }
+
+  const cleanId = identifier.toLowerCase().trim();
+  const index = lead.bills_list.findIndex((b: any) =>
+    b.id === identifier ||
+    (b.supplier_name && b.supplier_name.toLowerCase().includes(cleanId)) ||
+    (b.supplier_name && cleanId.includes(b.supplier_name.toLowerCase()))
+  );
+
+  if (index === -1) return { updated: false };
+
+  const oldBill = { ...lead.bills_list[index] };
+  const newBill = {
+    ...oldBill,
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+
+  lead.bills_list[index] = newBill;
+
+  await supabase
+    .from('trial_leads')
+    .update({ bills_list: lead.bills_list })
+    .eq('id', lead.id);
+
+  return { updated: true, oldBill, newBill };
+}
+
+/**
+ * Remove uma conta ou provisão de degustação
+ */
+export async function deleteTrialBill(
+  phone: string,
+  identifier: string
+): Promise<{ deleted: boolean; deletedBill?: any }> {
+  const supabase = createServiceRoleClient();
+  const cleanPhone = phone.replace(/\D/g, '');
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('id, bills_list, trial_docs_count')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  if (!lead || !Array.isArray(lead.bills_list) || lead.bills_list.length === 0) {
+    return { deleted: false };
+  }
+
+  const cleanId = identifier.toLowerCase().trim();
+  const index = lead.bills_list.findIndex((b: any) =>
+    b.id === identifier ||
+    (b.supplier_name && b.supplier_name.toLowerCase().includes(cleanId)) ||
+    (b.supplier_name && cleanId.includes(b.supplier_name.toLowerCase()))
+  );
+
+  if (index === -1) return { deleted: false };
+
+  const deletedBill = lead.bills_list.splice(index, 1)[0];
+  const newCount = Math.max(0, (lead.trial_docs_count || 1) - 1);
+
+  await supabase
+    .from('trial_leads')
+    .update({
+      bills_list: lead.bills_list,
+      trial_docs_count: newCount,
+    })
+    .eq('id', lead.id);
+
+  return { deleted: true, deletedBill };
+}
+
+/**
+ * Formata as contas de degustação em mensagem executiva WhatsApp, separando contas confirmadas e provisões
+ */
+export function formatTrialBillsListMessage(billsList: any[]): string {
+  if (!billsList || billsList.length === 0) {
+    return `📋 *Suas Contas (Degustação VIP)*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nVocê ainda não possui contas ou provisões cadastradas no momento.\n\nEnvie uma foto de boleto ou mande um áudio/texto para cadastrar seu primeiro compromisso! 🚀`;
+  }
+
+  const confirmedBills = billsList.filter(b => !b.is_provision);
+  const provisionBills = billsList.filter(b => b.is_provision);
+
+  let totalConfirmed = 0;
+  let totalProvisions = 0;
+
+  let text = `📋 *Painel de Contas & Provisões (Degustação VIP)*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+  if (confirmedBills.length > 0) {
+    text += `🟡 *CONTAS FECHADAS A VENCER (${confirmedBills.length}):*\n`;
+    for (const b of confirmedBills) {
+      const val = Number(b.amount || 0);
+      totalConfirmed += val;
+      const valFmt = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const dueFmt = b.due_date ? b.due_date.split('-').reverse().join('/') : 'A definir';
+      text += `• *${b.supplier_name}*\n  Valor: *${valFmt}* | Vencimento: ${dueFmt}\n`;
+    }
+    text += `Subtotal Contas: *${totalConfirmed.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n\n`;
+  }
+
+  if (provisionBills.length > 0) {
+    text += `📌 *PROVISÕES ESTIMADAS / COMPROMISSOS VARIÁVEIS (${provisionBills.length}):*\n`;
+    for (const b of provisionBills) {
+      const val = Number(b.amount || 0);
+      totalProvisions += val;
+      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
+      const dueFmt = b.due_date ? b.due_date.split('-').reverse().join('/') : 'Data a confirmar';
+      text += `• *${b.supplier_name}*\n  Estimativa: *${valFmt}* | Previsão: ${dueFmt}\n`;
+    }
+    text += `Subtotal Provisões: *${totalProvisions.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n\n`;
+  }
+
+  const grandTotal = (totalConfirmed + totalProvisions).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💰 *Comprometimento Geral do Mês:* *${grandTotal}*\n`;
+  text += `\n💡 *Dicas Rápidas:*
+• Para conciliar uma provisão com a fatura real: envie a foto do boleto ou fale: _"Chegou a CPFL, deu R$ 238,40 dia 22"_
+• Para alterar valor: _"Mudar valor da Sabesp para 85"_
+• Para excluir: _"Excluir conta da Sabesp"_`;
+
+  return text;
+}
+
