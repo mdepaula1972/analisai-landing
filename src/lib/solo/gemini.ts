@@ -260,7 +260,8 @@ REGRAS:
 export async function processVoiceCommandWithGemini(
   audioBase64: string,
   mimeType: string = 'audio/ogg; codecs=opus',
-  contextText: string = ''
+  contextText: string = '',
+  transcribeOnly: boolean = false
 ) {
   const genAI = getGeminiClient();
 
@@ -365,11 +366,12 @@ export async function processVoiceCommandWithGemini(
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
   // Lista de modelos oficiais com suporte nativo a áudio multimodal (Gemini 3 oficial)
+  // gemini-3.5-flash-lite processa áudios em < 1.5s com altíssima precisão e estabilidade
   const modelsToTry = [
+    'gemini-3.5-flash-lite',
     'gemini-3.6-flash',
     'gemini-3.7-flash',
     'gemini-3.1-pro-preview',
-    'gemini-3.5-flash-lite',
   ];
   let transcribedText = '';
   const attemptedErrors: string[] = [];
@@ -410,6 +412,14 @@ export async function processVoiceCommandWithGemini(
   }
 
   console.log('[Voice Command] Áudio transcrito com sucesso:', transcribedText);
+
+  // Se a chamada requereu apenas a transcrição do áudio (ex: degustação trial ou parsing direto), retorna imediatamente
+  if (transcribeOnly) {
+    return {
+      functionCalls: [],
+      textResponse: transcribedText,
+    };
+  }
 
   // ETAPA 2: Interpretação da intenção e extração de parâmetros sobre o texto transcrito
   let functionCalls: any[] = [];

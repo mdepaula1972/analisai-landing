@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText, sendEvolutionPoll, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
 import {
@@ -1026,6 +1030,12 @@ ${BANK_SAFETY_NOTICE}`,
             text: getTrialConversionMenu(),
           });
           return;
+        } else if (conv.is_financial_entry && conv.needs_clarification) {
+          await sendEvolutionText({
+            phone,
+            text: `💬 ${conv.clarification_prompt || 'Entendi que você deseja agendar um lançamento! Pode me informar o valor e a data de vencimento?'}`,
+          });
+          return;
         }
       } catch (trialTextErr) {
         console.warn('[Trial Text Entry Error]:', trialTextErr);
@@ -1070,7 +1080,8 @@ ${BANK_SAFETY_NOTICE}`,
           body.data?.mimetype ||
           'audio/ogg';
 
-        const audioResult = await processVoiceCommandWithGemini(audioBase64, rawMimeType);
+        // transcribeOnly = true garante transcrição rápida sem passar por function calls desnecessárias
+        const audioResult = await processVoiceCommandWithGemini(audioBase64, rawMimeType, '', true);
         const cleanTranscribed = (audioResult.textResponse || '').trim();
 
         if (!cleanTranscribed) {
@@ -1120,6 +1131,13 @@ ${BANK_SAFETY_NOTICE}`,
           await sendEvolutionText({
             phone,
             text: getTrialConversionMenu(),
+          });
+          return;
+        } else if (conv.is_financial_entry && conv.needs_clarification) {
+          // Bate-bola conversacional: usuário pediu para registrar mas faltaram dados essenciais
+          await sendEvolutionText({
+            phone,
+            text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n💬 ${conv.clarification_prompt || 'Entendi que você deseja registrar um lançamento! Para eu agendar no seu Livro Caixa, por favor me informe o valor e a data de vencimento.'}`,
           });
           return;
         } else {
