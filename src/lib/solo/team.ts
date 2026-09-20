@@ -403,3 +403,55 @@ export async function handleNaturalLanguageTeamCommand(
 
   return { handled: false };
 }
+
+
+/**
+ * Atualiza o telefone ou nome de um membro da equipe
+ */
+export async function updateTeamMember(
+  clientId: string,
+  oldPhone: string,
+  newPhone: string,
+  newName?: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceRoleClient();
+  const cleanOld = oldPhone.replace(/\D/g, '');
+  const cleanNew = newPhone.replace(/\D/g, '');
+
+  if (cleanNew.length < 10) {
+    return { success: false, message: 'Novo número de telefone inválido. Informe DDD + Número.' };
+  }
+
+  const fullNew = cleanNew.length <= 11 && !cleanNew.startsWith('55') ? `55${cleanNew}` : cleanNew;
+
+  const { data: member } = await supabase
+    .from('client_team_members')
+    .select('*')
+    .eq('client_id', clientId)
+    .ilike('whatsapp_number', `%${cleanOld.slice(-8)}%`)
+    .maybeSingle();
+
+  if (!member) {
+    return { success: false, message: `Não localizei nenhum membro de equipe com o telefone final ${cleanOld.slice(-4)}.` };
+  }
+
+  const updateData: any = { whatsapp_number: fullNew };
+  if (newName && newName.trim()) {
+    updateData.member_name = newName.trim();
+  }
+
+  const { error } = await supabase
+    .from('client_team_members')
+    .update(updateData)
+    .eq('id', member.id);
+
+  if (error) {
+    console.error('[UpdateTeamMember Error]:', error);
+    return { success: false, message: 'Erro ao atualizar membro da equipe no banco de dados.' };
+  }
+
+  return {
+    success: true,
+    message: `✅ Dados de *${updateData.member_name || member.member_name}* atualizados com sucesso para o WhatsApp *${fullNew}*!\n\nPeça para ela nos mandar um *"Oi"* para começar.`,
+  };
+}

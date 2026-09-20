@@ -55,8 +55,8 @@ async function loadAnalisaiLogo(pdfDoc: PDFDocument) {
     ];
 
     for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        const fileBytes = fs.readFileSync(p);
+      if (fs.existsSync(/*turbopackIgnore: true*/ p)) {
+        const fileBytes = fs.readFileSync(/*turbopackIgnore: true*/ p);
         if (p.endsWith('.jpg') || p.endsWith('.jpeg')) {
           return await pdfDoc.embedJpg(fileBytes);
         } else if (p.endsWith('.png')) {
