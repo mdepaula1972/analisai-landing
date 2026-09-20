@@ -27,8 +27,13 @@ import {
   getTrialLimitReachedMessage,
   formatTrialDocSummary,
   getTrialConversionMenu,
+  getPioneerShareMessage,
   BANK_SAFETY_NOTICE,
 } from '@/lib/solo/trial';
+import { checkAntiLoopStatus, recordFruitlessAttempt } from '@/lib/solo/anti-loop';
+import { isFeedbackMessage, recordClientFeedback } from '@/lib/solo/feedback';
+import { sendTrialPdfToWhatsApp, sendCashLedgerPdfToWhatsApp } from '@/lib/solo/cash-ledger-pdf';
+import { escalateToHumanConsultant } from '@/lib/solo/consultant-escalation';
 import { recordWaitlistLead } from '@/lib/solo/waitlist';
 import { linkReferralLead, getReferralShareMessage } from '@/lib/solo/referral';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
