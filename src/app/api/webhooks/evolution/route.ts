@@ -44,6 +44,9 @@ import {
   solicitarAlteracaoPix,
   confirmarAlteracaoPix,
   cancelarAlteracaoPix,
+  solicitarAlteracaoEmail,
+  confirmarAlteracaoEmail,
+  cancelarAlteracaoEmail,
   cadastrarEmailCliente,
   getReferralStatus,
 } from '@/lib/solo/referral';
@@ -768,6 +771,22 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       }
     }
 
+    // Trata confirmação de 2FA para Alteração de E-mail
+    if (pendingAction.action_type === 'change_email') {
+      if (isNegative || cleanText === '!cancelaremail' || cleanText === 'cancelar') {
+        const cancelMsg = await cancelarAlteracaoEmail(client?.id || cleanPhone);
+        await sendEvolutionText({ phone, text: cancelMsg });
+        return;
+      }
+
+      const otpCandidate = rawText.replace(/^[!/](confirmaremail|confirmar)\s*/i, '').replace(/\D/g, '').trim();
+      if (otpCandidate.length === 6) {
+        const confirmResult = await confirmarAlteracaoEmail(client?.id || cleanPhone, otpCandidate);
+        await sendEvolutionText({ phone, text: confirmResult.message });
+        return;
+      }
+    }
+
     if (isAffirmative) {
       await supabase
         .from('bot_action_confirmations')
@@ -1118,7 +1137,21 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     return;
   }
 
-  // ── Interceptação 1.05: Comando de E-mail de Segurança (!email [email]) ─────
+  // ── Interceptação 1.05: Confirmação e Cancelamento de 2FA do E-mail ────────
+  if (cleanText.startsWith('!confirmaremail') || cleanText.startsWith('/confirmaremail')) {
+    const rawCode = rawText.replace(/^[!/](confirmaremail)\s*/i, '').trim();
+    const result = await confirmarAlteracaoEmail(client?.id || cleanPhone, rawCode);
+    await sendEvolutionText({ phone, text: result.message });
+    return;
+  }
+
+  if (cleanText === '!cancelaremail' || cleanText === '/cancelaremail') {
+    const cancelMsg = await cancelarAlteracaoEmail(client?.id || cleanPhone);
+    await sendEvolutionText({ phone, text: cancelMsg });
+    return;
+  }
+
+  // ── Interceptação 1.06: Comando de E-mail de Segurança (!email [email]) ─────
   if (cleanText.startsWith('!email') || cleanText.startsWith('/email')) {
     const rawEmail = rawText.replace(/^[!/](email)\s*/i, '').trim();
     if (!rawEmail) {

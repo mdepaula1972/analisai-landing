@@ -1,7 +1,12 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_DISPLAY } from '@/lib/solo/constants';
-import { enviarCodigo2FAAlteracaoPix, notificarAlteracaoPixConcluida } from '@/lib/email';
+import {
+  enviarCodigo2FAAlteracaoPix,
+  notificarAlteracaoPixConcluida,
+  enviarCodigo2FATrocaEmail,
+  notificarTrocaEmailConcluida,
+} from '@/lib/email';
 import { maskEmail } from '@/lib/solo/phone-change';
 import { addMinutes } from 'date-fns';
 
@@ -70,6 +75,7 @@ export async function ensureClientForAnalisador(
   id: string;
   name: string;
   email?: string | null;
+  email_updated_at?: string | null;
   whatsapp_number: string;
   tax_id?: string | null;
   tax_type?: string | null;
@@ -84,7 +90,7 @@ export async function ensureClientForAnalisador(
   if (isUuid) {
     const { data: existingClient } = await supabase
       .from('clients')
-      .select('id, name, email, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
+      .select('id, name, email, email_updated_at, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
       .eq('id', cleanInput)
       .maybeSingle();
 
@@ -101,7 +107,7 @@ export async function ensureClientForAnalisador(
   // Busca cliente existente pelo telefone
   const { data: clientByPhone } = await supabase
     .from('clients')
-    .select('id, name, email, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
+    .select('id, name, email, email_updated_at, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
     .in('whatsapp_number', phoneVariations)
     .limit(1)
     .maybeSingle();
@@ -130,7 +136,7 @@ export async function ensureClientForAnalisador(
       is_analisador: true,
       pix_key: trialLead?.pix_key || null,
     })
-    .select('id, name, email, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
+    .select('id, name, email, email_updated_at, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
     .single();
 
   if (error || !newClient) {
@@ -360,7 +366,26 @@ Como esta chave é o próprio documento do seu contrato, a atualização foi con
     };
   }
 
-  // 2. A chave informada é uma chave alternativa (e-mail, telefone, chave aleatória, etc.)
+  // 2. Trava de Quarentena Bancária (Cooling-off Period de 24 horas):
+  // Se o e-mail foi alterado recentemente, bloqueia a troca de Pix para terceiros
+  if (client.email_updated_at) {
+    const hoursSinceEmailUpdate =
+      (Date.now() - new Date(client.email_updated_at).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceEmailUpdate < 24) {
+      const remainingHours = Math.ceil(24 - hoursSinceEmailUpdate);
+      return {
+        success: false,
+        requires2FA: false,
+        message: `🛡️ *Quarentena de Segurança Ativa (Proteção 24h)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Seu e-mail de segurança foi alterado recentemente. Por normas de proteção bancária contra fraudes, alterações de chave Pix para contas alternativas ficam suspensas por **24 horas** após uma mudança de e-mail (restam ~${remainingHours}h).
+
+Durante este período, seus repasses são transferidos exclusivamente para o **CNPJ oficial da sua empresa** (\`${formatTaxId(client.tax_id)}\`).`,
+      };
+    }
+  }
+
+  // 3. A chave informada é uma chave alternativa (e-mail, telefone, chave aleatória, etc.)
   // Exige validação 2FA pelo e-mail do titular
   if (!client.email || !client.email.includes('@')) {
     return {
@@ -556,37 +581,245 @@ A alteração foi descartada e sua chave Pix cadastrada anteriormente continua m
 }
 
 /**
- * Cadastra ou atualiza o e-mail de segurança do cliente
+ * Solicitação de alteração ou cadastro de e-mail com proteção 2FA (Segurança da Corrente de Custódia)
+ * - Se já possui e-mail cadastrado: envia código OTP para o E-MAIL ATUAL (ANTIGO) para autorizar a troca!
+ * - Se não possui e-mail cadastrado: envia código OTP para o novo e-mail para validar posse da caixa postal.
  */
-export async function cadastrarEmailCliente(
+export async function solicitarAlteracaoEmail(
   phoneOrClientId: string,
   rawEmail: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; requires2FA: boolean; message: string; maskedEmail?: string }> {
   const supabase = createServiceRoleClient();
   const cleanEmail = rawEmail.trim().toLowerCase();
 
   if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
     return {
       success: false,
+      requires2FA: false,
       message: `⚠️ Por favor, informe um endereço de e-mail válido.\nExemplo: *!email financeiro@suaempresa.com.br*`,
     };
   }
 
   const client = await ensureClientForAnalisador(phoneOrClientId);
 
+  // Se o novo e-mail for idêntico ao já cadastrado
+  if (client.email && client.email.toLowerCase() === cleanEmail) {
+    return {
+      success: true,
+      requires2FA: false,
+      message: `ℹ️ O e-mail \`${cleanEmail}\` já é o e-mail oficial cadastrado na sua conta.`,
+    };
+  }
+
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Cancela pendências anteriores de alteração de e-mail
   await supabase
-    .from('clients')
-    .update({ email: cleanEmail })
-    .eq('id', client.id);
+    .from('bot_action_confirmations')
+    .update({ status: 'expired' })
+    .eq('client_id', client.id)
+    .eq('action_type', 'change_email')
+    .eq('status', 'pending');
+
+  // CENÁRIO 1: Cliente JÁ possui e-mail cadastrado
+  // O código 2FA DEVE ser enviado para o e-mail ATUAL (ANTIGO) para impedir que invasor troque o e-mail!
+  if (client.email && client.email.includes('@')) {
+    const maskedCurrent = maskEmail(client.email);
+
+    await supabase.from('bot_action_confirmations').insert({
+      client_id: client.id,
+      phone_number: client.whatsapp_number,
+      action_type: 'change_email',
+      status: 'pending',
+      expires_at: addMinutes(new Date(), 10).toISOString(),
+      proposed_payload: {
+        novo_email: cleanEmail,
+        email_antigo: client.email,
+        otp_code: otpCode,
+        client_name: client.name,
+      },
+    });
+
+    await enviarCodigo2FATrocaEmail({
+      emailAtual: client.email,
+      nomeCliente: client.name,
+      codigoOtp: otpCode,
+      novoEmail: cleanEmail,
+    });
+
+    return {
+      success: true,
+      requires2FA: true,
+      maskedEmail: maskedCurrent,
+      message: `🔒 *Autorização de Troca de E-mail Obrigatória (2FA)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para proteger sua empresa contra invasões, o e-mail de segurança só pode ser alterado mediante autorização enviada para o seu **e-mail ATUAL**:
+📧 *${maskedCurrent}*
+
+👉 Digite o código de 6 dígitos recebido no e-mail atual:
+*!confirmaremail CÓDIGO* (ou envie apenas os 6 dígitos)
+
+⏱️ *Validade:* 10 minutos.
+_(Se você não solicitou essa troca, ignore este aviso. Sua conta permanece 100% protegida!)_`,
+    };
+  }
+
+  // CENÁRIO 2: Cliente AINDA NÃO possui e-mail cadastrado (cadastro inicial)
+  // Envia código para o novo e-mail para validar posse da caixa de entrada
+  await supabase.from('bot_action_confirmations').insert({
+    client_id: client.id,
+    phone_number: client.whatsapp_number,
+    action_type: 'change_email',
+    status: 'pending',
+    expires_at: addMinutes(new Date(), 10).toISOString(),
+    proposed_payload: {
+      novo_email: cleanEmail,
+      email_antigo: null,
+      otp_code: otpCode,
+      client_name: client.name,
+    },
+  });
+
+  await enviarCodigo2FATrocaEmail({
+    emailAtual: cleanEmail,
+    nomeCliente: client.name,
+    codigoOtp: otpCode,
+    novoEmail: cleanEmail,
+  });
 
   return {
     success: true,
-    message: `✅ *E-mail de Segurança Cadastrado com Sucesso!*
+    requires2FA: true,
+    maskedEmail: maskEmail(cleanEmail),
+    message: `📧 *Confirmação de E-mail Obrigatória*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-E-mail registrado:
-👉 \`${cleanEmail}\`
+Enviamos um código de segurança de 6 dígitos para o e-mail informado:
+👉 *${cleanEmail}*
 
-Este e-mail será utilizado para validações de segurança em 2 etapas (2FA) e avisos fiscais importantes da sua empresa.`,
+Digite o código aqui no WhatsApp para confirmar o vínculo:
+*!confirmaremail CÓDIGO* (ou envie apenas os 6 dígitos)
+
+⏱️ *Validade:* 10 minutos.`,
+  };
+}
+
+/**
+ * Confirma a alteração ou cadastro do e-mail validando o OTP de 6 dígitos
+ */
+export async function confirmarAlteracaoEmail(
+  phoneOrClientId: string,
+  rawOtp: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceRoleClient();
+  const cleanOtp = rawOtp.replace(/\D/g, '').trim();
+
+  if (cleanOtp.length !== 6) {
+    return {
+      success: false,
+      message: `⚠️ O código de segurança deve ter exatamente 6 dígitos numéricos.\nExemplo: *!confirmaremail 729184* (ou envie apenas *729184*)`,
+    };
+  }
+
+  const client = await ensureClientForAnalisador(phoneOrClientId);
+  const nowIso = new Date().toISOString();
+
+  const { data: pendingList } = await supabase
+    .from('bot_action_confirmations')
+    .select('*')
+    .eq('client_id', client.id)
+    .eq('action_type', 'change_email')
+    .eq('status', 'pending')
+    .gt('expires_at', nowIso)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const pending = pendingList?.[0];
+
+  if (!pending) {
+    return {
+      success: false,
+      message: `⚠️ *Nenhuma solicitação de troca de e-mail pendente!*
+Não encontramos nenhuma solicitação aguardando confirmação (ou o prazo de 10 minutos expirou).
+
+Para solicitar novamente, envie: *!email novo_email@empresa.com*`,
+    };
+  }
+
+  const payload = pending.proposed_payload as any;
+
+  if (payload?.otp_code !== cleanOtp) {
+    return {
+      success: false,
+      message: `❌ *Código de Segurança Incorreto!*
+O código de 6 dígitos digitado não confere. Verifique sua caixa de entrada e pasta de spam e tente novamente:
+*!confirmaremail CÓDIGO*`,
+    };
+  }
+
+  // Código correto! Atualiza o e-mail e ativa a quarentena de 24h
+  const newEmail = payload.novo_email;
+  const nowTimestamp = new Date().toISOString();
+
+  await supabase
+    .from('clients')
+    .update({ email: newEmail, email_updated_at: nowTimestamp })
+    .eq('id', client.id);
+
+  await supabase
+    .from('bot_action_confirmations')
+    .update({ status: 'confirmed' })
+    .eq('id', pending.id);
+
+  // Notifica ambos os e-mails
+  if (payload.email_antigo) {
+    await notificarTrocaEmailConcluida({
+      emailAntigo: payload.email_antigo,
+      novoEmail: newEmail,
+      nomeCliente: client.name,
+    });
+  }
+
+  return {
+    success: true,
+    message: `✅ *E-mail de Segurança Atualizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Novo e-mail registrado:
+👉 \`${newEmail}\`
+
+🛡️ *Proteção de Quarentena Ativa (24h):*
+Por diretrizes de segurança bancária contra fraudes, alterações de chave Pix para contas de terceiros ficam suspensas pelas próximas **24 horas**. Durante esse período, seus repasses são efetuados exclusivamente para o CNPJ oficial da sua empresa.`,
+  };
+}
+
+/**
+ * Cancela qualquer solicitação pendente de troca de e-mail
+ */
+export async function cancelarAlteracaoEmail(phoneOrClientId: string): Promise<string> {
+  const supabase = createServiceRoleClient();
+  const client = await ensureClientForAnalisador(phoneOrClientId);
+
+  await supabase
+    .from('bot_action_confirmations')
+    .update({ status: 'rejected' })
+    .eq('client_id', client.id)
+    .eq('action_type', 'change_email')
+    .eq('status', 'pending');
+
+  return `🛡️ *Solicitação de Alteração de E-mail Cancelada!*
+O e-mail anterior permanece mantido sem qualquer modificação.`;
+}
+
+/**
+ * Cadastra ou atualiza o e-mail de segurança do cliente (compatibilidade)
+ */
+export async function cadastrarEmailCliente(
+  phoneOrClientId: string,
+  rawEmail: string
+): Promise<{ success: boolean; message: string }> {
+  const res = await solicitarAlteracaoEmail(phoneOrClientId, rawEmail);
+  return {
+    success: res.success,
+    message: res.message,
   };
 }
 
