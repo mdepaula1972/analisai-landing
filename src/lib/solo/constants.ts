@@ -6,6 +6,10 @@
 export const ASAAS_WEBHOOK_AUTH_TOKEN =
   process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_AUTH_TOKEN || '';
 
+/** WhatsApp Oficial do Robô AnalisAí Solo: (13) 3150-0987 */
+export const OFFICIAL_BOT_WHATSAPP = '551331500987';
+export const OFFICIAL_BOT_PHONE_DISPLAY = '(13) 3150-0987';
+
 export const ASAAS_PLANS = {
   monthly: {
     start: {

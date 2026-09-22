@@ -1,34 +1,37 @@
 
+import { ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_DISPLAY } from '@/lib/solo/constants';
+
 /**
- * Retorna o link de convite oficial para o pioneiro VIP indicar parceiros
+ * Retorna o link de convite oficial para o parceiro indicar contatos
+ * Aponta diretamente para o robô oficial do AnalisAí: (13) 3150-0987
  */
 export function getPioneerShareLink(phone: string): string {
   const clean = phone.replace(/\D/g, '');
-  const botNumber = '5514930855878';
-  const text = encodeURIComponent(`Olá! Fui indicado pelo parceiro VIP ${clean} para garantir uma das 50 Vagas VIP Gratuitas do AnalisAí Solo!`);
-  return `https://wa.me/${botNumber}?text=${text}`;
+  const text = encodeURIComponent(`Olá! Vim por indicação do parceiro ${clean} para testar o AnalisAí e garantir minha vaga.`);
+  return `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${text}`;
 }
 
 export function getPioneerShareMessage(phone: string): string {
   const link = getPioneerShareLink(phone);
-  return `👑 *Compartilhe sua Vaga VIP e Ganhe Mensalidade Grátis!*
+  return `👑 *Programa de Indicação AnalisAí — Próximas Mensalidades Grátis!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você faz parte da Safra dos 50 Pioneiros VIP do AnalisAí.
-
-🎁 *Como zerar sua assinatura:*
-Indique 3 amigos, clientes ou parceiros empresariais para testarem o AnalisAí. Enquanto eles continuarem ativos no plano Solo ou superior, **sua mensalidade fica 100% por nossa conta**!
+🎁 *Como funciona a regra oficial de isenção:*
+1️⃣ *Assinatura Ativa:* Contrate qualquer um dos nossos planos oficiais (1ª mensalidade paga);
+2️⃣ *Indique 3 Parceiros:* Compartilhe seu link exclusivo abaixo com amigos empresários;
+3️⃣ *Mensalidade Zero:* Com **3 indicados pagantes** ativos no plano Solo ou superior, **suas próximas faturas ficam 100% por nossa conta**!
+_(A isenção é válida a partir da mensalidade seguinte à ativação dos seus 3 indicados e permanece enquanto eles continuarem ativos no serviço)._
 
 👉 *Seu link exclusivo para compartilhar no WhatsApp:*
 ${link}
 
-_Encaminhe este link para seus contatos empresariais. Ao clicarem, o sistema reconhece sua indicação na hora!_`;
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Ao clicar no link acima, seu indicado abre uma conversa direta com o robô oficial do AnalisAí no WhatsApp ${OFFICIAL_BOT_PHONE_DISPLAY}, com seu código de indicação vinculado automaticamente!_`;
 }
 export const MAX_BETA_VIP_USERS = 50;
 export const BETA_VIP_DOCS_LIMIT = 10;
 export const BETA_VIP_DAYS = 30;
 
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { classifyTaxId, TaxClassification } from '@/lib/solo/tax-classifier';

@@ -1071,26 +1071,13 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     cleanText === '!vip' || cleanText === 'vip' ||
     cleanText === '!pioneiro' || cleanText === 'pioneiro'
   ) {
-    // getPioneerShareMessage imported statically
-    const shareMsg = getPioneerShareMessage(cleanPhone);
-    await sendEvolutionText({ phone, text: shareMsg });
-    return;
-  }
-
-  if (false) {
     if (client) {
       const shareMsg = await getReferralShareMessage(client.id, client.whatsapp_number);
       await sendEvolutionText({ phone, text: shareMsg });
       return;
     } else {
-      await sendEvolutionText({
-        phone,
-        text: `🎁 *Programa de Indicação AnalisAí — Mensalidade 100% Grátis!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Assine um de nossos planos e indique 3 amigos ou parceiros empresariais no mesmo plano ou superior para **zerar sua fatura** enquanto eles continuarem ativos!
-
-👉 Para começar agora mesmo, envie uma foto ou PDF de boleto para testar nossa degustação gratuita!`,
-      });
+      const shareMsg = getPioneerShareMessage(cleanPhone);
+      await sendEvolutionText({ phone, text: shareMsg });
       return;
     }
   }

@@ -72,13 +72,13 @@ export async function getReferralShareMessage(clientId: string, phone: string): 
     `Olá! Vim por indicação do cliente ${cleanPhone} para testar o AnalisAí.`
   )}`;
 
-  let txt = `🎁 *Programa de Indicação AnalisAí — Mensalidade Zero!*\n`;
+  let txt = `🎁 *Programa de Indicação AnalisAí — Próximas Mensalidades Grátis!*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   txt += `Ajude outros empresários a organizarem suas contas sem estresse!\n\n`;
-  txt += `⭐ *Como funciona a regra de ouro:*
-1. Ative seu plano (1ª mensalidade paga).
-2. Compartilhe seu link com parceiros e amigos empresários.
-3. Com **3 indicados pagantes** ativos no mesmo plano que o seu (ou superior), a sua mensalidade fica **100% GRATUITA** a partir do próximo ciclo e enquanto eles continuarem ativos! O AnalisAí se paga sozinho!\n\n`;
+  txt += `⭐ *Como funciona a regra oficial de isenção:*
+1️⃣ *Assinatura Ativa:* Você precisa ter uma assinatura contratada (1ª mensalidade paga);
+2️⃣ *Indique 3 Parceiros:* Compartilhe seu link exclusivo com amigos empresários;
+3️⃣ *Mensalidade Zero:* Com **3 indicados pagantes** ativos no mesmo plano que o seu (ou superior), **suas próximas faturas ficam 100% GRATUITAS** a partir da fatura seguinte à ativação deles e enquanto continuarem ativos! O AnalisAí se paga sozinho!\n\n`;
 
   txt += `📊 *Seu Progresso Atual:*\n`;
   txt += `• Indicados ativos qualificados: *${status.activeQualified} de 3*\n`;
@@ -90,13 +90,15 @@ export async function getReferralShareMessage(clientId: string, phone: string): 
     txt += `• Status da sua mensalidade: ${
       status.isExempt
         ? '🎉 *ISENTO (100% Gratuito!)*'
-        : `Pagante normal (faltam ${status.neededForExemption} para zerar sua fatura)`
+        : `Pagante normal (faltam ${status.neededForExemption} indicados ativos para zerar suas próximas faturas)`
     }\n\n`;
   }
 
-  txt += `👉 *Seu link exclusivo para compartilhar com amigos e parceiros:*\n`;
-  txt += `${referralLink}\n\n`;
-  txt += `_Basta enviar este link no WhatsApp de quem precisa de organização financeira. Quando eles começarem a degustação e assinarem, o sistema computa automaticamente para você!_`;
+  txt += `👉 *Seu link exclusivo para compartilhar no WhatsApp:*
+${referralLink}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Ao clicar no link acima, seu indicado abre uma conversa direta com o robô oficial do AnalisAí no WhatsApp (13) 3150-0987, com seu código de indicação vinculado automaticamente!_`;
 
   return txt;
 }

@@ -74,9 +74,9 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!estourar analise* → Simula estouro do consultor de caixa (oferece R$ 49 avulso ou upgrade)
 
 👥 *4. GESTÃO DE USUÁRIOS QA (AMIGOS E FAMILIARES)*
-• *!qa add 11999999999 João Amigo* → Libera o João para testar tudo sem travas nem custos
+• *!qa add 13978122222 João Amigo* (aceita com ou sem máscara: `(13) 97812-2222` ou `5513...`) → Acesso livre QA
 • *!qa list* → Lista todos os contatos que você já liberou como QA
-• *!qa remove 11999999999* → Remove o João do modo QA
+• *!qa remove 13978122222* → Remove do modo QA
 • *!feedbacks* → Vê todas as sugestões e críticas enviadas pelos testadores
 
 📊 *5. PRODUTOS AVULSOS E AUDITORIA*
@@ -560,27 +560,45 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
   // ── !qa add / remove / list ───────────────────────────────────────────────
   if (action === 'qa') {
     const subAction = arg1;
-    const targetId = parts[2];
-    const description = parts.slice(3).join(' ');
 
-    if (subAction === 'add' && targetId) {
-      const { addQaWhitelist } = await import('@/lib/solo/qa-whitelist');
-      const res = await addQaWhitelist(targetId, description || 'QA Liberado pelo Admin', client.name);
-      return { handled: true, message: res.message };
-    } else if (subAction === 'remove' && targetId) {
-      const { removeQaWhitelist } = await import('@/lib/solo/qa-whitelist');
-      const res = await removeQaWhitelist(targetId);
-      return { handled: true, message: res.message };
+    if (subAction === 'add') {
+      const rawAfter = commandText.replace(/^[!/](qa)\s+add\s+/i, '').trim();
+      let rawTarget = '';
+      let description = '';
+
+      // Tenta separar telefone/identificador com pontuações do nome
+      const match = rawAfter.match(/^([+0-9()\s.\/-]+?)(?:\s+([a-zA-ZÀ-ÿ].*))?$/);
+      if (match) {
+        rawTarget = match[1].trim();
+        description = match[2] ? match[2].trim() : '';
+      } else {
+        const p = rawAfter.split(/\s+/);
+        rawTarget = p[0] || '';
+        description = p.slice(1).join(' ');
+      }
+
+      if (rawTarget) {
+        const { addQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+        const res = await addQaWhitelist(rawTarget, description || 'QA Liberado pelo Admin', client.name);
+        return { handled: true, message: res.message };
+      }
+    } else if (subAction === 'remove') {
+      const rawTarget = commandText.replace(/^[!/](qa)\s+remove\s+/i, '').trim();
+      if (rawTarget) {
+        const { removeQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+        const res = await removeQaWhitelist(rawTarget);
+        return { handled: true, message: res.message };
+      }
     } else if (subAction === 'list' || !subAction) {
       const { listQaWhitelist } = await import('@/lib/solo/qa-whitelist');
       const txt = await listQaWhitelist();
       return { handled: true, message: txt };
-    } else {
-      return {
-        handled: true,
-        message: `🧪 *Uso dos Comandos de QA:*\n• \`!qa add <cpf/cnpj/tel> [descrição]\`\n• \`!qa remove <cpf/cnpj/tel>\`\n• \`!qa list\``,
-      };
     }
+
+    return {
+      handled: true,
+      message: `🧪 *Uso dos Comandos de QA:*\n• \`!qa add <telefone/cpf> [descrição]\`\n  ↳ _Exemplos aceitos:_\n    • \`!qa add 13978122222 João Amigo\`\n    • \`!qa add (13) 97812-2222 João Amigo\`\n    • \`!qa add +55 13 97812-2222 João Amigo\`\n• \`!qa remove <telefone/cpf>\`\n• \`!qa list\``,
+    };
   }
 
   // ── !feedbacks / !feedback ──────────────────────────────────────────────────
