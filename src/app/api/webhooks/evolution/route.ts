@@ -42,6 +42,7 @@ import { recordWaitlistLead } from '@/lib/solo/waitlist';
 import { linkReferralLead, getReferralShareMessage } from '@/lib/solo/referral';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
+import { getTaxRevenueTracking, updateTaxRegime, addTrialLeadRevenue } from '@/lib/solo/tax-meter';
 import { isQaWhitelisted } from '@/lib/solo/qa-whitelist';
 import { addMinutes } from 'date-fns';
 
@@ -219,6 +220,14 @@ Válido por 60 dias para qualquer canal (texto, áudio, fotos ou PDFs):
           : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
 
       if (isIncome) {
+        let taxBadge = '';
+        try {
+          const taxStatus = await getTaxRevenueTracking({ clientId: client.id });
+          taxBadge = `\n${taxStatus.miniBadge}`;
+        } catch (tErr) {
+          console.warn('[Tax Meter Badge Warning]:', tErr);
+        }
+
         await sendEvolutionText({
           phone,
           text: `✅ *Previsão de Recebimento Registrada (via ${origin})!*
@@ -228,7 +237,7 @@ Válido por 60 dias para qualquer canal (texto, áudio, fotos ou PDFs):
 • *Data Prevista:* ${formattedDate}
 • *Classificação:* Receita Operacional
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${quotaFootnote}
+${quotaFootnote}${taxBadge}
 Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *relatório* para ver o PDF atualizado!`,
         });
       } else {
@@ -1105,6 +1114,82 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     }
   }
 
+  // ── Interceptação 1.15: Termômetro Tributário MEI x Simples Nacional (Ideia #55) ─
+  const isTaxMeterCommand =
+    cleanText === '!termometro' || cleanText === 'termometro' ||
+    cleanText === '!termômetro' || cleanText === 'termômetro' ||
+    cleanText === '!tributos' || cleanText === 'tributos' ||
+    cleanText === '!impostos' || cleanText === 'impostos' ||
+    cleanText === '!mei' || cleanText === 'mei' ||
+    cleanText === '!simples' || cleanText === 'simples' ||
+    cleanText === '/termometro' || cleanText === '/tributos' ||
+    cleanText.includes('limite mei') || cleanText.includes('limite do mei') ||
+    cleanText.includes('teto mei') || cleanText.includes('teto do mei') ||
+    cleanText.includes('termometro mei') || cleanText.includes('termômetro mei') ||
+    cleanText.includes('limite simples') || cleanText.includes('teto simples') ||
+    cleanText.includes('quanto posso faturar') || cleanText.includes('quanto ainda posso faturar');
+
+  if (isTaxMeterCommand) {
+    const tracking = await getTaxRevenueTracking({
+      clientId: client?.id,
+      phone: cleanPhone,
+    });
+    await sendEvolutionText({ phone, text: tracking.statusMessage });
+    return;
+  }
+
+  // Configuração de Regime: !regime [mei|simples|epp] [baseline?]
+  if (cleanText.startsWith('!regime') || cleanText.startsWith('/regime')) {
+    const parts = cleanText.split(/\s+/);
+    const targetRegime = parts[1]?.toLowerCase();
+    let regimeCode: 'mei' | 'simples_me' | 'simples_epp' = 'mei';
+
+    if (targetRegime === 'simples' || targetRegime === 'me' || targetRegime === 'simples_me') {
+      regimeCode = 'simples_me';
+    } else if (targetRegime === 'epp' || targetRegime === 'simples_epp') {
+      regimeCode = 'simples_epp';
+    } else {
+      regimeCode = 'mei';
+    }
+
+    let baselineNum: number | undefined = undefined;
+    if (parts[2]) {
+      const parsedBaseline = parseFloat(parts[2].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(parsedBaseline)) baselineNum = parsedBaseline;
+    }
+
+    const res = await updateTaxRegime({
+      phone: cleanPhone,
+      regime: regimeCode,
+      baseline: baselineNum,
+    });
+    await sendEvolutionText({ phone, text: res.message });
+    return;
+  }
+
+  // Configuração de Faturamento Base: !faturamento [valor]
+  if (cleanText.startsWith('!faturamento') || cleanText.startsWith('/faturamento')) {
+    const parts = cleanText.split(/\s+/);
+    if (parts[1]) {
+      const parsed = parseFloat(parts[1].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(parsed) && parsed >= 0) {
+        const currentTracking = await getTaxRevenueTracking({ clientId: client?.id, phone: cleanPhone });
+        const res = await updateTaxRegime({
+          phone: cleanPhone,
+          regime: currentTracking.taxRegime,
+          baseline: parsed,
+        });
+        await sendEvolutionText({ phone, text: res.message });
+        return;
+      }
+    }
+    await sendEvolutionText({
+      phone,
+      text: `💡 *Como informar seu faturamento prévio deste ano:*\nDigite: \`!faturamento [valor]\`\nExemplo: \`!faturamento 25000\``,
+    });
+    return;
+  }
+
   // ── Interceptação 1.2: Projeção Estendida de Fluxo de Caixa (> 7 dias / Mês) ────
   // Se o cliente ou lead solicitar prazo maior que uma semana, recusa educadamente
   // e apresenta o Relatório de Fluxo de Caixa Futuro avulso (R$ 49,00)
@@ -1421,8 +1506,19 @@ ${BANK_SAFETY_NOTICE}`,
 
           await recordTrialUsage(cleanPhone, mockExtracted);
 
+          let trialTaxBadge = '';
+          if (isIncome) {
+            try {
+              await addTrialLeadRevenue(cleanPhone, Number(conv.amount));
+              const taxStatus = await getTaxRevenueTracking({ phone: cleanPhone });
+              trialTaxBadge = `\n\n${taxStatus.miniBadge}`;
+            } catch (tErr) {
+              console.warn('[Trial Tax Meter Warning]:', tErr);
+            }
+          }
+
           const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
-          const summaryText = formatTrialDocSummary(mockExtracted, remainingAfter);
+          const summaryText = formatTrialDocSummary(mockExtracted, remainingAfter) + trialTaxBadge;
           await sendEvolutionText({ phone, text: summaryText });
 
           try {
@@ -2082,6 +2178,16 @@ Deseja migrar para o Solo agora?
 
       if (audioResult.functionCalls.length > 0) {
         const call = audioResult.functionCalls[0];
+
+        // -1) Function Call: Termômetro Tributário MEI / Simples por Voz
+        if (call.name === 'consult_tax_meter') {
+          const tracking = await getTaxRevenueTracking({
+            clientId: client?.id,
+            phone: cleanPhone,
+          });
+          await sendEvolutionText({ phone, text: tracking.statusMessage });
+          return;
+        }
 
         // 0) Function Call: Listar Contas por Voz
         if (call.name === 'list_bills') {

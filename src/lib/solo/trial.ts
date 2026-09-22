@@ -441,25 +441,55 @@ Conheça os planos corporativos sob demanda:
 export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de confirmar o pagamento no aplicativo do seu banco, confira sempre se o nome do favorecido, CNPJ e o valor na tela de confirmação correspondem exatamente ao seu credor/fornecedor. O AnalisAí realiza a leitura digital automatizada dos dados, cabendo exclusivamente ao pagador a conferência final e autorização da operação junto à sua instituição financeira.`;
 
 /**
- * Mensagem da Véspera do Vencimento (disparo às 10h) — Etapa 1: Alívio da Prevenção e Livro Caixa
+ * Formata uma lista de contas de forma elegante para mensagens do WhatsApp
  */
-export function getEveReminderMessage(lead: {
-  supplier_name?: string;
-  amount?: number;
-  barcode_or_pix?: string;
-}): string {
-  const fornecedor = lead.supplier_name || 'seu fornecedor';
-  const valFormatted = lead.amount
-    ? Number(lead.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : 'valor cadastrado';
+export function formatBillsList(bills: any[]): string {
+  return bills
+    .map((b) => {
+      const fornecedor = b.supplier_name || 'Conta / Fornecedor';
+      const valFmt = b.amount && Number(b.amount) > 0
+        ? Number(b.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : '_(Valor em aberto - Provisão)_';
+      const provTag = b.is_provision ? ' 📝 _[Provisão]_' : '';
+      let line = `• *${fornecedor}*: ${valFmt}${provTag}`;
+      if (b.barcode_or_pix) {
+        line += `\n  ↳ Linha/Pix: \`${b.barcode_or_pix.trim()}\``;
+      }
+      return line;
+    })
+    .join('\n');
+}
+
+/**
+ * Mensagem da Véspera do Vencimento (disparo às 10h) — Suporta conta única ou agrupamento de múltiplas contas
+ */
+export function getEveReminderMessage(leadOrBills: any): string {
+  const bills: any[] = Array.isArray(leadOrBills) ? leadOrBills : [leadOrBills];
+  const isMultiple = bills.length > 1;
+  const totalAmount = bills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const totalFmt = totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   let txt = `⏰ *Lembrete de Vencimento — AnalisAí*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  txt += `Olá! Passando para te lembrar que a sua conta de *${fornecedor}* (${valFormatted}) vence **AMANHÃ**!\n\n`;
 
-  if (lead.barcode_or_pix) {
-    txt += `📋 *Código de barras para pagar sem multas:*\n`;
-    txt += `${lead.barcode_or_pix.trim()}\n\n`;
+  if (!isMultiple) {
+    const single = bills[0] || {};
+    const fornecedor = single.supplier_name || 'seu fornecedor';
+    const valFormatted = single.amount && Number(single.amount) > 0
+      ? Number(single.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : 'valor cadastrado';
+    const provTag = single.is_provision ? ' 📝 _(Provisão de valor)_' : '';
+
+    txt += `Olá! Passando para te lembrar que a sua conta de *${fornecedor}* (${valFormatted}${provTag}) vence **AMANHÃ**!\n\n`;
+
+    if (single.barcode_or_pix) {
+      txt += `📋 *Código de barras para pagar sem multas:*\n`;
+      txt += `${single.barcode_or_pix.trim()}\n\n`;
+    }
+  } else {
+    txt += `Olá! Passando para te avisar que você tem *${bills.length} contas* agendadas para vencer **AMANHÃ**:\n\n`;
+    txt += `${formatBillsList(bills)}\n\n`;
+    txt += `💰 *Total previsto para amanhã:* ${totalFmt}\n\n`;
   }
 
   txt += `${BANK_SAFETY_NOTICE}\n\n`;
@@ -479,31 +509,44 @@ export function getEveReminderMessage(lead: {
 }
 
 /**
- * Mensagem do Dia do Vencimento (disparo às 10h) — Etapa 2: Agilidade e Inteligência Financeira
+ * Mensagem do Dia do Vencimento (disparo às 10h) — Suporta conta única ou agrupamento de múltiplas contas
  */
-export function getDueReminderMessage(lead: {
-  supplier_name?: string;
-  amount?: number;
-  barcode_or_pix?: string;
-}): string {
-  const fornecedor = lead.supplier_name || 'seu fornecedor';
-  const valFormatted = lead.amount
-    ? Number(lead.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : 'valor cadastrado';
+export function getDueReminderMessage(leadOrBills: any): string {
+  const bills: any[] = Array.isArray(leadOrBills) ? leadOrBills : [leadOrBills];
+  const isMultiple = bills.length > 1;
+  const totalAmount = bills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const totalFmt = totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  let txt = `🚨 *Atenção: Seu boleto vence HOJE!*\n`;
-  txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  txt += `A conta de *${fornecedor}* (${valFormatted}) vence no dia de hoje. Evite multas e juros de atraso!\n\n`;
+  let txt = '';
 
-  if (lead.barcode_or_pix) {
-    txt += `📋 *Código de barras pronto para cópia:*\n`;
-    txt += `${lead.barcode_or_pix.trim()}\n\n`;
+  if (!isMultiple) {
+    const single = bills[0] || {};
+    const fornecedor = single.supplier_name || 'seu fornecedor';
+    const valFormatted = single.amount && Number(single.amount) > 0
+      ? Number(single.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : 'valor cadastrado';
+    const provTag = single.is_provision ? ' 📝 _(Provisão de valor)_' : '';
+
+    txt += `🚨 *Atenção: Seu boleto vence HOJE!*\n`;
+    txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    txt += `A conta de *${fornecedor}* (${valFormatted}${provTag}) vence no dia de hoje. Evite multas e juros de atraso!\n\n`;
+
+    if (single.barcode_or_pix) {
+      txt += `📋 *Código de barras pronto para cópia:*\n`;
+      txt += `${single.barcode_or_pix.trim()}\n\n`;
+    }
+  } else {
+    txt += `🚨 *Atenção: Você tem ${bills.length} contas vencendo HOJE!*\n`;
+    txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    txt += `Organize seus pagamentos no início do dia para evitar juros e multas de atraso:\n\n`;
+    txt += `${formatBillsList(bills)}\n\n`;
+    txt += `💰 *Total a pagar HOJE:* ${totalFmt}\n\n`;
   }
 
   txt += `${BANK_SAFETY_NOTICE}\n\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   txt += `⚡ *Agilidade e Organização Financeira:*\n`;
-  txt += `Copie o código acima e liquide no app do seu banco para não pagar juros ou multas de atraso!\n\n`;
+  txt += `Copie os dados acima e liquide no app do seu banco para não pagar juros ou multas de atraso!\n\n`;
   txt += `🤖 *Cada plano é desenhado para o estágio do seu negócio:*\n`;
   txt += `• *Para Autônomos & MEIs:* Planos Start e Solo cuidam do básico essencial e avisos pontuais no WhatsApp;\n`;
   txt += `• *Para Empresas em Crescimento:* Plano Solo Plus (60 lançamentos) com conciliação mensal do seu extrato bancário;\n`;
@@ -517,7 +560,50 @@ export function getDueReminderMessage(lead: {
 }
 
 /**
+ * Mensagem consolidada para o caso do lead possuir contas vencendo HOJE e contas vencendo AMANHÃ
+ */
+export function getConsolidatedDailyReminderMessage(params: {
+  dueTodayBills: any[];
+  dueTomorrowBills: any[];
+}): string {
+  const { dueTodayBills, dueTomorrowBills } = params;
+  const todayTotal = dueTodayBills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const tomorrowTotal = dueTomorrowBills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const grandTotal = todayTotal + tomorrowTotal;
+
+  const todayFmt = todayTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const tomorrowFmt = tomorrowTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const grandFmt = grandTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  let txt = `☀️ *Bom dia! Seu Radar de Vencimentos — AnalisAí*\n`;
+  txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  txt += `Aqui está a sua programação de pagamentos prioritários:\n\n`;
+
+  if (dueTodayBills.length > 0) {
+    txt += `🚨 *VENCENDO HOJE (${dueTodayBills.length} conta${dueTodayBills.length > 1 ? 's' : ''}):*\n`;
+    txt += `${formatBillsList(dueTodayBills)}\n`;
+    txt += `💰 *Subtotal de Hoje:* ${todayFmt}\n\n`;
+  }
+
+  if (dueTomorrowBills.length > 0) {
+    txt += `⏰ *VENCENDO AMANHÃ (${dueTomorrowBills.length} conta${dueTomorrowBills.length > 1 ? 's' : ''}):*\n`;
+    txt += `${formatBillsList(dueTomorrowBills)}\n`;
+    txt += `💰 *Subtotal de Amanhã:* ${tomorrowFmt}\n\n`;
+  }
+
+  txt += `📊 *Total de Obrigações do Período:* ${grandFmt}\n\n`;
+  txt += `${BANK_SAFETY_NOTICE}\n\n`;
+  txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  txt += `⚡ *Dica de Gestão:* Liquide as contas de hoje logo pela manhã para manter seu fluxo de caixa desimpedido.\n\n`;
+  txt += `👉 *Gostou do lembrete consolidado? Ative o plano Solo por R$ 87,99/mês:*\n`;
+  txt += `${ASAAS_PLANS.monthly.solo.checkoutUrl}`;
+
+  return txt;
+}
+
+/**
  * Processa a agenda diária de lembretes (executada às 10h da manhã)
+ * Garante rigorosamente o AGRUPAMENTO INTELIGENTE (1 única mensagem por lead)
  */
 export async function processTrialReminders(): Promise<{ eveCount: number; dueCount: number }> {
   const supabase = createServiceRoleClient();
@@ -535,8 +621,6 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
   let dueCount = 0;
 
   // Processa Lembretes de VÉSPERA e DIA DO VENCIMENTO para TODAS as contas de cada Lead
-  // Mesmo que o lead já tenha atingido o teto de 10 contas ou os 30 dias de trial,
-  // continuamos informando pontualmente cada vencimento e oferecendo o plano Solo!
   const { data: allTrialLeads } = await supabase
     .from('trial_leads')
     .select('id, whatsapp_number, supplier_name, amount, due_date, barcode_or_pix, bills_list, reminder_eve_sent, reminder_due_sent')
@@ -573,37 +657,52 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
         });
       }
 
-      let billsUpdated = false;
+      // Agrupa contas que vencem hoje e que vencem amanhã
+      const dueToday = billsList.filter((b) => b.due_date === todayIso && !b.reminder_due_sent);
+      const dueTomorrow = billsList.filter((b) => b.due_date === tomorrowIso && !b.reminder_eve_sent);
 
-      for (const bill of billsList) {
-        // 1. Lembrete de Véspera (vence amanhã)
-        if (bill.due_date === tomorrowIso && !bill.reminder_eve_sent) {
-          const msg = getEveReminderMessage(bill);
-          await sendEvolutionText({ phone: lead.whatsapp_number, text: msg });
-          bill.reminder_eve_sent = true;
-          bill.reminder_eve_sent_at = new Date().toISOString();
-          billsUpdated = true;
+      if (dueToday.length === 0 && dueTomorrow.length === 0) {
+        continue;
+      }
+
+      let consolidatedMessage = '';
+
+      if (dueToday.length > 0 && dueTomorrow.length > 0) {
+        // Envia UMA ÚNICA MENSAGEM consolidada para hoje e amanhã
+        consolidatedMessage = getConsolidatedDailyReminderMessage({
+          dueTodayBills: dueToday,
+          dueTomorrowBills: dueTomorrow,
+        });
+      } else if (dueToday.length > 0) {
+        // Envia UMA ÚNICA MENSAGEM com todas as contas de hoje agrupadas
+        consolidatedMessage = getDueReminderMessage(dueToday);
+      } else if (dueTomorrow.length > 0) {
+        // Envia UMA ÚNICA MENSAGEM com todas as contas de amanhã agrupadas
+        consolidatedMessage = getEveReminderMessage(dueTomorrow);
+      }
+
+      if (consolidatedMessage) {
+        await sendEvolutionText({ phone: lead.whatsapp_number, text: consolidatedMessage });
+
+        // Marca flags em cada conta processada
+        for (const b of dueToday) {
+          b.reminder_due_sent = true;
+          b.reminder_due_sent_at = new Date().toISOString();
+          dueCount++;
+        }
+
+        for (const b of dueTomorrow) {
+          b.reminder_eve_sent = true;
+          b.reminder_eve_sent_at = new Date().toISOString();
           eveCount++;
         }
 
-        // 2. Lembrete do Dia (vence hoje)
-        if (bill.due_date === todayIso && !bill.reminder_due_sent) {
-          const msg = getDueReminderMessage(bill);
-          await sendEvolutionText({ phone: lead.whatsapp_number, text: msg });
-          bill.reminder_due_sent = true;
-          bill.reminder_due_sent_at = new Date().toISOString();
-          billsUpdated = true;
-          dueCount++;
-        }
-      }
-
-      if (billsUpdated) {
         await supabase
           .from('trial_leads')
           .update({
             bills_list: billsList,
-            reminder_eve_sent: billsList.some(b => b.reminder_eve_sent),
-            reminder_due_sent: billsList.some(b => b.reminder_due_sent),
+            reminder_eve_sent: billsList.some((b) => b.reminder_eve_sent),
+            reminder_due_sent: billsList.some((b) => b.reminder_due_sent),
           })
           .eq('id', lead.id);
       }

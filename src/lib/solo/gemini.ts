@@ -371,6 +371,10 @@ export async function processVoiceCommandWithGemini(
       name: 'request_cash_ledger_pdf',
       description: 'Invocada quando o cliente solicita o envio do relatório financeiro, livro caixa ou extrato em PDF.',
     },
+    {
+      name: 'consult_tax_meter',
+      description: 'Invocada quando o usuário pergunta sobre limite de faturamento anual, teto de MEI ou Simples Nacional, margem de segurança fiscal ou termômetro tributário (ex: "como está meu limite de MEI?", "quanto posso faturar no Simples?", "ver termômetro fiscal", "risco de desenquadramento").',
+    },
   ];
 
   // Limpa o MIME type para o formato estrito aceito pelo Google (ex: 'audio/ogg')

@@ -7,6 +7,7 @@ import { getEveReminderMessage, getDueReminderMessage } from './trial';
 import { getWaitlistAdminReport } from './waitlist';
 import { getReferralShareMessage } from './referral';
 import { getMonthlyDividendTracking } from './dividend-tracker';
+import { getTaxRevenueTracking } from './tax-meter';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -91,6 +92,13 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!erro <descrição>* → Sinônimo de !bug
 • *!fix <id>* → Autoriza a IA a corrigir autonomamente um bug relatado
 • *!fila* → Exibe todas as tarefas e status no backlog da IA
+
+🌡️ *7. TERMÔMETRO TRIBUTÁRIO & AGRUPAMENTO INTELIGENTE (IDEIA #55)*
+• *!termometro* → Régua visual de faturamento, margem segura e risco da Receita Federal
+• *!regime mei* ou *!regime simples* → Configura regime fiscal
+• *!faturamento [valor]* → Ajusta o faturamento acumulado fora do AnalisAí
+• *!simular lembrete grupo* → Simula na hora o lembrete de múltiplas contas agrupadas (CPFL + Sabesp)
+• *!simular termometro* → Simula o relatório completo de conformidade fiscal
 
 🛡️ *7. PROTEÇÃO ANTI-LOOPING DE ROBÔS*
 • *!bloqueios* → Lista números suspensos ou recursos de desbloqueio pendentes
@@ -237,7 +245,7 @@ Seu perfil está 100% limpo, exatamente como o de um cliente que acabou de se ca
     };
   }
 
-  // ── !simular [start|solo|plus|lembrete] ──────────────────────────────────────
+  // ── !simular [start|solo|plus|lembrete|termometro] ──────────────────────────
   if (action === 'simular') {
     if (arg1 === 'lembrete') {
       const subType = parts[2] || 'vencimento';
@@ -247,7 +255,16 @@ Seu perfil está 100% limpo, exatamente como o de um cliente que acabou de se ca
         barcode_or_pix: '34191090080000123456789012345678901234567890',
       };
 
-      if (subType === 'vespera' || subType === 'véspera') {
+      if (subType === 'grupo' || subType === 'agrupado') {
+        const mockGroup = [
+          { supplier_name: 'CPFL Energia', amount: 99.00, barcode_or_pix: '83600000001099000138' },
+          { supplier_name: 'Sabesp Saneamento', amount: 80.00, barcode_or_pix: '83650000000800000142' },
+        ];
+        return {
+          handled: true,
+          message: getDueReminderMessage(mockGroup),
+        };
+      } else if (subType === 'vespera' || subType === 'véspera') {
         return {
           handled: true,
           message: getEveReminderMessage(mockLead),
@@ -260,6 +277,14 @@ Seu perfil está 100% limpo, exatamente como o de um cliente que acabou de se ca
       }
     }
 
+    if (arg1 === 'termometro' || arg1 === 'tributos' || arg1 === 'mei') {
+      const tracking = await getTaxRevenueTracking({ clientId });
+      return {
+        handled: true,
+        message: tracking.statusMessage,
+      };
+    }
+
     let targetCode: PlanCode = 'solo_plus';
     if (arg1 === 'start') targetCode = 'start';
     else if (arg1 === 'solo') targetCode = 'solo';
@@ -270,7 +295,7 @@ Seu perfil está 100% limpo, exatamente como o de um cliente que acabou de se ca
       return {
         handled: true,
         message:
-          'Informe a simulação desejada:\n• `!simular start` (15 lançamentos)\n• `!simular solo` (30 lançamentos)\n• `!simular plus` (60 lançamentos)\n• `!simular pro` (500 lançamentos)\n• `!simular super` (1.000 lançamentos)\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`',
+          'Informe a simulação desejada:\n• `!simular start` (15 lançamentos)\n• `!simular solo` (30 lançamentos)\n• `!simular plus` (60 lançamentos)\n• `!simular pro` (500 lançamentos)\n• `!simular super` (1.000 lançamentos)\n• `!simular lembrete grupo` (CPFL + Sabesp unificadas)\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`\n• `!simular termometro` (Régua Fiscal MEI/Simples)',
       };
     }
 
