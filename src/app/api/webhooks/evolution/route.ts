@@ -54,6 +54,10 @@ import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFr
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
 import { getTaxRevenueTracking, updateTaxRegime, addTrialLeadRevenue } from '@/lib/solo/tax-meter';
 import { isQaWhitelisted } from '@/lib/solo/qa-whitelist';
+import {
+  iniciarDesafioRecuperacaoEmail,
+  processarRespostaDesafioEmail,
+} from '@/lib/solo/email-recovery';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -787,6 +791,15 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       }
     }
 
+    // Trata Desafio Cadastral de Recuperação de E-mail (Receita Federal)
+    if (pendingAction.action_type === 'email_recovery_challenge') {
+      const recoveryRes = await processarRespostaDesafioEmail(client?.id || cleanPhone, rawText);
+      if (recoveryRes.handled && recoveryRes.message) {
+        await sendEvolutionText({ phone, text: recoveryRes.message });
+        return;
+      }
+    }
+
     if (isAffirmative) {
       await supabase
         .from('bot_action_confirmations')
@@ -1177,7 +1190,19 @@ Para habilitar validações em duas etapas (2FA) e cadastrar chaves Pix alternat
     }
 
     const emailResult = await cadastrarEmailCliente(client?.id || cleanPhone, rawEmail);
-    await sendEvolutionText({ phone, text: emailResult.message });
+    let replyText = emailResult.message;
+    if (replyText.includes('Autorização de Troca de E-mail Obrigatória')) {
+      replyText += `\n\n💡 _Perdeu o acesso ao e-mail anterior? Use a recuperação cadastral oficial da Receita Federal:_\n👉 *!recuperaremail ${rawEmail}*`;
+    }
+    await sendEvolutionText({ phone, text: replyText });
+    return;
+  }
+
+  // ── Interceptação 1.07: Recuperação de E-mail por Desafio Cadastral (!recuperaremail [novo_email]) ──
+  if (cleanText.startsWith('!recuperaremail') || cleanText.startsWith('/recuperaremail')) {
+    const rawEmail = rawText.replace(/^[!/](recuperaremail)\s*/i, '').trim();
+    const result = await iniciarDesafioRecuperacaoEmail(client?.id || cleanPhone, rawEmail);
+    await sendEvolutionText({ phone, text: result.message });
     return;
   }
 
