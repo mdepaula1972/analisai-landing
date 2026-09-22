@@ -5,7 +5,13 @@ import { escalateToHumanConsultant } from './consultant-escalation';
 import { formatDueDateDetails } from './date-utils';
 import { getEveReminderMessage, getDueReminderMessage } from './trial';
 import { getWaitlistAdminReport } from './waitlist';
-import { getReferralShareMessage, setAnalisadorPixKey, getReferralStatus } from './referral';
+import {
+  getReferralShareMessage,
+  solicitarAlteracaoPix,
+  confirmarAlteracaoPix,
+  cancelarAlteracaoPix,
+  getReferralStatus,
+} from './referral';
 import { getMonthlyDividendTracking } from './dividend-tracker';
 import { addDays } from 'date-fns';
 
@@ -557,6 +563,23 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
     };
   }
 
+  if (action === 'confirmarpix') {
+    const rawCode = commandText.replace(/^[!/](confirmarpix)\s*/i, '').trim();
+    const result = await confirmarAlteracaoPix(clientId, rawCode);
+    return {
+      handled: true,
+      message: result.message,
+    };
+  }
+
+  if (action === 'cancelarpix') {
+    const cancelMsg = await cancelarAlteracaoPix(clientId);
+    return {
+      handled: true,
+      message: cancelMsg,
+    };
+  }
+
   if (action === 'pix') {
     const rawPix = commandText.replace(/^[!/](pix)\s*/i, '').trim();
     if (!rawPix) {
@@ -565,9 +588,13 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
         return {
           handled: true,
           message: `🔑 *Sua Chave Pix para Repasses de Analisador:*
-👉 \`${status.pixKey}\`
+👉 \`${status.pixKey}\` ${status.isDocumentPixKey ? '🛡️ *(CNPJ/CPF Oficial do Titular)*' : '✅'}
 
-Para alterar para outra chave, envie: *!pix nova_chave*`,
+🛡️ *Segurança Ativa (Abordagem 2):*
+Qualquer alteração para chaves alternativas requer validação obrigatória por código de segurança (2FA) enviado ao seu e-mail cadastrado.
+
+Para alterar sua chave Pix, envie:
+👉 *!pix nova_chave*`,
         };
       } else {
         return {
@@ -576,12 +603,12 @@ Para alterar para outra chave, envie: *!pix nova_chave*`,
 
 Para receber suas comissões mensais como Analisador direto no Pix, cadastre sua chave agora enviando:
 👉 *!pix sua_chave*
-_(Ex: !pix 13978122222 ou !pix financeiro@empresa.com)_`,
+_(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
         };
       }
     }
 
-    const result = await setAnalisadorPixKey(clientId, rawPix);
+    const result = await solicitarAlteracaoPix(clientId, rawPix);
     return {
       handled: true,
       message: result.message,

@@ -430,3 +430,159 @@ export async function notificarTrocaNumeroConcluida(params: { emailDestino: stri
   }
 }
 
+/**
+ * Envia código de segurança 2FA para autorizar alteração de chave Pix
+ */
+export async function enviarCodigo2FAAlteracaoPix(params: {
+  emailDestino: string;
+  nomeCliente: string;
+  codigoOtp: string;
+  novaChavePix: string;
+}) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('[Resend 2FA Pix] RESEND_API_KEY ausente.');
+    return { sucesso: false, erro: 'API Key não configurada' };
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 24px; }
+        .card { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; max-width: 540px; margin: 0 auto; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .header { background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(239,68,68,0.05)); padding: 24px; border-bottom: 1px solid #334155; text-align: center; }
+        .badge { display: inline-block; background-color: #ef4444; color: #ffffff; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 8px; }
+        .title { margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; }
+        .content { padding: 24px; font-size: 14px; color: #cbd5e1; line-height: 1.6; }
+        .otp-box { background-color: #020617; border: 2px dashed #f59e0b; border-radius: 12px; text-align: center; padding: 18px; margin: 20px 0; }
+        .otp-code { font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #f59e0b; }
+        .warning { background-color: rgba(239,68,68,0.1); border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; font-size: 13px; color: #fca5a5; margin-top: 16px; }
+        .footer { background-color: #020617; padding: 16px 24px; border-top: 1px solid #1e293b; text-align: center; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <span class="badge">Proteção Financeira 2FA</span>
+          <h1 class="title">Autorização de Chave Pix</h1>
+        </div>
+        <div class="content">
+          <p>Olá, <strong>${params.nomeCliente}</strong>!</p>
+          <p>Recebemos uma solicitação pelo WhatsApp para alterar a conta de recebimento de comissões do <strong>Programa Analisador</strong> da sua empresa para a seguinte chave Pix:</p>
+          <p style="font-size: 16px; font-weight: 700; color: #38bdf8; text-align: center; background: #020617; padding: 10px; border-radius: 8px;">
+            ${params.novaChavePix}
+          </p>
+          <p>Para confirmar que você é o titular desta solicitação, utilize o código de segurança abaixo:</p>
+          <div class="otp-box">
+            <div class="otp-code">${params.codigoOtp}</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">Válido por 10 minutos</div>
+          </div>
+          <div class="warning">
+            ⚠️ <strong>Alerta de Segurança:</strong> Se você NÃO solicitou essa alteração, <strong>NÃO</strong> compartilhe este código com ninguém. Seus dados e comissões continuam seguros.
+          </div>
+        </div>
+        <div class="footer">
+          AnalisAI.me — Sistema de Inteligência Financeira e Contábil
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'AnalisAI Segurança <onboarding@resend.dev>',
+        to: [params.emailDestino],
+        subject: `🔒 [Código 2FA: ${params.codigoOtp}] Autorização de Alteração de Chave Pix — AnalisAí`,
+        html: html,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('[Resend 2FA Pix Email] Erro no envio:', data);
+      return { sucesso: false, erro: data.message || 'Erro ao enviar e-mail' };
+    }
+
+    return { sucesso: true, id: data.id };
+  } catch (err: any) {
+    console.error('[Resend 2FA Pix Email] Falha de conexão:', err);
+    return { sucesso: false, erro: err.message };
+  }
+}
+
+/**
+ * Notifica o titular por e-mail quando a chave Pix for alterada com sucesso
+ */
+export async function notificarAlteracaoPixConcluida(params: {
+  emailDestino: string;
+  nomeCliente: string;
+  novaChavePix: string;
+}) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { sucesso: false };
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 24px; }
+        .card { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; max-width: 540px; margin: 0 auto; overflow: hidden; }
+        .header { background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05)); padding: 24px; border-bottom: 1px solid #334155; text-align: center; }
+        .badge { display: inline-block; background-color: #10b981; color: #020617; font-weight: 800; font-size: 11px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 8px; }
+        .title { margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; }
+        .content { padding: 24px; font-size: 14px; color: #cbd5e1; line-height: 1.6; }
+        .footer { background-color: #020617; padding: 16px 24px; border-top: 1px solid #1e293b; text-align: center; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <span class="badge">Auditoria de Segurança</span>
+          <h1 class="title">Chave Pix Atualizada com Sucesso</h1>
+        </div>
+        <div class="content">
+          <p>Olá, <strong>${params.nomeCliente}</strong>!</p>
+          <p>Confirmamos que a chave Pix para repasse de comissões do <strong>Programa Analisador</strong> da sua empresa foi alterada com sucesso para <strong>${params.novaChavePix}</strong> em ${new Date().toLocaleString('pt-BR')}.</p>
+          <p>Os futuros repasses de comissão serão efetuados para esta chave.</p>
+          <p style="color: #ef4444; font-weight: 600;">Se você não realizou ou não autorizou essa operação, contate o suporte imediatamente para suspender os pagamentos.</p>
+        </div>
+        <div class="footer">
+          AnalisAI.me — Sistema de Inteligência Financeira
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'AnalisAI Segurança <onboarding@resend.dev>',
+        to: [params.emailDestino],
+        subject: `✅ [Segurança] Chave Pix do AnalisAí atualizada com sucesso`,
+        html: html,
+      }),
+    });
+    return { sucesso: true };
+  } catch (err: any) {
+    return { sucesso: false, erro: err.message };
+  }
+}
+

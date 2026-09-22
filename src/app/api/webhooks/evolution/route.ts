@@ -38,7 +38,15 @@ import { checkAntiLoopStatus, recordFruitlessAttempt } from '@/lib/solo/anti-loo
 import { isFeedbackMessage, recordClientFeedback } from '@/lib/solo/feedback';
 import { sendTrialPdfToWhatsApp, sendCashLedgerPdfToWhatsApp } from '@/lib/solo/cash-ledger-pdf';
 import { recordWaitlistLead } from '@/lib/solo/waitlist';
-import { linkReferralLead, getReferralShareMessage, setAnalisadorPixKey, getReferralStatus } from '@/lib/solo/referral';
+import {
+  linkReferralLead,
+  getReferralShareMessage,
+  solicitarAlteracaoPix,
+  confirmarAlteracaoPix,
+  cancelarAlteracaoPix,
+  cadastrarEmailCliente,
+  getReferralStatus,
+} from '@/lib/solo/referral';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
 import { getTaxRevenueTracking, updateTaxRegime, addTrialLeadRevenue } from '@/lib/solo/tax-meter';
@@ -744,6 +752,22 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       /^(n[aã]o\b|n\b|cancela\b|cancelar\b|errado\b|incorreto\b|deixa\b|2\b|n[aã]o,\s*cancelar)/i.test(trimmed) &&
       trimmed.length <= 40;
 
+    // Trata confirmação de 2FA para Alteração de Chave Pix (Abordagem 2)
+    if (pendingAction.action_type === 'change_pix_key') {
+      if (isNegative || cleanText === '!cancelarpix' || cleanText === 'cancelar') {
+        const cancelMsg = await cancelarAlteracaoPix(client?.id || cleanPhone);
+        await sendEvolutionText({ phone, text: cancelMsg });
+        return;
+      }
+
+      const otpCandidate = rawText.replace(/^[!/](confirmarpix|confirmar)\s*/i, '').replace(/\D/g, '').trim();
+      if (otpCandidate.length === 6) {
+        const confirmResult = await confirmarAlteracaoPix(client?.id || cleanPhone, otpCandidate);
+        await sendEvolutionText({ phone, text: confirmResult.message });
+        return;
+      }
+    }
+
     if (isAffirmative) {
       await supabase
         .from('bot_action_confirmations')
@@ -1080,7 +1104,51 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     return;
   }
 
-  // ── Interceptação 1.05: Comando de Chave Pix (!pix [chave]) ───────────────
+  // ── Interceptação 1.04: Confirmação e Cancelamento de 2FA do Pix ──────────
+  if (cleanText.startsWith('!confirmarpix') || cleanText.startsWith('/confirmarpix')) {
+    const rawCode = rawText.replace(/^[!/](confirmarpix)\s*/i, '').trim();
+    const result = await confirmarAlteracaoPix(client?.id || cleanPhone, rawCode);
+    await sendEvolutionText({ phone, text: result.message });
+    return;
+  }
+
+  if (cleanText === '!cancelarpix' || cleanText === '/cancelarpix') {
+    const cancelMsg = await cancelarAlteracaoPix(client?.id || cleanPhone);
+    await sendEvolutionText({ phone, text: cancelMsg });
+    return;
+  }
+
+  // ── Interceptação 1.05: Comando de E-mail de Segurança (!email [email]) ─────
+  if (cleanText.startsWith('!email') || cleanText.startsWith('/email')) {
+    const rawEmail = rawText.replace(/^[!/](email)\s*/i, '').trim();
+    if (!rawEmail) {
+      const currentEmail = client?.email;
+      if (currentEmail) {
+        await sendEvolutionText({
+          phone,
+          text: `📧 *Seu E-mail de Segurança Cadastrado:*
+👉 \`${currentEmail}\`
+
+Para alterar, envie: *!email novo_email@empresa.com*`,
+        });
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Nenhum E-mail de Segurança Cadastrado!*
+
+Para habilitar validações em duas etapas (2FA) e cadastrar chaves Pix alternativas, registre seu e-mail enviando:
+👉 *!email seu_email@empresa.com*`,
+        });
+      }
+      return;
+    }
+
+    const emailResult = await cadastrarEmailCliente(client?.id || cleanPhone, rawEmail);
+    await sendEvolutionText({ phone, text: emailResult.message });
+    return;
+  }
+
+  // ── Interceptação 1.06: Comando de Chave Pix (!pix [chave]) ────────────────
   if (cleanText.startsWith('!pix') || cleanText.startsWith('/pix') || cleanText === 'pix') {
     const rawPix = rawText.replace(/^[!/](pix)\s*/i, '').replace(/^pix\s*/i, '').trim();
     if (!rawPix) {
@@ -1089,9 +1157,13 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
         await sendEvolutionText({
           phone,
           text: `🔑 *Sua Chave Pix para Repasses de Analisador:*
-👉 \`${status.pixKey}\`
+👉 \`${status.pixKey}\` ${status.isDocumentPixKey ? '🛡️ *(CNPJ/CPF Oficial do Titular)*' : '✅'}
 
-Para alterar para outra chave, envie: *!pix nova_chave*`,
+🛡️ *Segurança Ativa (Abordagem 2):*
+Qualquer alteração para chaves alternativas requer validação obrigatória por código de segurança (2FA) enviado ao seu e-mail cadastrado.
+
+Para alterar sua chave Pix, envie:
+👉 *!pix nova_chave*`,
         });
       } else {
         await sendEvolutionText({
@@ -1100,13 +1172,13 @@ Para alterar para outra chave, envie: *!pix nova_chave*`,
 
 Para receber suas comissões mensais como Analisador direto no Pix, cadastre sua chave agora enviando:
 👉 *!pix sua_chave*
-_(Ex: !pix 13978122222 ou !pix financeiro@empresa.com)_`,
+_(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
         });
       }
       return;
     }
 
-    const result = await setAnalisadorPixKey(client?.id || cleanPhone, rawPix);
+    const result = await solicitarAlteracaoPix(client?.id || cleanPhone, rawPix);
     await sendEvolutionText({ phone, text: result.message });
     return;
   }

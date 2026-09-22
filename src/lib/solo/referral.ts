@@ -1,6 +1,9 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_DISPLAY } from '@/lib/solo/constants';
+import { enviarCodigo2FAAlteracaoPix, notificarAlteracaoPixConcluida } from '@/lib/email';
+import { maskEmail } from '@/lib/solo/phone-change';
+import { addMinutes } from 'date-fns';
 
 /**
  * Tabela Oficial de Comissões Recorrentes por Plano (~20% da mensalidade)
@@ -32,10 +35,28 @@ export interface ReferralStatus {
   monthlyEarningsCents: number;
   monthlyEarningsFormatted: string;
   pixKey?: string | null;
+  isDocumentPixKey: boolean;
+  taxIdFormatted?: string | null;
+  clientEmail?: string | null;
   referrerPlanName?: string;
   hasPaidFirstInvoice: boolean;
   referralLink: string;
   phone: string;
+}
+
+/**
+ * Utilitário de formatação de CNPJ ou CPF
+ */
+export function formatTaxId(taxId?: string | null): string {
+  if (!taxId) return '';
+  const clean = taxId.replace(/\D/g, '');
+  if (clean.length === 14) {
+    return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  }
+  if (clean.length === 11) {
+    return clean.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  }
+  return taxId;
 }
 
 /**
@@ -45,7 +66,16 @@ export interface ReferralStatus {
 export async function ensureClientForAnalisador(
   phoneOrClientId: string,
   pushName?: string
-): Promise<{ id: string; name: string; whatsapp_number: string; pix_key?: string | null; is_analisador?: boolean }> {
+): Promise<{
+  id: string;
+  name: string;
+  email?: string | null;
+  whatsapp_number: string;
+  tax_id?: string | null;
+  tax_type?: string | null;
+  pix_key?: string | null;
+  is_analisador?: boolean;
+}> {
   const supabase = createServiceRoleClient();
   const cleanInput = phoneOrClientId.trim();
 
@@ -54,7 +84,7 @@ export async function ensureClientForAnalisador(
   if (isUuid) {
     const { data: existingClient } = await supabase
       .from('clients')
-      .select('id, name, whatsapp_number, pix_key, is_analisador')
+      .select('id, name, email, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
       .eq('id', cleanInput)
       .maybeSingle();
 
@@ -71,7 +101,7 @@ export async function ensureClientForAnalisador(
   // Busca cliente existente pelo telefone
   const { data: clientByPhone } = await supabase
     .from('clients')
-    .select('id, name, whatsapp_number, pix_key, is_analisador')
+    .select('id, name, email, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
     .in('whatsapp_number', phoneVariations)
     .limit(1)
     .maybeSingle();
@@ -100,7 +130,7 @@ export async function ensureClientForAnalisador(
       is_analisador: true,
       pix_key: trialLead?.pix_key || null,
     })
-    .select('id, name, whatsapp_number, pix_key, is_analisador')
+    .select('id, name, email, whatsapp_number, tax_id, tax_type, pix_key, is_analisador')
     .single();
 
   if (error || !newClient) {
@@ -171,6 +201,16 @@ export async function getReferralStatus(phoneOrClientId: string): Promise<Referr
     currency: 'BRL',
   });
 
+  const formattedTaxId = client.tax_id ? formatTaxId(client.tax_id) : null;
+  const cleanTaxDigits = (client.tax_id || '').replace(/\D/g, '');
+  const cleanPixDigits = (client.pix_key || '').replace(/\D/g, '');
+
+  // Padrão Inteligente: se não cadastrou Pix customizado, assume o CNPJ/CPF oficial da assinatura
+  const activePixKey = client.pix_key || (formattedTaxId || null);
+  const isDocumentPixKey = Boolean(
+    cleanTaxDigits && (cleanPixDigits === cleanTaxDigits || !client.pix_key)
+  );
+
   return {
     totalReferrals: total,
     activeQualified,
@@ -180,7 +220,10 @@ export async function getReferralStatus(phoneOrClientId: string): Promise<Referr
     isAnalisadorOficial,
     monthlyEarningsCents,
     monthlyEarningsFormatted,
-    pixKey: client.pix_key || null,
+    pixKey: activePixKey,
+    isDocumentPixKey,
+    taxIdFormatted: formattedTaxId,
+    clientEmail: client.email || null,
     referrerPlanName: plan?.name,
     hasPaidFirstInvoice,
     referralLink,
@@ -234,7 +277,7 @@ export async function getReferralShareMessage(phoneOrClientId: string, pushName?
   txt += `• Comissão mensal acumulada: *${status.monthlyEarningsFormatted}/mês*\n`;
   
   if (status.pixKey) {
-    txt += `• Chave Pix cadastrada: \`${status.pixKey}\` ✅\n\n`;
+    txt += `• Chave Pix cadastrada: \`${status.pixKey}\` ${status.isDocumentPixKey ? '🛡️ *(CNPJ/CPF Oficial)*' : '✅'}\n\n`;
   } else {
     txt += `• Chave Pix cadastrada: ⚠️ *Nenhuma chave informada ainda!*\n`;
     txt += `  _(Cadastre agora enviando: *!pix sua_chave* para receber suas comissões)_\n\n`;
@@ -258,58 +301,307 @@ _"Opa! Estou usando o AnalisAí para organizar minhas contas e pagar tudo sem es
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 *Comandos Rápidos:*
-• *!pix [chave]* → Cadastrar ou alterar sua chave Pix
+• *!pix [chave]* → Alterar chave Pix (com proteção 2FA)
 • *!analisador* → Atualizar seu painel e saldo de comissões`;
 
   return txt;
 }
 
 /**
- * Salva ou atualiza a chave Pix do Analisador
+ * Solicitação de alteração de chave Pix com proteção de segurança 2FA (Abordagem 2)
+ * - Se a chave informada for o próprio CNPJ/CPF oficial da empresa: atualiza direto sem atrito.
+ * - Se for uma chave alternativa (e-mail, telefone, chave aleatória): exige 2FA via e-mail do titular.
  */
-export async function setAnalisadorPixKey(
+export async function solicitarAlteracaoPix(
   phoneOrClientId: string,
   rawPixKey: string
-): Promise<{ success: boolean; message: string; pixKey: string }> {
+): Promise<{ success: boolean; requires2FA: boolean; message: string; maskedEmail?: string }> {
   const supabase = createServiceRoleClient();
   const cleanPixKey = rawPixKey.trim();
 
   if (!cleanPixKey || cleanPixKey.length < 3) {
     return {
       success: false,
-      message: `⚠️ Por favor, informe uma chave Pix válida.\nExemplo: *!pix 13978122222* ou *!pix financeiro@empresa.com*`,
-      pixKey: '',
+      requires2FA: false,
+      message: `⚠️ Por favor, informe uma chave Pix válida.\nExemplo: *!pix 12.345.678/0001-90* ou *!pix financeiro@empresa.com*`,
+    };
+  }
+
+  const client = await ensureClientForAnalisador(phoneOrClientId);
+  const clientTaxDigits = (client.tax_id || '').replace(/\D/g, '');
+  const inputDigits = cleanPixKey.replace(/\D/g, '');
+
+  // 1. Se a chave informada for exatamente o próprio CNPJ ou CPF do titular
+  const isOwnDocument = Boolean(clientTaxDigits && inputDigits === clientTaxDigits);
+  if (isOwnDocument) {
+    const formattedDoc = formatTaxId(client.tax_id);
+    await supabase
+      .from('clients')
+      .update({ pix_key: formattedDoc, is_analisador: true })
+      .eq('id', client.id);
+
+    const cleanPhone = client.whatsapp_number.replace(/\D/g, '');
+    await supabase
+      .from('trial_leads')
+      .update({ pix_key: formattedDoc })
+      .eq('whatsapp_number', cleanPhone);
+
+    return {
+      success: true,
+      requires2FA: false,
+      message: `✅ *Chave Pix Atualizada com o Documento Oficial da sua Empresa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sua chave Pix registrada:
+👉 \`${formattedDoc}\` 🛡️ *(CNPJ/CPF Oficial do Titular)*
+
+Como esta chave é o próprio documento do seu contrato, a atualização foi concluída imediatamente com **blindagem bancária total**!
+
+💡 Digite *!analisador* para ver seu painel completo.`,
+    };
+  }
+
+  // 2. A chave informada é uma chave alternativa (e-mail, telefone, chave aleatória, etc.)
+  // Exige validação 2FA pelo e-mail do titular
+  if (!client.email || !client.email.includes('@')) {
+    return {
+      success: false,
+      requires2FA: false,
+      message: `⚠️ *Proteção de Segurança 2FA Obrigatória*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para cadastrar uma chave Pix alternativa (\`${cleanPixKey}\`) diferente do CNPJ oficial da sua empresa, é obrigatório ter um e-mail de segurança cadastrado para validação em 2 etapas.
+
+Isso impede que qualquer pessoa que pegue este aparelho desvie suas comissões!
+
+👉 Por favor, registre seu e-mail enviando:
+*!email seu_email@empresa.com*`,
+    };
+  }
+
+  // 3. Gera código OTP seguro de 6 dígitos
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const maskedEmail = maskEmail(client.email);
+
+  // Expira solicitações pendentes anteriores de chave Pix
+  await supabase
+    .from('bot_action_confirmations')
+    .update({ status: 'expired' })
+    .eq('client_id', client.id)
+    .eq('action_type', 'change_pix_key')
+    .eq('status', 'pending');
+
+  // Registra nova confirmação pendente de 2FA
+  const { error: insErr } = await supabase.from('bot_action_confirmations').insert({
+    client_id: client.id,
+    phone_number: client.whatsapp_number,
+    action_type: 'change_pix_key',
+    status: 'pending',
+    expires_at: addMinutes(new Date(), 10).toISOString(),
+    proposed_payload: {
+      proposed_pix_key: cleanPixKey,
+      otp_code: otpCode,
+      email: client.email,
+      client_name: client.name,
+    },
+  });
+
+  if (insErr) {
+    console.error('[2FA Pix Error]:', insErr);
+    return {
+      success: false,
+      requires2FA: false,
+      message: `⚠️ Ocorreu uma instabilidade ao gerar seu código de segurança. Tente novamente em instantes.`,
+    };
+  }
+
+  // Envia e-mail com o código de 6 dígitos
+  await enviarCodigo2FAAlteracaoPix({
+    emailDestino: client.email,
+    nomeCliente: client.name,
+    codigoOtp: otpCode,
+    novaChavePix: cleanPixKey,
+  });
+
+  return {
+    success: true,
+    requires2FA: true,
+    maskedEmail,
+    message: `🔒 *Confirmação de Segurança 2FA Obrigatória*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para garantir que **apenas o titular** autorize a mudança da conta de recebimento para a chave \`${cleanPixKey}\`, enviamos um código de segurança de 6 dígitos para o seu e-mail cadastrado:
+📧 *${maskedEmail}*
+
+👉 Digite o código aqui no WhatsApp para autorizar:
+*!confirmarpix CÓDIGO* (ou envie apenas os 6 dígitos)
+
+⏱️ *Validade:* 10 minutos.
+_(Se você não solicitou essa alteração, basta ignorar. Sua conta e comissões continuam 100% seguras!)_`,
+  };
+}
+
+/**
+ * Confirma a alteração da chave Pix validando o código OTP de 6 dígitos
+ */
+export async function confirmarAlteracaoPix(
+  phoneOrClientId: string,
+  rawOtp: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceRoleClient();
+  const cleanOtp = rawOtp.replace(/\D/g, '').trim();
+
+  if (cleanOtp.length !== 6) {
+    return {
+      success: false,
+      message: `⚠️ O código de segurança deve ter exatamente 6 dígitos numéricos.\nExemplo: *!confirmarpix 729184* (ou envie apenas *729184*)`,
+    };
+  }
+
+  const client = await ensureClientForAnalisador(phoneOrClientId);
+  const nowIso = new Date().toISOString();
+
+  // Localiza a solicitação pendente mais recente dentro do prazo
+  const { data: pendingList } = await supabase
+    .from('bot_action_confirmations')
+    .select('*')
+    .eq('client_id', client.id)
+    .eq('action_type', 'change_pix_key')
+    .eq('status', 'pending')
+    .gt('expires_at', nowIso)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const pending = pendingList?.[0];
+
+  if (!pending) {
+    return {
+      success: false,
+      message: `⚠️ *Nenhuma solicitação pendente!*
+Não encontramos nenhuma solicitação de alteração de chave Pix aguardando confirmação (ou o prazo de 10 minutos já expirou).
+
+Para solicitar novamente, envie: *!pix sua_chave*`,
+    };
+  }
+
+  const payload = pending.proposed_payload as any;
+
+  if (payload?.otp_code !== cleanOtp) {
+    return {
+      success: false,
+      message: `❌ *Código de Segurança Incorreto!*
+O código de 6 dígitos informado não confere com o enviado ao seu e-mail *${maskEmail(payload?.email || client.email || '')}*.
+
+Verifique sua caixa de entrada (ou pasta de spam) e envie novamente:
+*!confirmarpix CÓDIGO*`,
+    };
+  }
+
+  // Código correto! Efetiva a alteração da chave Pix
+  const newPixKey = payload.proposed_pix_key;
+
+  await supabase
+    .from('clients')
+    .update({ pix_key: newPixKey, is_analisador: true })
+    .eq('id', client.id);
+
+  const cleanPhone = client.whatsapp_number.replace(/\D/g, '');
+  await supabase
+    .from('trial_leads')
+    .update({ pix_key: newPixKey })
+    .eq('whatsapp_number', cleanPhone);
+
+  // Marca ação como confirmada
+  await supabase
+    .from('bot_action_confirmations')
+    .update({ status: 'confirmed' })
+    .eq('id', pending.id);
+
+  // Dispara e-mail de auditoria ao titular
+  if (payload?.email) {
+    await notificarAlteracaoPixConcluida({
+      emailDestino: payload.email,
+      nomeCliente: client.name,
+      novaChavePix: newPixKey,
+    });
+  }
+
+  return {
+    success: true,
+    message: `✅ *Chave Pix Autorizada e Atualizada com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Sua nova chave Pix cadastrada:
+👉 \`${newPixKey}\`
+
+Autenticação em duas etapas (2FA) concluída com sucesso!
+Todas as comissões das suas indicações ativas como **Analisador** serão transferidas para esta conta.
+
+💡 Digite *!analisador* a qualquer momento para ver seu painel de comissões e link de convite.`,
+  };
+}
+
+/**
+ * Cancela qualquer solicitação pendente de alteração de chave Pix
+ */
+export async function cancelarAlteracaoPix(phoneOrClientId: string): Promise<string> {
+  const supabase = createServiceRoleClient();
+  const client = await ensureClientForAnalisador(phoneOrClientId);
+
+  await supabase
+    .from('bot_action_confirmations')
+    .update({ status: 'rejected' })
+    .eq('client_id', client.id)
+    .eq('action_type', 'change_pix_key')
+    .eq('status', 'pending');
+
+  return `🛡️ *Solicitação de Alteração de Pix Cancelada!*
+A alteração foi descartada e sua chave Pix cadastrada anteriormente continua mantida com segurança total.`;
+}
+
+/**
+ * Cadastra ou atualiza o e-mail de segurança do cliente
+ */
+export async function cadastrarEmailCliente(
+  phoneOrClientId: string,
+  rawEmail: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceRoleClient();
+  const cleanEmail = rawEmail.trim().toLowerCase();
+
+  if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+    return {
+      success: false,
+      message: `⚠️ Por favor, informe um endereço de e-mail válido.\nExemplo: *!email financeiro@suaempresa.com.br*`,
     };
   }
 
   const client = await ensureClientForAnalisador(phoneOrClientId);
 
-  // Atualiza no clients
   await supabase
     .from('clients')
-    .update({ pix_key: cleanPixKey, is_analisador: true })
+    .update({ email: cleanEmail })
     .eq('id', client.id);
-
-  // Atualiza também no trial_leads se houver registro por telefone
-  const cleanPhone = client.whatsapp_number.replace(/\D/g, '');
-  await supabase
-    .from('trial_leads')
-    .update({ pix_key: cleanPixKey })
-    .eq('whatsapp_number', cleanPhone);
-
-  const msg = `✅ *Chave Pix Registrada com Sucesso!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Sua chave Pix cadastrada:
-👉 \`${cleanPixKey}\`
-
-Todo mês, as comissões das suas indicações ativas como **Analisador** serão transferidas diretamente para esta chave!
-
-💡 Digite *!analisador* a qualquer momento para ver seus ganhos acumulados e seu link de convite.`;
 
   return {
     success: true,
-    message: msg,
-    pixKey: cleanPixKey,
+    message: `✅ *E-mail de Segurança Cadastrado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+E-mail registrado:
+👉 \`${cleanEmail}\`
+
+Este e-mail será utilizado para validações de segurança em 2 etapas (2FA) e avisos fiscais importantes da sua empresa.`,
+  };
+}
+
+/**
+ * Compatibilidade legada com a assinatura anterior
+ */
+export async function setAnalisadorPixKey(
+  phoneOrClientId: string,
+  rawPixKey: string
+): Promise<{ success: boolean; message: string; pixKey: string }> {
+  const res = await solicitarAlteracaoPix(phoneOrClientId, rawPixKey);
+  return {
+    success: res.success,
+    message: res.message,
+    pixKey: rawPixKey.trim(),
   };
 }
 
