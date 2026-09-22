@@ -140,6 +140,7 @@ Comandos disponíveis para você testar todas as opções:
 • *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
 • *!analisador* ou *!indicar* → Painel do Analisador Oficial, saldo no Pix e meta de gratuidade Solo
 • *!pix [chave]* → Cadastra ou consulta a chave Pix para repasse mensal de comissões
+• *!setemail <tel/cnpj> <email>* → Recuperação soberana de e-mail de cliente (adicione 'bypass' para dispensar 24h)
 • *!qa add <cpf/cnpj/tel> [desc]* → Libera CPF/CNPJ/Tel para atuar livremente no app como QA
 • *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
 • *!qa list* → Lista todos os identificadores em modo QA
@@ -929,6 +930,85 @@ Em menos de 1 minuto o robô te envia o link oficial da Vercel no ar aqui nesta 
     const { listActiveBotBlocks } = await import('@/lib/solo/anti-loop');
     const report = await listActiveBotBlocks();
     return { handled: true, message: report };
+  }
+
+  // ── !setemail <tel/cnpj> <novo_email> [bypass] (Recuperação Soberana de E-mail) ───
+  if (action === 'setemail' || action === 'forcaremail') {
+    const target = arg1;
+    const newEmail = parts[2]?.trim().toLowerCase();
+    const isBypassQuarantine = parts[3]?.toLowerCase() === 'bypass' || parts[3]?.toLowerCase() === 'semquarentena';
+
+    if (!target || !newEmail || !newEmail.includes('@')) {
+      return {
+        handled: true,
+        message: `⚠️ *Uso do comando administrativo !setemail:*
+\`!setemail <telefone_ou_cnpj> <novo_email> [bypass]\`
+
+Exemplo:
+• \`!setemail 13978122222 financeiro@novodominio.com.br\`
+• Adicione \`bypass\` no final para dispensar a quarentena de 24h caso já tenha validado a identidade do cliente.`,
+      };
+    }
+
+    const cleanTarget = target.replace(/\D/g, '');
+    const { data: targetClients } = await supabase
+      .from('clients')
+      .select('id, name, whatsapp_number, email, tax_id')
+      .or(`whatsapp_number.ilike.%${cleanTarget}%,tax_id.eq.${cleanTarget}`)
+      .limit(1);
+
+    const targetClient = targetClients?.[0];
+    if (!targetClient) {
+      return {
+        handled: true,
+        message: `❌ Cliente não encontrado para o identificador: \`${target}\`. Verifique o telefone ou CNPJ informado.`,
+      };
+    }
+
+    const emailUpdatedAt = isBypassQuarantine ? null : new Date().toISOString();
+
+    await supabase
+      .from('clients')
+      .update({
+        email: newEmail,
+        email_updated_at: emailUpdatedAt,
+      })
+      .eq('id', targetClient.id);
+
+    // Notifica o cliente no WhatsApp dele sobre a recuperação de conta efetuada pelo suporte
+    try {
+      const { sendEvolutionText } = await import('@/lib/evolution');
+      const quarantineNotice = isBypassQuarantine
+        ? ''
+        : '\n\n🛡️ *Quarentena Ativa:* Alterações de chave Pix para terceiros suspensas por 24h (repasses continuam ativos para seu CNPJ oficial).';
+
+      await sendEvolutionText({
+        phone: targetClient.whatsapp_number,
+        text: `🔐 *Recuperação de Acesso Concluída pela Solucione*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Olá, *${targetClient.name}*!
+
+Seu e-mail de segurança foi atualizado manualmente pelo suporte oficial da Solucione para:
+👉 \`${newEmail}\`${quarantineNotice}
+
+Agora você já pode solicitar alterações de chave Pix e validações 2FA normalmente.`,
+      });
+    } catch (notifyErr) {
+      console.warn('[Admin SetEmail Notify Warning]:', notifyErr);
+    }
+
+    return {
+      handled: true,
+      message: `✅ *E-mail do Cliente Atualizado com Sucesso pelo Administrador!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 *Cliente:* ${targetClient.name}
+📱 *WhatsApp:* ${targetClient.whatsapp_number}
+📧 *E-mail Anterior:* ${targetClient.email || 'Nenhum'}
+🎯 *Novo E-mail:* \`${newEmail}\`
+🛡️ *Quarentena 24h:* ${isBypassQuarantine ? '❌ Dispensada (Bypass Ativo)' : '✅ Ativa (Segurança Bancária)'}
+
+O cliente já foi notificado via WhatsApp sobre a recuperação de conta.`,
+    };
   }
 
   // ── !bypass on / !bypass off ────────────────────────────────────────────────
