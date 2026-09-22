@@ -1192,15 +1192,21 @@ Para habilitar validações em duas etapas (2FA) e cadastrar chaves Pix alternat
     const emailResult = await cadastrarEmailCliente(client?.id || cleanPhone, rawEmail);
     let replyText = emailResult.message;
     if (replyText.includes('Autorização de Troca de E-mail Obrigatória')) {
-      replyText += `\n\n💡 _Perdeu o acesso ao e-mail anterior? Use a recuperação cadastral oficial da Receita Federal:_\n👉 *!recuperaremail ${rawEmail}*`;
+      replyText += `\n\n💡 _Perdeu o acesso ao e-mail anterior? Use a recuperação por Prova Social Oficial:_\n👉 *!recuperaremail ${rawEmail}*`;
     }
     await sendEvolutionText({ phone, text: replyText });
     return;
   }
 
-  // ── Interceptação 1.07: Recuperação de E-mail por Desafio Cadastral (!recuperaremail [novo_email]) ──
-  if (cleanText.startsWith('!recuperaremail') || cleanText.startsWith('/recuperaremail')) {
-    const rawEmail = rawText.replace(/^[!/](recuperaremail)\s*/i, '').trim();
+  // ── Interceptação 1.07: Recuperação de E-mail por Prova Social (!recuperaremail / !recuperar email) ──
+  if (
+    cleanText.startsWith('!recuperaremail') || cleanText.startsWith('/recuperaremail') ||
+    cleanText.startsWith('!recuperar email') || cleanText.startsWith('/recuperar email') ||
+    cleanText.startsWith('!recuperar') || cleanText.startsWith('/recuperar')
+  ) {
+    const rawEmail = rawText
+      .replace(/^[!/](recuperaremail|recuperar\s*email|recuperar)\s*/i, '')
+      .trim();
     const result = await iniciarDesafioRecuperacaoEmail(client?.id || cleanPhone, rawEmail);
     await sendEvolutionText({ phone, text: result.message });
     return;

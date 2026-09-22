@@ -1027,8 +1027,9 @@ O cliente já foi notificado via WhatsApp sobre a recuperação de conta.`,
     };
   }
 
+  // Se não foi nenhum comando exclusivo do Admin, permite que o fluxo continue
+  // para processar comandos comuns (como !recuperaremail, !email, !pix, etc.)
   return {
-    handled: true,
-    message: 'Comando admin não reconhecido. Digite `!ajuda` para listar todos os comandos.',
+    handled: false,
   };
 }
