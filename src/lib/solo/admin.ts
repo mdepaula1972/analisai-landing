@@ -5,9 +5,8 @@ import { escalateToHumanConsultant } from './consultant-escalation';
 import { formatDueDateDetails } from './date-utils';
 import { getEveReminderMessage, getDueReminderMessage } from './trial';
 import { getWaitlistAdminReport } from './waitlist';
-import { getReferralShareMessage } from './referral';
+import { getReferralShareMessage, setAnalisadorPixKey, getReferralStatus } from './referral';
 import { getMonthlyDividendTracking } from './dividend-tracker';
-import { getTaxRevenueTracking } from './tax-meter';
 import { addDays } from 'date-fns';
 
 export interface AdminCommandResult {
@@ -74,7 +73,7 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!estourar analise* → Simula estouro do consultor de caixa (oferece R$ 49 avulso ou upgrade)
 
 👥 *4. GESTÃO DE USUÁRIOS QA (AMIGOS E FAMILIARES)*
-• *!qa add 13978122222 João Amigo* (aceita com ou sem máscara: `(13) 97812-2222` ou `5513...`) → Acesso livre QA
+• *!qa add 13978122222 João Amigo* (aceita com ou sem máscara: '(13) 97812-2222' ou '5513...') → Acesso livre QA
 • *!qa list* → Lista todos os contatos que você já liberou como QA
 • *!qa remove 13978122222* → Remove do modo QA
 • *!feedbacks* → Vê todas as sugestões e críticas enviadas pelos testadores
@@ -133,7 +132,8 @@ Comandos disponíveis para você testar todas as opções:
 • *!simular lembrete vespera* → Dispara o aviso de véspera da degustação (10h)
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
-• *!indicar* → Consulta o link de indicação e progresso para mensalidade gratuita
+• *!analisador* ou *!indicar* → Painel do Analisador Oficial, saldo no Pix e meta de gratuidade Solo
+• *!pix [chave]* → Cadastra ou consulta a chave Pix para repasse mensal de comissões
 • *!qa add <cpf/cnpj/tel> [desc]* → Libera CPF/CNPJ/Tel para atuar livremente no app como QA
 • *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
 • *!qa list* → Lista todos os identificadores em modo QA
@@ -539,12 +539,52 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
     };
   }
 
-  // ── !indicar / !indicacao ───────────────────────────────────────────────────
-  if (action === 'indicar' || action === 'indicacao' || action === 'indicação') {
-    const shareMsg = await getReferralShareMessage(clientId, client.whatsapp_number);
+  // ── !analisador / !indicar / !comissao / !pix ────────────────────────────────
+  if (
+    action === 'analisador' ||
+    action === 'analisar' ||
+    action === 'indicar' ||
+    action === 'indicacao' ||
+    action === 'indicação' ||
+    action === 'comissao' ||
+    action === 'comissão' ||
+    action === 'parceiro'
+  ) {
+    const shareMsg = await getReferralShareMessage(clientId, client.name);
     return {
       handled: true,
       message: shareMsg,
+    };
+  }
+
+  if (action === 'pix') {
+    const rawPix = commandText.replace(/^[!/](pix)\s*/i, '').trim();
+    if (!rawPix) {
+      const status = await getReferralStatus(clientId);
+      if (status.pixKey) {
+        return {
+          handled: true,
+          message: `🔑 *Sua Chave Pix para Repasses de Analisador:*
+👉 \`${status.pixKey}\`
+
+Para alterar para outra chave, envie: *!pix nova_chave*`,
+        };
+      } else {
+        return {
+          handled: true,
+          message: `⚠️ *Nenhuma Chave Pix Cadastrada!*
+
+Para receber suas comissões mensais como Analisador direto no Pix, cadastre sua chave agora enviando:
+👉 *!pix sua_chave*
+_(Ex: !pix 13978122222 ou !pix financeiro@empresa.com)_`,
+        };
+      }
+    }
+
+    const result = await setAnalisadorPixKey(clientId, rawPix);
+    return {
+      handled: true,
+      message: result.message,
     };
   }
 

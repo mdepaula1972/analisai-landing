@@ -7,25 +7,36 @@ import { ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_D
  */
 export function getPioneerShareLink(phone: string): string {
   const clean = phone.replace(/\D/g, '');
-  const text = encodeURIComponent(`Olá! Vim por indicação do parceiro ${clean} para testar o AnalisAí e garantir minha vaga.`);
+  const text = encodeURIComponent(`Olá! Vim por indicação do Analisador ${clean} para testar o AnalisAí.`);
   return `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${text}`;
 }
 
 export function getPioneerShareMessage(phone: string): string {
+  const clean = phone.replace(/\D/g, '');
   const link = getPioneerShareLink(phone);
-  return `👑 *Programa de Indicação AnalisAí — Próximas Mensalidades Grátis!*
+  return `⚡ *Painel do Analisador • AnalisAí* ⚡
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎁 *Como funciona a regra oficial de isenção:*
-1️⃣ *Assinatura Ativa:* Contrate qualquer um dos nossos planos oficiais (1ª mensalidade paga);
-2️⃣ *Indique 3 Parceiros:* Compartilhe seu link exclusivo abaixo com amigos empresários;
-3️⃣ *Mensalidade Zero:* Com **3 indicados pagantes** ativos no plano Solo ou superior, **suas próximas faturas ficam 100% por nossa conta**!
-_(A isenção é válida a partir da mensalidade seguinte à ativação dos seus 3 indicados e permanece enquanto eles continuarem ativos no serviço)._
+Transforme suas conexões em renda mensal no Pix e use o AnalisAí de graça!
 
-👉 *Seu link exclusivo para compartilhar no WhatsApp:*
+🎯 *Seu Selo:* *Analisador em Ação*
+🎁 *Meta para Selo Oficial:* Traga 3 parceiros pagantes e conquiste o **Selo Analisador Oficial** com a **assinatura Solo 100% GRATUITA todo mês**!
+
+💰 *Comissões Recorrentes por Plano (~20%/mês no Pix):*
+• *Plano Start (R$ 39,90):* +R$ 8,00 / mês
+• *Plano Solo (R$ 87,99):* +R$ 18,00 / mês
+• *Plano Solo Plus (R$ 157,99):* +R$ 32,00 / mês
+• *Plano Pro (R$ 297,00):* +R$ 60,00 / mês
+• *Plano Super (R$ 597,00):* +R$ 120,00 / mês
+_(A comissão cai na sua conta todo mês enquanto seu indicado mantiver o plano ativo!)_
+
+🔗 *Seu Link Exclusivo de Analisador:*
 ${link}
 
+📲 *Mensagem para copiar e enviar:*
+_"Opa! Estou usando o AnalisAí para organizar minhas contas e pagar tudo sem estresse direto pelo WhatsApp. Você pode testar de graça agora enviando uma foto de conta ou boleto para o robô oficial: ${link}"_
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-_Ao clicar no link acima, seu indicado abre uma conversa direta com o robô oficial do AnalisAí no WhatsApp ${OFFICIAL_BOT_PHONE_DISPLAY}, com seu código de indicação vinculado automaticamente!_`;
+💡 Cadastre sua chave Pix enviando: *!pix sua_chave*`;
 }
 export const MAX_BETA_VIP_USERS = 50;
 export const BETA_VIP_DOCS_LIMIT = 10;

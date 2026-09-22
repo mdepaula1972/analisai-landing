@@ -546,6 +546,11 @@ Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
 
       if (clientPhone) {
         const firstName = (clientName || 'Cliente').split(' ')[0];
+        const cleanDigits = clientPhone.replace(/\D/g, '');
+        const inviteLink = `https://wa.me/551331500987?text=${encodeURIComponent(
+          `Olá! Vim por indicação do Analisador ${cleanDigits} para testar o AnalisAí.`
+        )}`;
+
         await sendEvolutionText({
           phone: clientPhone,
           text: `🎉 *Assinatura ${billingPeriod === 'annual' ? 'Anual' : 'Mensal'} Confirmada no Asaas!*
@@ -560,11 +565,14 @@ Parabéns, ${firstName}! O seu plano *${plan.name}* está 100% ativo.
 5. Usar o Consultor Estratégico de Caixa perguntando *"qual conta devo adiar?"*.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎁 *Benefício Exclusivo de Assinante Ativo — Mensalidade Zero:*
-Ao indicar 3 amigos empresários com o seu link exclusivo, enquanto os 3 estiverem com assinaturas ativas, a sua própria mensalidade fica **100% GRATUITA**!
+⚡ *Clube do Analisador — Renda no Pix & Mensalidade Zero:*
+Indique o AnalisAí para amigos empresários e receba até R$ 120,00/mês no Pix por cada assinatura ativa!
+Com 3 amigos indicados, você conquista o **Selo Analisador Oficial** e sua própria assinatura Solo fica **100% GRATUITA** todo mês!
 
-Seu Link Oficial de Indicação:
-👉 https://analisai.me/assinar?ref=${clientId}`,
+👉 *Seu Link Exclusivo de Analisador:*
+${inviteLink}
+
+💡 Digite *!analisador* a qualquer momento para ver seu painel completo ou *!pix sua_chave* para cadastrar sua chave Pix!`,
         });
       }
 

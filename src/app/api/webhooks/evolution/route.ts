@@ -37,9 +37,8 @@ import {
 import { checkAntiLoopStatus, recordFruitlessAttempt } from '@/lib/solo/anti-loop';
 import { isFeedbackMessage, recordClientFeedback } from '@/lib/solo/feedback';
 import { sendTrialPdfToWhatsApp, sendCashLedgerPdfToWhatsApp } from '@/lib/solo/cash-ledger-pdf';
-import { escalateToHumanConsultant } from '@/lib/solo/consultant-escalation';
 import { recordWaitlistLead } from '@/lib/solo/waitlist';
-import { linkReferralLead, getReferralShareMessage } from '@/lib/solo/referral';
+import { linkReferralLead, getReferralShareMessage, setAnalisadorPixKey, getReferralStatus } from '@/lib/solo/referral';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
 import { getTaxRevenueTracking, updateTaxRegime, addTrialLeadRevenue } from '@/lib/solo/tax-meter';
@@ -1064,22 +1063,52 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     }
   }
 
-  // ── Interceptação 1: Comando de Indicação (!indicar ou indicar) & Pioneiros VIP ───
-  if (
-    cleanText === '!indicar' || cleanText === 'indicar' ||
-    cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '/indicar' ||
+  // ── Interceptação 1: Comandos do Analisador Oficial, Indicação & Parcerias ────
+  const isAnalisadorCommand =
+    cleanText === '!analisador' || cleanText === 'analisador' || cleanText === '/analisador' ||
+    cleanText === '!analisar' || cleanText === 'analisar' || cleanText === '/analisar' ||
+    cleanText === '!indicar' || cleanText === 'indicar' || cleanText === '/indicar' ||
+    cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '!indicacao' || cleanText === 'indicacao' ||
+    cleanText === '!comissao' || cleanText === 'comissao' || cleanText === '!comissão' || cleanText === 'comissão' || cleanText === '/comissao' ||
+    cleanText === '!parceiro' || cleanText === 'parceiro' || cleanText === '/parceiro' ||
     cleanText === '!vip' || cleanText === 'vip' ||
-    cleanText === '!pioneiro' || cleanText === 'pioneiro'
-  ) {
-    if (client) {
-      const shareMsg = await getReferralShareMessage(client.id, client.whatsapp_number);
-      await sendEvolutionText({ phone, text: shareMsg });
-      return;
-    } else {
-      const shareMsg = getPioneerShareMessage(cleanPhone);
-      await sendEvolutionText({ phone, text: shareMsg });
+    cleanText === '!pioneiro' || cleanText === 'pioneiro';
+
+  if (isAnalisadorCommand) {
+    const shareMsg = await getReferralShareMessage(client?.id || cleanPhone, body.data?.pushName);
+    await sendEvolutionText({ phone, text: shareMsg });
+    return;
+  }
+
+  // ── Interceptação 1.05: Comando de Chave Pix (!pix [chave]) ───────────────
+  if (cleanText.startsWith('!pix') || cleanText.startsWith('/pix') || cleanText === 'pix') {
+    const rawPix = rawText.replace(/^[!/](pix)\s*/i, '').replace(/^pix\s*/i, '').trim();
+    if (!rawPix) {
+      const status = await getReferralStatus(client?.id || cleanPhone);
+      if (status.pixKey) {
+        await sendEvolutionText({
+          phone,
+          text: `🔑 *Sua Chave Pix para Repasses de Analisador:*
+👉 \`${status.pixKey}\`
+
+Para alterar para outra chave, envie: *!pix nova_chave*`,
+        });
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Nenhuma Chave Pix Cadastrada!*
+
+Para receber suas comissões mensais como Analisador direto no Pix, cadastre sua chave agora enviando:
+👉 *!pix sua_chave*
+_(Ex: !pix 13978122222 ou !pix financeiro@empresa.com)_`,
+        });
+      }
       return;
     }
+
+    const result = await setAnalisadorPixKey(client?.id || cleanPhone, rawPix);
+    await sendEvolutionText({ phone, text: result.message });
+    return;
   }
 
   // ── Interceptação 1.1: Comando de Dividendos e Retiradas de Lucro (!dividendos) ─
@@ -1198,8 +1227,8 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
-  // ── Interceptação 2: Lead vindo de Link de Indicação de Amigo ───────────────
-  const referralMatch = rawText.match(/(?:indica[çc][ãa]o do cliente|indicado por)\s*(\d{10,14})/i);
+  // ── Interceptação 2: Lead vindo de Link de Indicação de Amigo ou Analisador ───
+  const referralMatch = rawText.match(/(?:indica[çc][ãa]o do (?:cliente|analisador|parceiro)|indicado por)\s*(\d{10,14})/i);
   if (referralMatch && referralMatch[1]) {
     const referrerPhone = referralMatch[1];
     await linkReferralLead(cleanPhone, referrerPhone);
@@ -1207,7 +1236,7 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
       phone,
       text: `🎉 *Bem-vindo ao AnalisAí!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que você veio por indicação de um de nossos parceiros!
+Identificamos que você veio por indicação de um de nossos **Analisadores Oficiais**!
 Você tem direito à nossa **Degustação Gratuita Imediata**!
 
 📸 Envie uma foto ou PDF de um boleto ou conta a pagar agora mesmo para ver como nossa inteligência artificial organiza seu fluxo de caixa em segundos!`,
@@ -2570,15 +2599,11 @@ Identifiquei suas contas agendadas no Livro Caixa. Para proteger sua empresa e e
     return;
   }
 
-  if (cleanText.includes('amigo') || cleanText.includes('indicar') || cleanText.includes('indica')) {
+  if (cleanText.includes('amigo') || cleanText.includes('indicar') || cleanText.includes('indica') || cleanText.includes('analisador') || cleanText.includes('comissao') || cleanText.includes('comissão')) {
+    const shareMsg = await getReferralShareMessage(client.id, client.name);
     await sendEvolutionText({
       phone,
-      text: `🎁 *Programa de Indicação AnalisAí*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Indique 3 amigos que se tornem clientes pagantes do mesmo plano que você (ou superior) e sua **mensalidade fica 100% gratuita** enquanto os 3 estiverem ativos!
-
-Seu link exclusivo de indicação:
-👉 https://analisai.me/assinar?ref=${client.id}`,
+      text: shareMsg,
     });
     return;
   }
