@@ -977,7 +977,7 @@ Exemplo:
 
     // Notifica o cliente no WhatsApp dele sobre a recuperação de conta efetuada pelo suporte
     try {
-      const { sendEvolutionText } = await import('@/lib/evolution');
+      const { sendEvolutionText } = await import('@/lib/solo/evolution');
       const quarantineNotice = isBypassQuarantine
         ? ''
         : '\n\n🛡️ *Quarentena Ativa:* Alterações de chave Pix para terceiros suspensas por 24h (repasses continuam ativos para seu CNPJ oficial).';

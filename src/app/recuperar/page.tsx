@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 
-export default function RecuperarEmailPage() {
+function RecuperarEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const erro = searchParams.get('erro');
@@ -140,5 +140,17 @@ export default function RecuperarEmailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RecuperarEmailPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <p className="text-sm text-slate-400">Carregando verificação...</p>
+      </div>
+    }>
+      <RecuperarEmailContent />
+    </Suspense>
   );
 }

@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, ShieldCheck, ArrowLeft } from 'lucide-react';
 
-export default function RecuperarSucessoPage() {
+function RecuperarSucessoContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get('email');
   const provider = searchParams.get('provider') || 'social';
@@ -54,5 +54,17 @@ export default function RecuperarSucessoPage() {
         </a>
       </div>
     </div>
+  );
+}
+
+export default function RecuperarSucessoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <p className="text-sm text-slate-400">Carregando confirmação...</p>
+      </div>
+    }>
+      <RecuperarSucessoContent />
+    </Suspense>
   );
 }

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { sendEvolutionText } from '@/lib/evolution';
+import { sendEvolutionText } from '@/lib/solo/evolution';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
