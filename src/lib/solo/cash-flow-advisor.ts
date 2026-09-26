@@ -117,38 +117,42 @@ ${billsContext}`;
 }
 
 /**
- * Detecta se a mensagem do usuário solicita projeções de períodos maiores que uma semana
- * (ex: mês, 30 dias, 60 dias, projeção de fluxo de caixa futuro)
+ * Detecta se a mensagem do usuário solicita a contratação ou relatório executivo avulso de Fluxo de Caixa Futuro (R$ 49)
  */
 export function isLongTermCashFlowQuery(cleanText: string): boolean {
   const query = cleanText.toLowerCase();
-  const longTermKeywords = [
-    'fluxo de caixa',
-    'projeção',
-    'projecao',
-    'projeções',
-    'projecoes',
-    'mês',
-    'mes',
-    'próximo mês',
-    'proximo mes',
-    '30 dias',
-    '60 dias',
-    '90 dias',
-    'longo prazo',
-    'médio prazo',
-    'medio prazo',
-    'trimestre',
-    'bimestre',
-    'visão do mês',
-    'visao do mes',
-    'contas do mês',
-    'contas do mes',
-    'vencimentos do mês',
-    'vencimentos do mes',
+
+  // Se o usuário estiver consultando suas contas, vencimentos, agenda ou lançamentos, NÃO cai no upsell
+  if (
+    query.includes('conta') ||
+    query.includes('vencimento') ||
+    query.includes('agenda') ||
+    query.includes('despesa') ||
+    query.includes('receita') ||
+    query.includes('lançamento') ||
+    query.includes('lancamento') ||
+    query.includes('!contas') ||
+    query.includes('ver') ||
+    query.includes('listar') ||
+    query.includes('mostrar')
+  ) {
+    return false;
+  }
+
+  const upsellKeywords = [
+    'relatório executivo',
+    'relatorio executivo',
+    'relatório de fluxo de caixa',
+    'relatorio de fluxo de caixa',
+    'projeção de fluxo de caixa',
+    'projecao de fluxo de caixa',
+    'estudo de fluxo de caixa',
+    'análise de fluxo de caixa futuro',
+    'diagnóstico de fluxo de caixa',
+    'fluxo de caixa futuro',
   ];
 
-  return longTermKeywords.some((kw) => query.includes(kw));
+  return upsellKeywords.some((kw) => query.includes(kw));
 }
 
 /**
@@ -224,99 +228,156 @@ ${checkoutUrl}
 💳 _A liberação é imediata e o estudo contábil detalhado é gerado por IA e entregue diretamente aqui no seu WhatsApp assim que o pagamento for confirmado no Asaas!_`;
 }
 
+export interface BillsPeriodOption {
+  periodDays: number | 'all';
+  periodLabel: string;
+}
+
 /**
- * Consulta e formata a relação de contas a pagar da semana (próximos 7 dias) ou salvas
+ * Extrai a janela de período solicitada pelo usuário (ex: semana, 15 dias, mês/30 dias, 60 dias, todas)
+ */
+export function extractBillsQueryPeriod(cleanText: string): BillsPeriodOption {
+  const query = cleanText.toLowerCase().trim();
+
+  if (/(?:todas|tudo|todos|completo|geral)/i.test(query)) {
+    return { periodDays: 'all', periodLabel: 'Todas as Contas Agendadas' };
+  }
+
+  const matchDays = query.match(/(?:próximos|proximos|em|\b)(\d{1,3})\s*dias/i);
+  if (matchDays && matchDays[1]) {
+    const days = parseInt(matchDays[1], 10);
+    return { periodDays: days, periodLabel: `Próximos ${days} Dias` };
+  }
+
+  if (query.includes('quinzena') || query.includes('15 dias')) {
+    return { periodDays: 15, periodLabel: 'Próximos 15 Dias (Quinzena)' };
+  }
+
+  if (query.includes('semana') || query.includes('7 dias')) {
+    return { periodDays: 7, periodLabel: 'Próximos 7 Dias (Semana)' };
+  }
+
+  if (query.includes('60 dias') || query.includes('dois meses') || query.includes('2 meses') || query.includes('bimestre')) {
+    return { periodDays: 60, periodLabel: 'Próximos 60 Dias' };
+  }
+
+  if (query.includes('90 dias') || query.includes('trimestre') || query.includes('3 meses')) {
+    return { periodDays: 90, periodLabel: 'Próximos 90 Dias' };
+  }
+
+  if (query.includes('mes') || query.includes('mês') || query.includes('mensal') || query.includes('30 dias')) {
+    return { periodDays: 30, periodLabel: 'Próximos 30 Dias (Mês)' };
+  }
+
+  // Padrão amigável: Próximos 30 dias (visão completa do mês)
+  return { periodDays: 30, periodLabel: 'Próximos 30 Dias' };
+}
+
+/**
+ * Consulta e formata a relação de contas a pagar e receber para o período solicitado (ou todas)
  */
 export async function getUpcomingBillsSummary(
   clientId: string | null,
-  phone?: string
+  phone?: string,
+  periodOption?: BillsPeriodOption
 ): Promise<string> {
   const supabase = createServiceRoleClient();
+  const cleanPhone = (phone || '').replace(/\D/g, '');
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const period = periodOption || { periodDays: 30, periodLabel: 'Próximos 30 Dias' };
   const now = new Date();
   const todayIso = now.toISOString().split('T')[0];
-  const next7DaysIso = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const maxDueIso =
+    period.periodDays === 'all'
+      ? '9999-12-31'
+      : new Date(now.getTime() + period.periodDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // 1. Se for cliente cadastrado com ID
+  let rawBills: any[] = [];
+
+  // 1. Tenta carregar do cliente em payables_receivables
   if (clientId) {
-    const { data: bills } = await supabase
+    const { data: dbBills } = await supabase
       .from('payables_receivables')
       .select('*')
       .eq('client_id', clientId)
-      .eq('type', 'payable')
-      .eq('status', 'open')
-      .gte('current_due_date', todayIso)
-      .lte('current_due_date', next7DaysIso)
+      .in('status', ['open', 'postponed'])
       .order('current_due_date', { ascending: true });
 
-    if (!bills || bills.length === 0) {
-      return `📅 *Agenda Financeira da Semana (Próximos 7 Dias)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você não possui nenhuma conta a pagar cadastrada com vencimento para os próximos 7 dias! 🎉
-
-Tudo em ordem com seu fluxo de caixa imediato.
-
-💡 _Precisa da visão estendida do mês completo ou próximos 60 dias? Digite *Mês* para conhecer nosso Relatório de Fluxo de Caixa Futuro!_`;
+    if (dbBills && dbBills.length > 0) {
+      rawBills = dbBills.map((b) => ({
+        supplier_name: b.counterparty_name || 'Fornecedor',
+        amount: Number(b.amount || 0),
+        due_date: b.current_due_date || b.original_due_date,
+        entry_type: b.type === 'receivable' ? 'receivable' : 'payable',
+        barcode_or_pix: b.barcode_or_pix || null,
+        is_provision: false,
+        is_recurring: Boolean(b.is_recurring),
+      }));
     }
-
-    const totalWeek = bills.reduce((sum: number, b: any) => sum + Number(b.amount), 0);
-    const billsList = bills
-      .map((b: any) => {
-        const hasBarcode = b.barcode_or_pix ? '📋 _(código disponível)_' : '⚠️ _(sem código de barras)_';
-        return `• *${formatDueDateDetails(b.current_due_date)}:* ${b.counterparty_name} — R$ ${Number(b.amount).toFixed(2)} ${hasBarcode}`;
-      })
-      .join('\n');
-
-    return `📅 *Agenda Financeira da Semana (Próximos 7 Dias)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${billsList}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 *Total previsto para a semana:* R$ ${totalWeek.toFixed(2)}
-
-💡 _O AnalisAí vai te lembrar às 10h da véspera de cada vencimento para você não esquecer da sua obrigação!_
-📊 _Precisa da visão estendida do mês completo ou próximos 60 dias? Digite *Mês* para conhecer nosso Relatório de Fluxo de Caixa Futuro!_`;
   }
 
-  // 2. Se for lead em degustação consultando pelo telefone
-  if (phone) {
-    const cleanPhone = phone.replace(/\D/g, '');
-
-    // Busca todas as contas salvas na degustação
+  // 2. Se não encontrou contas no payables_receivables (ex: lead em degustação ou usuário testando como lead)
+  if (rawBills.length === 0 && cleanPhone) {
     const trialBills = await getTrialBills(cleanPhone);
     if (trialBills && trialBills.length > 0) {
-      return formatTrialBillsListMessage(trialBills);
+      rawBills = trialBills;
+    } else {
+      const { data: lead } = await supabase
+        .from('trial_leads')
+        .select('*')
+        .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+        .maybeSingle();
+
+      if (lead && lead.due_date && lead.amount) {
+        rawBills = [
+          {
+            supplier_name: lead.supplier_name || 'Fornecedor',
+            amount: Number(lead.amount),
+            due_date: lead.due_date,
+            barcode_or_pix: lead.barcode_or_pix || null,
+            is_provision: false,
+            entry_type: 'payable',
+          },
+        ];
+      }
     }
-
-    const { data: lead } = await supabase
-      .from('trial_leads')
-      .select('*')
-      .eq('whatsapp_number', cleanPhone)
-      .maybeSingle();
-
-    if (lead && lead.due_date && lead.amount) {
-      const fallbackBill = [
-        {
-          supplier_name: lead.supplier_name || 'Fornecedor',
-          amount: Number(lead.amount),
-          due_date: lead.due_date,
-          barcode_or_pix: lead.barcode_or_pix || null,
-          is_provision: false,
-        },
-      ];
-      return formatTrialBillsListMessage(fallbackBill);
-    }
-
-    return `📋 *Suas Contas Salvas (Degustação VIP)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você ainda não possui contas ou despesas cadastradas no momento.
-
-Envie uma foto de boleto ou mande um áudio/texto dizendo o que pagar para agendar seu primeiro compromisso! 🚀`;
   }
 
-  return `📅 *Agenda Financeira da Semana*
+  if (rawBills.length === 0) {
+    return `📅 *Agenda Financeira — ${period.periodLabel}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Não encontrei contas cadastradas para a sua empresa nos próximos 7 dias.
+Você não possui nenhuma conta cadastrada no momento.
 
-👉 Envie uma foto ou PDF de boleto para agendar seu primeiro vencimento!`;
+👉 Envie uma foto ou PDF de boleto, ou envie um áudio/texto dizendo suas contas para agendar seu primeiro compromisso! 🚀`;
+  }
+
+  // Filtra as contas do período solicitado
+  let filteredBills = rawBills.filter((b) => {
+    if (!b.due_date) return true;
+    if (period.periodDays === 'all') return true;
+    return b.due_date >= todayIso && b.due_date <= maxDueIso;
+  });
+
+  let noticePrefix = '';
+
+  // Se o usuário pediu um período curto (ex: 7 dias) e não tem contas no período, mas TEM contas futuras cadastradas
+  if (filteredBills.length === 0 && rawBills.length > 0) {
+    noticePrefix = `ℹ️ _Você não possui contas a vencer para os *${period.periodLabel}*! 🎉_\n💡 _Mostrando seus compromissos agendados para os próximos 30 dias:_\n\n`;
+    const next30DaysIso = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    filteredBills = rawBills.filter((b) => !b.due_date || (b.due_date >= todayIso && b.due_date <= next30DaysIso));
+    if (filteredBills.length === 0) {
+      filteredBills = rawBills; // Mostra todas as contas salvas
+      noticePrefix = `ℹ️ _Você não possui contas a vencer para os *${period.periodLabel}*! 🎉_\n💡 _Mostrando todas as suas contas cadastradas:_\n\n`;
+    }
+  }
+
+  return noticePrefix + formatTrialBillsListMessage(filteredBills, `Agenda Financeira — ${period.periodLabel}`);
 }
 
 /**

@@ -291,14 +291,21 @@ export async function recordMultipleTrialUsage(
 
     // Tenta conciliar com provisão anterior se houver
     let reconciled = false;
+    const currentEntryType = entry.entry_type || 'payable';
     if (!isProvision && amountVal && amountVal > 0) {
       const idx = billsList.findIndex((b: any) => {
         const bName = (b.supplier_name || '').toLowerCase();
         const candName = supplier.toLowerCase();
-        return (
-          (b.is_provision || bName.includes(candName) || candName.includes(bName)) &&
-          (bName.includes(candName) || candName.includes(bName) || bName.slice(0, 4) === candName.slice(0, 4))
-        );
+        const bType = b.entry_type || 'payable';
+        if (bType !== currentEntryType) return false;
+
+        // Reconcilia SE:
+        // 1. Era uma provisão para este mesmo fornecedor/origem
+        const isMatchingProvision = Boolean(b.is_provision) && (bName.includes(candName) || candName.includes(bName));
+        // 2. OU se já existe um lançamento idêntico COM A MESMA DATA DE VENCIMENTO
+        const isSameBillSameDate = !b.is_provision && dueDateVal && b.due_date === dueDateVal && (bName === candName || bName.includes(candName));
+
+        return isMatchingProvision || isSameBillSameDate;
       });
 
       if (idx >= 0) {
@@ -311,6 +318,7 @@ export async function recordMultipleTrialUsage(
           is_provision: false,
           is_recurring: Boolean(entry.is_recurring),
           recurrence_day: entry.recurrence_day || null,
+          entry_type: currentEntryType,
           reconciled_at: new Date().toISOString(),
         };
         reconciled = true;
@@ -364,14 +372,68 @@ export async function recordMultipleTrialUsage(
 }
 
 /**
+ * Apresentação profissional e elegante ("Olá, como funciona?"),
+ * convidando delicadamente para a degustação VIP gratuita caso haja vagas abertas,
+ * ou informando com transparência que a cota de avaliadores está temporariamente esgotada.
+ */
+export async function getHowItWorksMessage(phone?: string): Promise<string> {
+  const supabase = createServiceRoleClient();
+
+  const { count } = await supabase
+    .from('trial_leads')
+    .select('*', { count: 'exact', head: true });
+
+  const totalLeads = count || 0;
+  const remainingVipSlots = Math.max(0, MAX_BETA_VIP_USERS - totalLeads);
+  const hasVipSlots = remainingVipSlots > 0;
+
+  if (hasVipSlots) {
+    return `👋 *Olá! Que bom ter você por aqui!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O *AnalisAí* é o seu assistente financeiro no WhatsApp para desburocratizar a sua rotina:
+
+• 📸 *Zero digitação:* Envie fotos de boletos, notas fiscais, áudios ou textos com suas contas a pagar e receber.
+• ⏰ *Lembretes na véspera:* Te aviso com antecedência para você nunca mais pagar juros ou multas por esquecimento.
+• 📊 *Fluxo de Caixa Descomplicado:* Veja o saldo futuro e receba relatórios de Livro Caixa direto no celular.
+
+🎁 *Quer experimentar gratuitamente?*
+Estamos com **vagas abertas** na nossa degustação VIP para novos avaliadores testarem na prática, sem compromisso e sem precisar cadastrar cartão!
+
+👉 *Para começar a testar agora mesmo:*
+Envie uma foto de um **boleto**, ou mande um áudio/texto dizendo suas contas (ex: *"Pagar internet R$ 90 dia 21 e receber cliente R$ 1.500 dia 25"*).
+
+Em segundos eu organizo tudo para você! 🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 _Já possui cadastro? Digite seu *CPF ou CNPJ* para carregar seus dados._`;
+  }
+
+  return `👋 *Olá! Que bom ter você por aqui!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O *AnalisAí* é o seu assistente financeiro no WhatsApp para MEIs e pequenas empresas: organizamos suas contas a pagar e receber por foto, áudio ou texto, lembramos seus vencimentos na véspera para evitar juros e emitimos seu Livro Caixa automaticamente.
+
+ℹ️ *Status de Avaliação Gratuita:*
+No momento, a nossa cota de vagas para avaliadores gratuitos VIP está **temporariamente preenchida**.
+
+Mas você pode começar agora mesmo a proteger o caixa do seu negócio com nossos planos super acessíveis:
+• ⭐ *AnalisAí Start — R$ 39,90/mês* (menos de R$ 1,35/dia — até 15 lançamentos/mês):
+👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
+• 🚀 *AnalisAí Solo — R$ 87,99/mês* (30 lançamentos/mês + Inteligência de Caixa):
+👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
+
+💳 _Todos os planos contam com 7 dias de garantia total!_
+💡 _Digite *planos* para conhecer todas as opções ou envie uma mensagem para entrar na lista de espera._`;
+}
+
+/**
  * Mensagem de boas-vindas com convite para a Degustação Gratuita (sem fricção)
  */
 export function getTrialWelcomeMessage(): string {
-  return `👑 *Bem-vindo à Safra dos 50 Pioneiros VIP — AnalisAí Solo!*
+  return `👋 *Olá! Quer experimentar o AnalisAí gratuitamente?*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você foi contemplado com uma das **50 Vagas VIP Gratuitas** para ter seu assistente financeiro no piloto automático!
+O *AnalisAí* é o seu assistente financeiro no WhatsApp que cuida das suas contas a pagar e receber sem burocracia!
 
-✨ *O que você ganha durante seus 30 dias VIP:*
+✨ *O que você ganha durante seus 30 dias de teste:*
 • *Até 10 contas e boletos* cadastrados por foto, PDF, áudio ou texto;
 • *Lembretes diários no WhatsApp* às 10h da véspera com código Pix pronto para cópia (evite juros e multas de atraso);
 • *Relatório de Livro Caixa e DRE em PDF* com gráficos gerenciais direto no seu celular;
@@ -521,6 +583,17 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
     return '✅ *Lançamento salvo com sucesso no seu AnalisAí!*';
   }
 
+  const payables = entries.filter((e) => (e.entry_type || 'payable') !== 'receivable');
+  const receivables = entries.filter((e) => (e.entry_type || 'payable') === 'receivable');
+
+  const totalPayable = payables.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+  const totalReceivable = receivables.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+  const netBalance = totalReceivable - totalPayable;
+
+  const totalPayableFmt = totalPayable.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const totalReceivableFmt = totalReceivable.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const netBalanceFmt = (netBalance >= 0 ? '+' : '') + netBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
   if (entries.length === 1) {
     const doc = entries[0];
     const sup = doc.supplier_or_customer || doc.supplier_name || 'Fornecedor';
@@ -532,48 +605,61 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
 
     let txt = `✅ *Lançamento salvo e monitorado no seu AnalisAí:*\n`;
     txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    txt += `🏢 *${isIncome ? 'Cliente/Origem' : 'Fornecedor'}:* ${sup}\n`;
+    txt += `${isIncome ? '🟢' : '🔴'} *${isIncome ? 'Cliente/Origem' : 'Fornecedor'}:* ${sup}\n`;
     txt += `💰 *Valor:* ${valFormatted}\n`;
     txt += `📅 *Vencimento:* ${dueInfo}\n`;
-    txt += `📑 *Tipo:* ${isIncome ? 'Conta a Receber' : 'Conta a Pagar'}\n`;
+    txt += `📑 *Tipo:* ${isIncome ? 'Conta a Receber (Receita)' : 'Conta a Pagar (Despesa)'}\n`;
     txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    
-    const reminderMsg = doc.barcode_or_pix
-      ? 'te envio o lembrete aqui com o código pronto para você pagar sem multas.'
-      : 'te envio o lembrete aqui para você não esquecer da obrigação e evitar juros de atraso!';
+
+    const reminderMsg = isIncome
+      ? 'te envio um lembrete para acompanhar o recebimento desta receita!'
+      : (doc.barcode_or_pix
+        ? 'te envio o lembrete aqui com o código pronto para você pagar sem multas.'
+        : 'te envio o lembrete aqui para você não esquecer da obrigação e evitar juros de atraso!');
 
     txt += `⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h), ${reminderMsg}\n\n`;
     txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
     return txt;
   }
 
-  // Múltiplos lançamentos (ex: 2, 3, 4, 5 ou 6 contas no mesmo áudio)
-  const totalVal = entries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
-  const totalFormatted = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+  // Múltiplos lançamentos (2 ou mais no mesmo áudio ou texto)
+  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '1️⃣1️⃣', '1️⃣2️⃣', '1️⃣3️⃣', '1️⃣4️⃣', '1️⃣5️⃣'];
 
   let txt = `✅ *${entries.length} lançamentos salvos e agendados no seu AnalisAí:*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
   entries.forEach((e, idx) => {
     const num = emojis[idx] || `•`;
+    const isIncome = (e.entry_type || 'payable') === 'receivable';
     const sup = e.supplier_or_customer || e.supplier_name || `Lançamento ${idx + 1}`;
     const dueInfo = e.due_date ? formatDueDateDetails(e.due_date) : 'Data a confirmar';
     const valFormatted = e.amount
       ? Number(e.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       : (e.is_provision ? 'A confirmar (Provisão)' : 'R$ 0,00');
     const provTag = e.is_provision ? ' _(Estimativa)_' : '';
+    const typeBadge = isIncome ? '🟢 _(Receita)_' : '🔴 _(Despesa)_';
 
-    txt += `${num} *${sup}*\n`;
+    txt += `${num} *${sup}* ${typeBadge}\n`;
     txt += `   💰 ${valFormatted}${provTag} · 📅 ${dueInfo}\n\n`;
   });
 
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  if (totalVal > 0) {
-    txt += `📊 *Total dos compromissos:* *${totalFormatted}*\n`;
+  if (receivables.length > 0 && payables.length > 0) {
+    txt += `🔴 *Total a Pagar (Despesas):* *${totalPayableFmt}*\n`;
+    txt += `🟢 *Total a Receber (Receitas):* *${totalReceivableFmt}*\n`;
+    txt += `💰 *Saldo Líquido Previsto:* *${netBalanceFmt}*\n`;
+  } else if (receivables.length > 0) {
+    txt += `🟢 *Total das Receitas a Receber:* *${totalReceivableFmt}*\n`;
+  } else if (totalPayable > 0) {
+    txt += `🔴 *Total das Despesas a Pagar:* *${totalPayableFmt}*\n`;
   }
-  txt += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você não esquecer de suas obrigações e manter seu fluxo em dia!\n\n`;
+
+  if (payables.length > 0) {
+    txt += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você não esquecer de suas obrigações e manter seu fluxo em dia!\n\n`;
+  } else {
+    txt += `⏰ *Fique tranquilo:* Te avisarei nas datas programadas para acompanhar o recebimento das suas receitas!\n\n`;
+  }
+
   txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
 
   return txt;
@@ -1022,30 +1108,32 @@ export async function deleteTrialBill(
 }
 
 /**
- * Formata as contas de degustação em mensagem executiva WhatsApp, separando contas confirmadas e provisões
+ * Formata as contas de degustação em mensagem executiva WhatsApp, separando contas a pagar e contas a receber
  */
-export function formatTrialBillsListMessage(billsList: any[]): string {
+export function formatTrialBillsListMessage(billsList: any[], periodLabel: string = 'Suas Contas Salvas'): string {
   if (!billsList || billsList.length === 0) {
-    return `📋 *Suas Contas Salvas (Degustação VIP)*
+    return `📋 *${periodLabel} (Degustação VIP)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você ainda não possui contas ou despesas cadastradas no momento.
+Você não possui nenhum lançamento agendado para o período consultado.
 
-Envie uma foto de boleto ou mande um áudio/texto dizendo o que pagar para agendar seu primeiro compromisso! 🚀`;
+Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pagar internet R$ 90 dia 21 e receber cliente R$ 1.500 dia 25"*) para agendar! 🚀`;
   }
 
-  const confirmedBills = billsList.filter((b) => !b.is_provision);
-  const provisionBills = billsList.filter((b) => b.is_provision);
+  const payables = billsList.filter((b) => (b.entry_type || 'payable') !== 'receivable' && !b.is_provision);
+  const receivables = billsList.filter((b) => (b.entry_type || 'payable') === 'receivable' && !b.is_provision);
+  const provisions = billsList.filter((b) => b.is_provision);
 
-  let totalConfirmed = 0;
+  let totalPayables = 0;
+  let totalReceivables = 0;
   let totalProvisions = 0;
 
-  let text = `📋 *Suas Contas Agendadas & Salvas (Degustação VIP)*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  let text = `📋 *${periodLabel} (Degustação VIP)*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
-  if (confirmedBills.length > 0) {
-    text += `🟢 *CONTAS A VENCER (${confirmedBills.length}):*\n`;
-    for (const b of confirmedBills) {
+  if (payables.length > 0) {
+    text += `🔴 *CONTAS A PAGAR / DESPESAS (${payables.length}):*\n`;
+    for (const b of payables) {
       const val = Number(b.amount || 0);
-      totalConfirmed += val;
+      totalPayables += val;
       const valFmt = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
@@ -1054,25 +1142,48 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo o que pagar para agend
     text += `\n`;
   }
 
-  if (provisionBills.length > 0) {
-    text += `📌 *PROVISÕES / ESTIMATIVAS (${provisionBills.length}):*\n`;
-    for (const b of provisionBills) {
+  if (receivables.length > 0) {
+    text += `🟢 *CONTAS A RECEBER / RECEITAS (${receivables.length}):*\n`;
+    for (const b of receivables) {
       const val = Number(b.amount || 0);
-      totalProvisions += val;
-      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
+      totalReceivables += val;
+      const valFmt = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
-      text += `• *${b.supplier_name}*\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}\n`;
+      const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
+      text += `• *${b.supplier_name}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
     }
     text += `\n`;
   }
 
-  const grandTotal = (totalConfirmed + totalProvisions).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💰 *Total Previsto:* *${grandTotal}*\n`;
-  text += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você não esquecer de suas obrigações e manter seu fluxo em dia!\n\n`;
-  text += `💡 _Digite *planos* para assinar ou envie novas contas para agendar._`;
+  if (provisions.length > 0) {
+    text += `📌 *PROVISÕES / ESTIMATIVAS (${provisions.length}):*\n`;
+    for (const b of provisions) {
+      const val = Number(b.amount || 0);
+      totalProvisions += val;
+      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
+      const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
+      const typeStr = (b.entry_type || 'payable') === 'receivable' ? 'Receita Prevista' : 'Despesa Estimada';
+      text += `• *${b.supplier_name}* _(${typeStr})_\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}\n`;
+    }
+    text += `\n`;
+  }
+
+  const netBalance = totalReceivables - totalPayables;
+  const netBalanceFmt = (netBalance >= 0 ? '+' : '') + netBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  if (receivables.length > 0 && payables.length > 0) {
+    text += `🔴 *Total a Pagar:* *${totalPayables.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
+    text += `🟢 *Total a Receber:* *${totalReceivables.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
+    text += `💰 *Saldo Líquido Previsto:* *${netBalanceFmt}*\n`;
+  } else if (receivables.length > 0) {
+    text += `🟢 *Total a Receber:* *${totalReceivables.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
+  } else {
+    text += `🔴 *Total a Pagar:* *${(totalPayables + totalProvisions).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
+  }
+
+  text += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você manter seu fluxo em dia!\n\n`;
+  text += `💡 _Dica: Você pode filtrar outros períodos enviando: *contas semana*, *contas 15 dias*, *contas mês* ou *todas as contas*._`;
 
   return text;
 }

@@ -14,6 +14,7 @@ import {
   generateCashFlowPostponeAdvice,
   isLongTermCashFlowQuery,
   isWeeklyBillsQuery,
+  extractBillsQueryPeriod,
   getExtendedCashFlowProposalMessage,
   getUpcomingBillsSummary,
 } from '@/lib/solo/cash-flow-advisor';
@@ -25,6 +26,7 @@ import {
   recordTrialUsage,
   recordMultipleTrialUsage,
   getTrialWelcomeMessage,
+  getHowItWorksMessage,
   getTrialLimitReachedMessage,
   formatTrialDocSummary,
   formatMultipleTrialEntriesConfirmation,
@@ -1035,7 +1037,11 @@ Nenhum lançamento foi alterado ou excluído. Seus dados e histórico permanecem
   }
 
   // ── Interceptação Universal: Reset / Apagar com Confirmação Prévia ───────
+  const isForceReset =
+    cleanText === '!reset force' || cleanText === '!reset -f' || cleanText === '!reset sim' || cleanText === '!reset confirmar';
+
   const isResetCommand =
+    isForceReset ||
     cleanText === '!apagar' || cleanText === 'apagar' ||
     cleanText === '!reset' || cleanText === 'reset' ||
     cleanText === '!limpar' || cleanText === 'limpar' ||
@@ -1045,7 +1051,8 @@ Nenhum lançamento foi alterado ou excluído. Seus dados e histórico permanecem
     cleanText === 'excluir tudo';
 
   if (isResetCommand) {
-    if (client?.is_admin || isAdminTester) {
+    // Só executa direto se o usuário enviou explicitamente o parâmetro de força (!reset force / !reset sim)
+    if (isForceReset && (client?.is_admin || isAdminTester)) {
       await supabase
         .from('trial_leads')
         .delete()
@@ -1081,18 +1088,18 @@ Nenhum lançamento foi alterado ou excluído. Seus dados e histórico permanecem
 
       await sendEvolutionText({
         phone,
-        text: `🔄 *Reset do Perfil Realizado com Sucesso!*
+        text: `🔄 *Reset Forçado Concluído com Sucesso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ Contas a pagar e lançamentos anteriores foram apagados.
 ✅ Histórico de degustação (trial) foi zerado.
 ✅ Contadores de uso restaurados para 0.
 
-💡 *Dica:* Para testar a experiência exata de um *Cliente Novo (Degustação)*, envie:
-👉 *!simular lead*`,
+Seu perfil foi limpo para o estado inicial! 🚀`,
       });
       return;
     }
 
+    // Para todos os demais casos (incluindo admin), solicita confirmação obrigatória de 2 passos
     await supabase.from('bot_action_confirmations').insert({
       client_id: client?.id || null,
       phone_number: cleanPhone,
@@ -1108,16 +1115,19 @@ Nenhum lançamento foi alterado ou excluído. Seus dados e histórico permanecem
 
     await sendEvolutionPoll({
       phone,
-      question: `⚠️ *Confirmação de Segurança — Zerar Lançamentos*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nVocê solicitou *apagar todos os lançamentos e histórico*.\n\n⚠️ Esta ação é irreversível e excluirá permanentemente suas contas.\n\nDeseja realmente confirmar?`,
+      question: `⚠️ *Confirmação de Segurança — Zerar Lançamentos*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nVocê solicitou *apagar todos os lançamentos e histórico*.\n\n⚠️ Esta ação é irreversível e excluirá permanentemente suas contas cadastradas.\n\nDeseja realmente confirmar?`,
       options: ['Sim, apagar tudo', 'Não, cancelar'],
     });
 
     await sendEvolutionText({
       phone,
       text: `⚠️ *Confirmação de Segurança Requerida*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Você solicitou apagar todos os seus lançamentos e zerar o histórico de testes.
 
-👉 *Toque na opção acima ou responda com SIM para confirmar ou NÃO para cancelar.*`,
+⚠️ Esta ação é irreversível e excluirá todas as contas e relatórios.
+
+👉 *Responda com SIM para confirmar ou NÃO para cancelar.*`,
     });
     return;
   }
@@ -1482,24 +1492,41 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
-  // ── Interceptação 1.2: Projeção Estendida de Fluxo de Caixa (> 7 dias / Mês) ────
-  // Se o cliente ou lead solicitar prazo maior que uma semana, recusa educadamente
-  // e apresenta o Relatório de Fluxo de Caixa Futuro avulso (R$ 49,00)
-  // cash-flow-advisor helpers imported statically
+  // ── Interceptação: "Olá, como funciona?" / Apresentação e Dúvidas Gerais ──
+  const isHowItWorksIntent =
+    cleanText === 'como funciona' ||
+    cleanText === 'como funciona?' ||
+    cleanText === 'olá, como funciona?' ||
+    cleanText === 'ola, como funciona?' ||
+    cleanText === 'olá como funciona' ||
+    cleanText === 'ola como funciona' ||
+    cleanText === 'o que é' ||
+    cleanText === 'o que e' ||
+    cleanText === 'o que faz' ||
+    cleanText === 'quem é você' ||
+    cleanText === 'quem e voce' ||
+    cleanText === 'como usar' ||
+    cleanText === 'quero entender' ||
+    cleanText === 'explicar';
 
-  const hasMonetaryPattern = /(?:r\$\s*|reais|\b\d+[,.]\d{2}\b)/i.test(rawText);
-  const isFinancialAction = /(?:pagar|receber|comprei|gastei|transferir|lance|lançar)/i.test(cleanText);
+  if (isHowItWorksIntent && !hasMonetaryPattern && !isFinancialAction) {
+    const howItWorksMsg = await getHowItWorksMessage(cleanPhone);
+    await sendEvolutionText({ phone, text: howItWorksMsg });
+    return;
+  }
 
+  // ── Interceptação 1.2: Projeção Estendida de Fluxo de Caixa Futuro (Avulso R$ 49) ────
   if (isLongTermCashFlowQuery(cleanText) && (!hasMonetaryPattern || !isFinancialAction)) {
     const extendedProposal = getExtendedCashFlowProposalMessage();
     await sendEvolutionText({ phone, text: extendedProposal });
     return;
   }
 
-  // ── Interceptação 1.3: Agenda de Contas da Semana (Até 7 dias) ───────────────
+  // ── Interceptação 1.3: Agenda Financeira de Contas (Semana, 15 dias, Mês ou Todas) ──
   if (isWeeklyBillsQuery(cleanText) && (!hasMonetaryPattern || !isFinancialAction)) {
-    const weeklySummary = await getUpcomingBillsSummary(client?.id || null, cleanPhone);
-    await sendEvolutionText({ phone, text: weeklySummary });
+    const periodOption = extractBillsQueryPeriod(cleanText);
+    const billsSummary = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
+    await sendEvolutionText({ phone, text: billsSummary });
     return;
   }
 
@@ -1732,12 +1759,12 @@ ${BANK_SAFETY_NOTICE}`,
     // 1.35 Comandos de Gestão e Consulta de Contas na Degustação
     if (
       isWeeklyBillsQuery(cleanText) ||
-      cleanText === 'contas' || cleanText === 'minhas contas' ||
+      cleanText === 'contas' || cleanText === '!contas' || cleanText === 'minhas contas' ||
       cleanText.includes('listar contas') || cleanText.includes('mostrar contas') ||
       cleanText.includes('quais contas')
     ) {
-      const trialBills = await getTrialBills(cleanPhone);
-      const billsMsg = formatTrialBillsListMessage(trialBills);
+      const periodOption = extractBillsQueryPeriod(cleanText);
+      const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
       await sendEvolutionText({ phone, text: billsMsg });
       return;
     }
@@ -1964,10 +1991,11 @@ Como posso te ajudar agora?`,
       }
     }
 
-    // Se ainda estiver no limite de tolerância, apresenta a mensagem de boas-vindas da Degustação
+    // Se ainda estiver no limite de tolerância, apresenta a apresentação transparente e convite elegante para a degustação
+    const welcomeMsg = await getHowItWorksMessage(cleanPhone);
     await sendEvolutionText({
       phone,
-      text: getTrialWelcomeMessage(),
+      text: welcomeMsg,
     });
     return;
   }
