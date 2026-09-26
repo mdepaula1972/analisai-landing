@@ -23,9 +23,11 @@ import { solicitarTrocaNumeroCom2FA, validarCodigo2FATrocaNumero } from '@/lib/s
 import {
   checkTrialStatus,
   recordTrialUsage,
+  recordMultipleTrialUsage,
   getTrialWelcomeMessage,
   getTrialLimitReachedMessage,
   formatTrialDocSummary,
+  formatMultipleTrialEntriesConfirmation,
   getTrialConversionMenu,
   getPioneerShareMessage,
   getTrialBills,
@@ -110,6 +112,80 @@ async function processConversationalEntry(
           conv.clarification_prompt ||
           'Entendi a sua intenção! Para registrar certinho no seu fluxo de caixa, por favor me informe o valor e a data de vencimento.',
       });
+      return true;
+    }
+
+    const entries = Array.isArray(conv.entries) && conv.entries.length > 0 ? conv.entries : [];
+    if (entries.length === 0 && conv.amount && conv.due_date) {
+      entries.push({
+        supplier_or_customer: conv.supplier_or_customer,
+        amount: conv.amount,
+        due_date: conv.due_date,
+        entry_type: conv.entry_type || 'payable',
+        category_suggestion: conv.category_suggestion,
+        is_provision: Boolean(conv.is_provision),
+      });
+    }
+
+    const validEntries = entries.filter((e: any) => (e.amount || e.is_provision) && (e.due_date || e.is_provision));
+
+    if (validEntries.length > 1) {
+      const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', validEntries.length);
+      const cleanNumber = phone.replace(/\D/g, '');
+      const isEntryQa = client.is_admin || await isQaWhitelisted(cleanNumber) || await isQaWhitelisted(client.tax_id);
+
+      if (!quotaCheck.allowed && !isEntryQa) {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Limite de Lançamentos do Mês Atingido!*
+Você tentou registrar ${validEntries.length} lançamentos, mas ultrapassou a cota mensal disponível do seu plano.
+Para contratar lançamentos extras válidos por 60 dias:
+👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}`,
+        });
+        return true;
+      }
+
+      const supabase = createServiceRoleClient();
+      for (const item of validEntries) {
+        const isInc = item.entry_type === 'receivable';
+        const ent = item.supplier_or_customer || (isInc ? 'Cliente' : 'Fornecedor');
+        const grp = item.category_suggestion || (isInc ? 'receita_operacional' : 'despesa_administrativa');
+        const isProv = Boolean(item.is_provision);
+
+        await supabase.from('cash_ledger_entries').insert({
+          client_id: client.id,
+          entry_date: item.due_date,
+          description: `${isInc ? 'RECEITA' : 'DESPESA'} - ${ent} (via ${origin})`,
+          amount: isInc ? Math.abs(item.amount) : -Math.abs(item.amount),
+          entry_type: isInc ? 'income' : 'expense',
+          dre_group: grp,
+          status: 'previsto',
+        });
+
+        await supabase.from('payables_receivables').insert({
+          client_id: client.id,
+          counterparty_name: ent,
+          type: isInc ? 'receivable' : 'payable',
+          amount: Math.abs(item.amount),
+          original_due_date: item.due_date,
+          current_due_date: item.due_date,
+          status: 'open',
+          is_provision: isProv,
+          notes: isProv ? '[PROVISÃO] Valor estimado a confirmar' : null,
+        });
+      }
+
+      const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+      let msg = `✅ *${validEntries.length} lançamentos registrados no seu Livro Caixa (via ${origin})!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      validEntries.forEach((it: any, idx: number) => {
+        const num = emojis[idx] || '•';
+        const valFmt = Number(it.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const dueFmt = it.due_date ? formatDueDateDetails(it.due_date) : 'A definir';
+        msg += `${num} *${it.supplier_or_customer}*: ${valFmt} | ${dueFmt}\n`;
+      });
+      msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nO AnalisAí vai te lembrar às 10h da véspera de cada vencimento! Digite *relatório* para gerar o PDF ou *contas* para ver seus agendamentos.`;
+
+      await sendEvolutionText({ phone, text: msg });
       return true;
     }
 
@@ -1638,24 +1714,24 @@ ${BANK_SAFETY_NOTICE}`,
         });
       }
 
-      // 3. Envia Demonstrativo Contábil em PDF para causar forte impressão profissional (Fisgar o lead)
-      try {
-        // sendTrialPdfToWhatsApp imported statically
-        await sendTrialPdfToWhatsApp(cleanPhone, extraction);
-      } catch (trialPdfErr) {
-        console.warn('[Trial PDF Generation Warning]:', trialPdfErr);
-      }
-
-      // 4. Envia o Menu de Assinatura com Links Diretos do Asaas
-      await sendEvolutionText({
-        phone,
-        text: getTrialConversionMenu(),
-      });
+      // 3. Documento registrado na degustação
       return;
     }
 
-    // 1.35 Comandos de Gestão de Contas e Provisões na Degustação
+    // Interceptação de consulta de planos / assinatura
     if (
+      cleanText === 'planos' || cleanText === 'plano' || cleanText === 'assinar' ||
+      cleanText === 'preços' || cleanText === 'precos' || cleanText === 'valores' ||
+      cleanText === 'quanto custa' || cleanText.includes('ver planos') ||
+      cleanText.includes('quais planos') || cleanText.includes('quero assinar')
+    ) {
+      await sendEvolutionText({ phone, text: getTrialConversionMenu() });
+      return;
+    }
+
+    // 1.35 Comandos de Gestão e Consulta de Contas na Degustação
+    if (
+      isWeeklyBillsQuery(cleanText) ||
       cleanText === 'contas' || cleanText === 'minhas contas' ||
       cleanText.includes('listar contas') || cleanText.includes('mostrar contas') ||
       cleanText.includes('quais contas')
@@ -1704,28 +1780,32 @@ ${BANK_SAFETY_NOTICE}`,
         }
 
         const conv = await parseConversationalFinancialEntry(rawText);
-        if (conv.is_financial_entry && conv.amount && conv.due_date) {
-          const isIncome = conv.entry_type === 'receivable';
-          const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
-          const mockExtracted = {
-            is_financial_doc: true,
-            supplier_name: entity,
-            counterparty_name: entity,
-            total_amount: Number(conv.amount),
-            amount: Number(conv.amount),
+        const entries = Array.isArray(conv.entries) && conv.entries.length > 0 ? conv.entries : [];
+        if (entries.length === 0 && conv.is_financial_entry && (conv.amount || conv.is_provision)) {
+          entries.push({
+            supplier_or_customer: conv.supplier_or_customer || 'Fornecedor',
+            amount: conv.amount,
             due_date: conv.due_date,
-            document_type: isIncome ? 'Recebimento' : 'Conta a Pagar',
-            category: conv.category_suggestion || (isIncome ? 'Receita Operacional' : 'Despesa Administrativa'),
-            barcode_or_pix: null,
+            entry_type: conv.entry_type || 'payable',
+            category_suggestion: conv.category_suggestion,
             is_provision: Boolean(conv.is_provision),
-          };
+            is_recurring: Boolean(conv.is_recurring),
+            recurrence_day: conv.recurrence_day || null,
+          });
+        }
 
-          await recordTrialUsage(cleanPhone, mockExtracted);
+        const validEntries = entries.filter((e: any) => (e.amount || e.is_provision) && (e.due_date || e.is_provision));
+
+        if (conv.is_financial_entry && validEntries.length > 0) {
+          await recordMultipleTrialUsage(cleanPhone, validEntries);
 
           let trialTaxBadge = '';
-          if (isIncome) {
+          const incomeEntries = validEntries.filter((e: any) => e.entry_type === 'receivable');
+          if (incomeEntries.length > 0) {
             try {
-              await addTrialLeadRevenue(cleanPhone, Number(conv.amount));
+              for (const inc of incomeEntries) {
+                if (inc.amount) await addTrialLeadRevenue(cleanPhone, Number(inc.amount));
+              }
               const taxStatus = await getTaxRevenueTracking({ phone: cleanPhone });
               trialTaxBadge = `\n\n${taxStatus.miniBadge}`;
             } catch (tErr) {
@@ -1733,21 +1813,9 @@ ${BANK_SAFETY_NOTICE}`,
             }
           }
 
-          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
-          const summaryText = formatTrialDocSummary(mockExtracted, remainingAfter) + trialTaxBadge;
-          await sendEvolutionText({ phone, text: summaryText });
-
-          try {
-            // sendTrialPdfToWhatsApp imported statically
-            await sendTrialPdfToWhatsApp(cleanPhone, mockExtracted);
-          } catch (trialPdfErr) {
-            console.warn('[Trial Text PDF Generation Warning]:', trialPdfErr);
-          }
-
-          await sendEvolutionText({
-            phone,
-            text: getTrialConversionMenu(),
-          });
+          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - validEntries.length);
+          const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, remainingAfter) + trialTaxBadge;
+          await sendEvolutionText({ phone, text: confirmationText });
           return;
         } else if (conv.is_financial_entry && conv.needs_clarification) {
           await sendEvolutionText({
@@ -1811,45 +1879,47 @@ ${BANK_SAFETY_NOTICE}`,
           return;
         }
 
-        // Tenta interpretar o áudio como lançamento financeiro
+        // Tenta interpretar o áudio como lançamento financeiro (1 ou múltiplos lançamentos)
         const conv = await parseConversationalFinancialEntry(cleanTranscribed);
-        if (conv.is_financial_entry && conv.amount && conv.due_date) {
-          const isIncome = conv.entry_type === 'receivable';
-          const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
-          const mockExtracted = {
-            is_financial_doc: true,
-            doc_type: isIncome ? 'recibo' : 'outro',
-            supplier_name: entity,
-            counterparty_name: entity,
-            total_amount: Number(conv.amount),
-            amount: Number(conv.amount),
+        const entries = Array.isArray(conv.entries) && conv.entries.length > 0 ? conv.entries : [];
+        if (entries.length === 0 && conv.is_financial_entry && (conv.amount || conv.is_provision)) {
+          entries.push({
+            supplier_or_customer: conv.supplier_or_customer || 'Fornecedor',
+            amount: conv.amount,
             due_date: conv.due_date,
-            document_type: isIncome ? 'Recebimento' : 'Conta a Pagar',
-            category: conv.category_suggestion || (isIncome ? 'Receita Operacional' : 'Despesa Administrativa'),
-            barcode_or_pix: null,
-            confidence: 0.95,
-          };
-
-          await recordTrialUsage(cleanPhone, mockExtracted);
-
-          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
-          const summaryText = formatTrialDocSummary(mockExtracted, remainingAfter);
-
-          await sendEvolutionText({
-            phone,
-            text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n${summaryText}`,
+            entry_type: conv.entry_type || 'payable',
+            category_suggestion: conv.category_suggestion,
+            is_provision: Boolean(conv.is_provision),
+            is_recurring: Boolean(conv.is_recurring),
+            recurrence_day: conv.recurrence_day || null,
           });
+        }
 
-          try {
-            // sendTrialPdfToWhatsApp imported statically
-            await sendTrialPdfToWhatsApp(cleanPhone, mockExtracted);
-          } catch (trialPdfErr) {
-            console.warn('[Trial Audio PDF Generation Warning]:', trialPdfErr);
+        const validEntries = entries.filter((e: any) => (e.amount || e.is_provision) && (e.due_date || e.is_provision));
+
+        if (conv.is_financial_entry && validEntries.length > 0) {
+          await recordMultipleTrialUsage(cleanPhone, validEntries);
+
+          let trialTaxBadge = '';
+          const incomeEntries = validEntries.filter((e: any) => e.entry_type === 'receivable');
+          if (incomeEntries.length > 0) {
+            try {
+              for (const inc of incomeEntries) {
+                if (inc.amount) await addTrialLeadRevenue(cleanPhone, Number(inc.amount));
+              }
+              const taxStatus = await getTaxRevenueTracking({ phone: cleanPhone });
+              trialTaxBadge = `\n\n${taxStatus.miniBadge}`;
+            } catch (tErr) {
+              console.warn('[Trial Voice Tax Meter Warning]:', tErr);
+            }
           }
 
+          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - validEntries.length);
+          const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, remainingAfter) + trialTaxBadge;
+
           await sendEvolutionText({
             phone,
-            text: getTrialConversionMenu(),
+            text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n${confirmationText}`,
           });
           return;
         } else if (conv.is_financial_entry && conv.needs_clarification) {
@@ -1865,12 +1935,11 @@ ${BANK_SAFETY_NOTICE}`,
             phone,
             text: `🎙️ _Entendi seu áudio: "${cleanTranscribed}"_
 
-💡 *Como agendar na sua Degustação Gratuita VIP:*
-Para registrar uma conta por voz, basta dizer o fornecedor, valor e data.
-Exemplos:
-• *"Pagar aluguel de R$ 1.500 no dia 25"*
-• *"Conta de luz de 380 reais vence amanhã"*
-• Ou tire uma foto nítida de qualquer boleto ou conta de consumo!
+💡 *Como agendar no seu AnalisAí:*
+Para registrar contas por voz, basta dizer os compromissos, valores e datas (pode citar várias contas no mesmo áudio!).
+Exemplo:
+• *"Pagar Vivo R$ 92 dia 21, contabilidade R$ 170 dia 10 e aluguel de R$ 1.500 no dia 5"*
+• Ou envie a foto de um boleto!
 
 Como posso te ajudar agora?`,
           });

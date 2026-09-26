@@ -210,6 +210,54 @@ export async function parseConversationalFinancialEntry(
                 type: SchemaType.BOOLEAN,
                 description: 'True se for um compromisso variável, provisão, valor estimado ou agendamento para não esquecer antes da fatura real chegar (ex: conta de luz estimada, cartão, provisão de imposto, valor aproximado).',
               },
+              entries: {
+                type: SchemaType.ARRAY,
+                description: 'Lista com TODOS os lançamentos financeiros identificados na mensagem (1 ou mais contas/recebimentos).',
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    supplier_or_customer: {
+                      type: SchemaType.STRING,
+                      description: 'Nome da empresa, fornecedor, cliente ou serviço (ex: Vivo, Copel, Contabilidade, Aluguel)',
+                      nullable: true,
+                    },
+                    amount: {
+                      type: SchemaType.NUMBER,
+                      description: 'Valor monetário numérico em reais (ex: 92.00, 170.00)',
+                      nullable: true,
+                    },
+                    due_date: {
+                      type: SchemaType.STRING,
+                      description: 'Data de vencimento ou previsão no formato YYYY-MM-DD',
+                      nullable: true,
+                    },
+                    entry_type: {
+                      type: SchemaType.STRING,
+                      enum: ['payable', 'receivable'],
+                      description: 'payable para contas a pagar/despesas, receivable para recebimentos',
+                    },
+                    category_suggestion: {
+                      type: SchemaType.STRING,
+                      description: 'Categoria DRE (ex: despesa_administrativa, custo_operacional, telecomunicacoes)',
+                      nullable: true,
+                    },
+                    is_provision: {
+                      type: SchemaType.BOOLEAN,
+                      description: 'True se for estimativa, valor a confirmar ou provisão',
+                    },
+                    is_recurring: {
+                      type: SchemaType.BOOLEAN,
+                      description: 'True se for conta recorrente fixa (ex: todo mês, mensal, todo dia X)',
+                    },
+                    recurrence_day: {
+                      type: SchemaType.INTEGER,
+                      description: 'Dia do mês da recorrência (ex: 21, 10)',
+                      nullable: true,
+                    },
+                  },
+                  required: ['supplier_or_customer', 'entry_type', 'is_provision'],
+                },
+              },
               missing_fields: {
                 type: SchemaType.ARRAY,
                 description: 'Lista dos campos vitais ausentes: "amount", "supplier_or_customer", "due_date"',
@@ -239,29 +287,75 @@ Seu objetivo é registrar contas a pagar, contas a receber e PROVISÕES financei
 Data de referência de hoje: ${referenceDateStr}.
 
 REGRAS:
-1. Para cada lançamento definitivo, precisamos de 3 dados:
+1. MÚLTIPLOS LANÇAMENTOS NO MESMO ÁUDIO / TEXTO (MUITO IMPORTANTE):
+   - O usuário pode listar 1, 2, 3, 4 ou mais contas no mesmo áudio ou texto (exemplo: "Tenho todo mês dia 21 conta de internet Vivo de R$ 92, e também todo dia 10 a contabilidade de R$ 170, e dia 5 aluguel de R$ 1200...").
+   - Você DEVE identificar e extrair CADA UMA das contas citadas como um objeto individual dentro do array 'entries'.
+   - Os campos de primeiro nível (amount, supplier_or_customer, due_date, entry_type) devem ser preenchidos com os dados da PRIMEIRA conta para compatibilidade, e o array 'entries' deve conter TODAS as contas (inclusive a primeira).
+
+2. CÁLCULO DE VENCIMENTOS E RECORRÊNCIAS:
+   - Se o usuário mencionar recorrência como "todo mês dia X", "durante o dia X", "todo dia X de todo mês":
+     * is_recurring = true
+     * recurrence_day = X
+     * Calcule a próxima data de vencimento no formato YYYY-MM-DD a partir de hoje (${referenceDateStr}):
+       - Se o dia X já passou no mês atual de ${referenceDateStr} (ou for hoje): o próximo vencimento é no mês seguinte.
+       - Se o dia X ainda vai vencer no mês atual de ${referenceDateStr}: o vencimento é no mês atual.
+   - Se disser "amanhã", "sexta", "dia 20", calcule com base na data de referência ${referenceDateStr}.
+
+3. DADOS NECESSÁRIOS:
    - Valor (amount)
    - Favorecido / Fornecedor ou Cliente (supplier_or_customer)
-   - Vencimento / Data (due_date no formato YYYY-MM-DD). Se ele falar "amanhã", "sexta", "dia 20", calcule com base na data de referência.
-2. PROVISÕES / COMPROMISSOS VARIÁVEIS:
-   - Se o usuário disser "provisão", "previsão", "estimado", "mais ou menos", "em torno de", "uns X reais", ou quiser registrar para não esquecer contas variáveis (luz, água, cartão, impostos, comissões) antes da fatura real chegar:
+   - Vencimento / Data (due_date no formato YYYY-MM-DD).
+
+4. PROVISÕES / COMPROMISSOS VARIÁVEIS:
+   - Se disser "provisão", "previsão", "estimado", "mais ou menos", "uns X reais", ou contas variáveis (luz, água, cartão) antes da fatura real chegar:
      * is_provision = true
-     * Se informou um valor aproximado (ex: "uns 250 reais"), preencha amount = 250.
-     * Se disse "valor a confirmar" ou não deu valor, preencha amount = 0.
-     * Se indicou a data ou estimativa de dia (ex: "dia 20", "fim do mês"), preencha due_date.
-     * Para provisões, needs_clarification = false se tiver fornecedor e data (ou estimativa), pois a provisão serve justamente para antecipar o compromisso no fluxo de caixa e será conciliada quando a conta real chegar!
-3. Se NÃO for provisão e faltar qualquer um dos 3 dados essenciais:
-   - is_provision = false
-   - needs_clarification = true
-   - adicione os nomes em missing_fields
-   - formule um clarification_prompt leve, direto e parceiro perguntando o dado faltante.
-4. Se todos os dados estiverem presentes e definidos:
-   - needs_clarification = false
-   - clarification_prompt = null.`,
+     * Se informou valor aproximado, preencha amount com o valor. Se não informou, preencha amount = 0.
+     * Para provisões, needs_clarification = false se tiver fornecedor e data.
+
+5. CLARIFICAÇÃO:
+   - Se nenhuma conta tiver valor ou vencimento e NÃO for provisão: needs_clarification = true.
+   - Se pelo menos uma conta tiver os dados completos: needs_clarification = false.`,
       });
 
       const result = await model.generateContent(`Mensagem do usuário: "${userText}"`);
-      return JSON.parse(result.response.text());
+      const parsed = JSON.parse(result.response.text());
+
+      // Normaliza entries para garantir consistência
+      if (!Array.isArray(parsed.entries) || parsed.entries.length === 0) {
+        if (parsed.is_financial_entry && (parsed.amount || parsed.supplier_or_customer)) {
+          parsed.entries = [
+            {
+              supplier_or_customer: parsed.supplier_or_customer,
+              amount: parsed.amount,
+              due_date: parsed.due_date,
+              entry_type: parsed.entry_type || 'payable',
+              category_suggestion: parsed.category_suggestion,
+              is_provision: Boolean(parsed.is_provision),
+              is_recurring: false,
+              recurrence_day: null,
+            },
+          ];
+        } else {
+          parsed.entries = [];
+        }
+      } else {
+        // Se entries foi preenchido, garante que o primeiro item preencha os campos raiz
+        const first = parsed.entries[0];
+        if (first) {
+          parsed.supplier_or_customer = parsed.supplier_or_customer || first.supplier_or_customer;
+          parsed.amount = parsed.amount ?? first.amount;
+          parsed.due_date = parsed.due_date || first.due_date;
+          parsed.entry_type = parsed.entry_type || first.entry_type;
+          parsed.category_suggestion = parsed.category_suggestion || first.category_suggestion;
+          parsed.is_provision = parsed.is_provision ?? first.is_provision;
+        }
+        if (parsed.entries.some((e: any) => e.amount && e.due_date)) {
+          parsed.is_financial_entry = true;
+          parsed.needs_clarification = false;
+        }
+      }
+
+      return parsed;
     } catch (err) {
       lastError = err;
       console.warn(`[Gemini Parse Entry] Falha com ${modelName}, tentando próximo:`, err);

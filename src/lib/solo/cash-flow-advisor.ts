@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { formatDueDateDetails } from './date-utils';
+import { getTrialBills, formatTrialBillsListMessage } from './trial';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
 
@@ -151,7 +152,7 @@ export function isLongTermCashFlowQuery(cleanText: string): boolean {
 }
 
 /**
- * Detecta se a mensagem do usuário solicita consulta de contas da semana (até 7 dias)
+ * Detecta se a mensagem do usuário solicita consulta de contas, despesas, receitas ou agenda
  */
 export function isWeeklyBillsQuery(cleanText: string): boolean {
   const query = cleanText.toLowerCase().trim();
@@ -167,12 +168,38 @@ export function isWeeklyBillsQuery(cleanText: string): boolean {
     '7 dias',
     'contas',
     '!contas',
-    'vencimentos',
-    'agenda',
-    'o que vence',
+    'minhas contas',
+    'ver contas',
+    'listar contas',
+    'mostrar contas',
     'quais contas',
     'próximas contas',
     'proximas contas',
+    'contas salvas',
+    'despesas e receitas do dia a dia',
+    'despesas e receitas',
+    'receitas e despesas',
+    'despesas',
+    'receitas',
+    'minhas despesas',
+    'minhas receitas',
+    'o que está salvo',
+    'o que tem salvo',
+    'o que foi salvo',
+    'o que está agendado',
+    'o que foi agendado',
+    'o que tenho a pagar',
+    'o que tenho que pagar',
+    'o que pagar',
+    'vencimentos',
+    'agenda',
+    'minha agenda',
+    'o que vence',
+    'consultar contas',
+    'meus lançamentos',
+    'meus lancamentos',
+    'lançamentos',
+    'lancamentos',
   ];
 
   return weeklyKeywords.some((kw) => query === kw || query.includes(kw));
@@ -198,7 +225,7 @@ ${checkoutUrl}
 }
 
 /**
- * Consulta e formata a relação de contas a pagar da semana (próximos 7 dias)
+ * Consulta e formata a relação de contas a pagar da semana (próximos 7 dias) ou salvas
  */
 export async function getUpcomingBillsSummary(
   clientId: string | null,
@@ -252,6 +279,13 @@ ${billsList}
   // 2. Se for lead em degustação consultando pelo telefone
   if (phone) {
     const cleanPhone = phone.replace(/\D/g, '');
+
+    // Busca todas as contas salvas na degustação
+    const trialBills = await getTrialBills(cleanPhone);
+    if (trialBills && trialBills.length > 0) {
+      return formatTrialBillsListMessage(trialBills);
+    }
+
     const { data: lead } = await supabase
       .from('trial_leads')
       .select('*')
@@ -259,17 +293,23 @@ ${billsList}
       .maybeSingle();
 
     if (lead && lead.due_date && lead.amount) {
-      return `📅 *Agenda Financeira — Degustação AnalisAí*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identifiquei seu boleto registrado em teste:
-• *Vencimento:* ${formatDueDateDetails(lead.due_date)}
-• *Favorecido:* ${lead.supplier_name || 'Fornecedor'}
-• *Valor:* R$ ${Number(lead.amount).toFixed(2)}
-• *Código de barras:* ${lead.barcode_or_pix ? 'Salvo para o lembrete' : 'Não identificado'}
-
-💡 _Na véspera deste vencimento, às 10h em ponto, eu vou te mandar o lembrete aqui com o código de barras limpo para você pagar sem atrasos!_
-📊 _Para acompanhar todas as contas do mês e ter projeção futura contínua, assine um de nossos planos!_`;
+      const fallbackBill = [
+        {
+          supplier_name: lead.supplier_name || 'Fornecedor',
+          amount: Number(lead.amount),
+          due_date: lead.due_date,
+          barcode_or_pix: lead.barcode_or_pix || null,
+          is_provision: false,
+        },
+      ];
+      return formatTrialBillsListMessage(fallbackBill);
     }
+
+    return `📋 *Suas Contas Salvas (Degustação VIP)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você ainda não possui contas ou despesas cadastradas no momento.
+
+Envie uma foto de boleto ou mande um áudio/texto dizendo o que pagar para agendar seu primeiro compromisso! 🚀`;
   }
 
   return `📅 *Agenda Financeira da Semana*
