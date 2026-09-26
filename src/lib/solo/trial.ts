@@ -503,7 +503,11 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
     txt += `📂 *Categoria:* ${doc.category}\n`;
   }
 
-  txt += `\n⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h em ponto), te envio o lembrete aqui com o código prontinho para pagar sem estresse.\n\n`;
+  const reminderText = doc.barcode_or_pix
+    ? 'te envio o lembrete aqui com o código prontinho para pagar sem estresse.'
+    : 'te envio o lembrete aqui para você não esquecer da obrigação e manter seus pagamentos em dia!';
+
+  txt += `\n⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h em ponto), ${reminderText}\n\n`;
   txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
 
   return txt;
@@ -533,12 +537,17 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
     txt += `📅 *Vencimento:* ${dueInfo}\n`;
     txt += `📑 *Tipo:* ${isIncome ? 'Conta a Receber' : 'Conta a Pagar'}\n`;
     txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    txt += `⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h), te envio o lembrete aqui com o código pronto para você pagar sem multas.\n\n`;
+    
+    const reminderMsg = doc.barcode_or_pix
+      ? 'te envio o lembrete aqui com o código pronto para você pagar sem multas.'
+      : 'te envio o lembrete aqui para você não esquecer da obrigação e evitar juros de atraso!';
+
+    txt += `⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h), ${reminderMsg}\n\n`;
     txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
     return txt;
   }
 
-  // Múltiplos lançamentos (ex: 2, 3 ou 4 contas no mesmo áudio)
+  // Múltiplos lançamentos (ex: 2, 3, 4, 5 ou 6 contas no mesmo áudio)
   const totalVal = entries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
   const totalFormatted = totalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -554,16 +563,17 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
     const valFormatted = e.amount
       ? Number(e.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       : (e.is_provision ? 'A confirmar (Provisão)' : 'R$ 0,00');
+    const provTag = e.is_provision ? ' _(Estimativa)_' : '';
 
     txt += `${num} *${sup}*\n`;
-    txt += `   💰 ${valFormatted} · 📅 ${dueInfo}\n\n`;
+    txt += `   💰 ${valFormatted}${provTag} · 📅 ${dueInfo}\n\n`;
   });
 
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   if (totalVal > 0) {
     txt += `📊 *Total dos compromissos:* *${totalFormatted}*\n`;
   }
-  txt += `⏰ *Fique tranquilo:* Na véspera de cada vencimento (às 10h), te envio o lembrete aqui com o código pronto para pagar sem estresse.\n\n`;
+  txt += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você não esquecer de suas obrigações e manter seu fluxo em dia!\n\n`;
   txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
 
   return txt;
@@ -1061,7 +1071,7 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo o que pagar para agend
     currency: 'BRL',
   });
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💰 *Total Previsto:* *${grandTotal}*\n`;
-  text += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui com o código pronto para pagar.\n\n`;
+  text += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você não esquecer de suas obrigações e manter seu fluxo em dia!\n\n`;
   text += `💡 _Digite *planos* para assinar ou envie novas contas para agendar._`;
 
   return text;

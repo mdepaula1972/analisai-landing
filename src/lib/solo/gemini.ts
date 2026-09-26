@@ -156,9 +156,37 @@ Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_scor
 }
 
 /**
+ * Sanitiza o nome do favorecido/fornecedor removendo ruídos de IA e textos metalinguísticos
+ */
+export function cleanSupplierName(raw: any): string {
+  if (!raw || typeof raw !== 'string') return 'Fornecedor';
+  let cleaned = raw.trim();
+
+  // Se o modelo inseriu delimitadores técnicos ("/" ou ";")
+  if (cleaned.includes('/')) {
+    cleaned = cleaned.split('/')[0].trim();
+  }
+  if (cleaned.includes(';')) {
+    cleaned = cleaned.split(';')[0].trim();
+  }
+
+  // Remove termos em inglês típicos de alucinação de LLM
+  cleaned = cleaned.replace(/\b(primary supplier|processed first|standard output|compatibility check|internal evaluation|pipeline|baseline|setup sequence|validation|payload|json format|result generation|system process|finish logic|output done)\b/gi, '').trim();
+
+  // Limpa pontuações estranhas no início e no final
+  cleaned = cleaned.replace(/^[-:,\s]+|[-:,\s]+$/g, '').trim();
+
+  if (cleaned.length > 50) {
+    cleaned = cleaned.slice(0, 50).trim();
+  }
+
+  return cleaned || 'Fornecedor';
+}
+
+/**
  * 2. Análise e Extração de Lançamentos Financeiros Conversacionais (Texto ou Áudio Transcrito)
  * Identifica se é Conta a Pagar (payable) ou Conta a Receber (receivable)
- * e detecta dados faltantes (valor, favorecido/cliente, vencimento) para permitir bate-bola.
+ * e extrai cada compromisso citado pelo usuário para a lista de lançamentos.
  */
 export async function parseConversationalFinancialEntry(
   userText: string,
@@ -179,180 +207,128 @@ export async function parseConversationalFinancialEntry(
             properties: {
               is_financial_entry: {
                 type: SchemaType.BOOLEAN,
-                description: 'True se a mensagem indicar intenção de registrar ou consultar um pagamento (despesa) ou recebimento (receita).',
-              },
-              entry_type: {
-                type: SchemaType.STRING,
-                enum: ['payable', 'receivable', 'other'],
-                description: 'payable para contas a pagar/despesas, receivable para contas a receber/vendas/honorários, other se neutro.',
-              },
-              supplier_or_customer: {
-                type: SchemaType.STRING,
-                description: 'Nome da empresa, fornecedor, cliente ou descrição do serviço (ex: Copel, Padaria do Zé, Cliente João)',
-                nullable: true,
-              },
-              amount: {
-                type: SchemaType.NUMBER,
-                description: 'Valor monetário numérico em reais (ex: 250.00)',
-                nullable: true,
-              },
-              due_date: {
-                type: SchemaType.STRING,
-                description: 'Data de vencimento ou previsão no formato YYYY-MM-DD',
-                nullable: true,
-              },
-              category_suggestion: {
-                type: SchemaType.STRING,
-                description: 'Categoria contábil DRE (ex: receita_operacional, despesa_administrativa, custo_mercadoria_servico)',
-                nullable: true,
-              },
-              is_provision: {
-                type: SchemaType.BOOLEAN,
-                description: 'True se for um compromisso variável, provisão, valor estimado ou agendamento para não esquecer antes da fatura real chegar (ex: conta de luz estimada, cartão, provisão de imposto, valor aproximado).',
+                description: 'True se a mensagem indicar intenção de registrar contas, despesas ou receitas.',
               },
               entries: {
                 type: SchemaType.ARRAY,
-                description: 'Lista com TODOS os lançamentos financeiros identificados na mensagem (1 ou mais contas/recebimentos).',
+                description: 'Lista com TODOS os compromissos financeiros citados na mensagem.',
                 items: {
                   type: SchemaType.OBJECT,
                   properties: {
                     supplier_or_customer: {
                       type: SchemaType.STRING,
-                      description: 'Nome da empresa, fornecedor, cliente ou serviço (ex: Vivo, Copel, Contabilidade, Aluguel)',
-                      nullable: true,
+                      description: 'Nome limpo e curto da empresa, favorecido ou compromisso em português (ex: "Contabilivre", "Vivo", "CPFL Piratininga", "Sabesp", "Pensão Alimentícia", "Empréstimo Irmão"). NUNCA use textos em inglês ou explicações técnicas.',
                     },
                     amount: {
                       type: SchemaType.NUMBER,
-                      description: 'Valor monetário numérico em reais (ex: 92.00, 170.00)',
+                      description: 'Valor monetário numérico em reais (ex: 170.0, 90.0, 85.0, 1200.0, 500.0)',
                       nullable: true,
                     },
                     due_date: {
                       type: SchemaType.STRING,
-                      description: 'Data de vencimento ou previsão no formato YYYY-MM-DD',
+                      description: 'Data de vencimento no formato YYYY-MM-DD calculada a partir de hoje',
                       nullable: true,
                     },
                     entry_type: {
                       type: SchemaType.STRING,
                       enum: ['payable', 'receivable'],
-                      description: 'payable para contas a pagar/despesas, receivable para recebimentos',
+                      description: 'payable para contas a pagar/despesas/obrigações, receivable para recebimentos',
                     },
                     category_suggestion: {
                       type: SchemaType.STRING,
-                      description: 'Categoria DRE (ex: despesa_administrativa, custo_operacional, telecomunicacoes)',
+                      description: 'Categoria DRE simples em português (ex: contabilidade, telecomunicacoes, energia, agua, pessoal)',
                       nullable: true,
                     },
                     is_provision: {
                       type: SchemaType.BOOLEAN,
-                      description: 'True se for estimativa, valor a confirmar ou provisão',
+                      description: 'True se for valor estimado, variável ou aproximado (ex: energia variável)',
                     },
                     is_recurring: {
                       type: SchemaType.BOOLEAN,
-                      description: 'True se for conta recorrente fixa (ex: todo mês, mensal, todo dia X)',
+                      description: 'True se for conta recorrente mensal (todo mês, todo dia X)',
                     },
                     recurrence_day: {
                       type: SchemaType.INTEGER,
-                      description: 'Dia do mês da recorrência (ex: 21, 10)',
+                      description: 'Dia do mês do vencimento (ex: 10, 21, 3)',
                       nullable: true,
                     },
                   },
                   required: ['supplier_or_customer', 'entry_type', 'is_provision'],
                 },
               },
-              missing_fields: {
-                type: SchemaType.ARRAY,
-                description: 'Lista dos campos vitais ausentes: "amount", "supplier_or_customer", "due_date"',
-                items: { type: SchemaType.STRING },
-              },
               needs_clarification: {
                 type: SchemaType.BOOLEAN,
-                description: 'True se faltar pelo menos um dado vital e NÃO for uma provisão permitida.',
+                description: 'True apenas se o usuário quis registrar uma conta mas não informou nenhum dado essencial e não for provisão.',
               },
               clarification_prompt: {
                 type: SchemaType.STRING,
-                description: 'Mensagem curta e acolhedora em tom de parceiro de trincheira solicitando apenas os dados que faltam.',
+                description: 'Mensagem curta e acolhedora em português solicitando os dados faltantes.',
                 nullable: true,
               },
             },
-            required: [
-              'is_financial_entry',
-              'entry_type',
-              'is_provision',
-              'missing_fields',
-              'needs_clarification',
-            ],
+            required: ['is_financial_entry', 'entries', 'needs_clarification'],
           } as any),
         },
-        systemInstruction: `Você é o parceiro de trincheira financeiro do AnalisAí.
-Seu objetivo é registrar contas a pagar, contas a receber e PROVISÕES financeiras informadas pelo usuário em linguagem natural (texto ou voz).
+        systemInstruction: `Você é o parceiro de trincheira financeiro do AnalisAí Solo.
 Data de referência de hoje: ${referenceDateStr}.
+IDIOMA OBRIGATÓRIO: Português do Brasil.
+PROIBIÇÃO RIGOROSA: NUNCA gere textos em inglês, comentários de código, justificativas de sistema ou metadados de compatibilidade nos campos de saída.
 
-REGRAS:
-1. MÚLTIPLOS LANÇAMENTOS NO MESMO ÁUDIO / TEXTO (MUITO IMPORTANTE):
-   - O usuário pode listar 1, 2, 3, 4 ou mais contas no mesmo áudio ou texto (exemplo: "Tenho todo mês dia 21 conta de internet Vivo de R$ 92, e também todo dia 10 a contabilidade de R$ 170, e dia 5 aluguel de R$ 1200...").
-   - Você DEVE identificar e extrair CADA UMA das contas citadas como um objeto individual dentro do array 'entries'.
-   - Os campos de primeiro nível (amount, supplier_or_customer, due_date, entry_type) devem ser preenchidos com os dados da PRIMEIRA conta para compatibilidade, e o array 'entries' deve conter TODAS as contas (inclusive a primeira).
+OBJETIVO:
+O usuário enviou uma mensagem de texto ou transcrição de áudio listando seus compromissos financeiros.
+Ele pode citar 1, 2, 3, 4, 5, 6 ou mais contas no mesmo áudio ou texto!
+Você DEVE identificar e incluir CADA UMA das contas citadas como um item individual dentro da lista 'entries'.
 
-2. CÁLCULO DE VENCIMENTOS E RECORRÊNCIAS:
-   - Se o usuário mencionar recorrência como "todo mês dia X", "durante o dia X", "todo dia X de todo mês":
-     * is_recurring = true
-     * recurrence_day = X
-     * Calcule a próxima data de vencimento no formato YYYY-MM-DD a partir de hoje (${referenceDateStr}):
-       - Se o dia X já passou no mês atual de ${referenceDateStr} (ou for hoje): o próximo vencimento é no mês seguinte.
-       - Se o dia X ainda vai vencer no mês atual de ${referenceDateStr}: o vencimento é no mês atual.
-   - Se disser "amanhã", "sexta", "dia 20", calcule com base na data de referência ${referenceDateStr}.
-
-3. DADOS NECESSÁRIOS:
-   - Valor (amount)
-   - Favorecido / Fornecedor ou Cliente (supplier_or_customer)
-   - Vencimento / Data (due_date no formato YYYY-MM-DD).
-
-4. PROVISÕES / COMPROMISSOS VARIÁVEIS:
-   - Se disser "provisão", "previsão", "estimado", "mais ou menos", "uns X reais", ou contas variáveis (luz, água, cartão) antes da fatura real chegar:
-     * is_provision = true
-     * Se informou valor aproximado, preencha amount com o valor. Se não informou, preencha amount = 0.
-     * Para provisões, needs_clarification = false se tiver fornecedor e data.
-
-5. CLARIFICAÇÃO:
-   - Se nenhuma conta tiver valor ou vencimento e NÃO for provisão: needs_clarification = true.
-   - Se pelo menos uma conta tiver os dados completos: needs_clarification = false.`,
+REGRAS PARA CADA ITEM EM 'entries':
+1. 'supplier_or_customer': Nome LIMPO, DIRETO e CURTO em português do favorecido ou compromisso.
+   Exemplos: "Contabilivre", "Vivo", "CPFL Piratininga", "Sabesp", "Pensão Alimentícia", "Empréstimo Irmão".
+   NUNCA adicione frases longas, explicações ou termos em inglês como "primary supplier" ou "standard output".
+2. 'amount': Valor numérico em reais (ex: 170, 90, 85, 1200, 500). Se for aproximado ("uns 90 reais", "valor aproximado"), use o valor citado e marque is_provision = true.
+3. 'due_date': Data no formato YYYY-MM-DD calculada a partir de ${referenceDateStr}:
+   - Se disser "todo dia 10", "dia 10": se o dia 10 já passou ou é hoje em ${referenceDateStr}, use o dia 10 do mês seguinte; senão use o mês atual.
+   - Se disser "todo dia 21", "dia 21": se dia 21 já passou em ${referenceDateStr}, use o dia 21 do mês seguinte; senão use o mês atual.
+   - Se disser "todo dia 3", "dia 3": se dia 3 já passou em ${referenceDateStr}, use o dia 3 do mês seguinte; senão use o mês atual.
+4. 'entry_type': 'payable' para contas a pagar/despesas, 'receivable' para receitas.
+5. 'is_provision': true para valores aproximados ou contas de consumo variáveis; false para valores fixos definidos.
+6. 'is_recurring': true para contas pagas mensalmente ("todo mês", "todo dia X").
+7. 'recurrence_day': número do dia informado (ex: 10, 21, 3).`,
       });
 
       const result = await model.generateContent(`Mensagem do usuário: "${userText}"`);
       const parsed = JSON.parse(result.response.text());
 
-      // Normaliza entries para garantir consistência
-      if (!Array.isArray(parsed.entries) || parsed.entries.length === 0) {
-        if (parsed.is_financial_entry && (parsed.amount || parsed.supplier_or_customer)) {
-          parsed.entries = [
-            {
-              supplier_or_customer: parsed.supplier_or_customer,
-              amount: parsed.amount,
-              due_date: parsed.due_date,
-              entry_type: parsed.entry_type || 'payable',
-              category_suggestion: parsed.category_suggestion,
-              is_provision: Boolean(parsed.is_provision),
-              is_recurring: false,
-              recurrence_day: null,
-            },
-          ];
-        } else {
-          parsed.entries = [];
+      // Normaliza e higieniza cada entrada de 'entries'
+      const normalizedEntries: any[] = [];
+      if (Array.isArray(parsed.entries)) {
+        for (const item of parsed.entries) {
+          const cleanName = cleanSupplierName(item.supplier_or_customer);
+          if (cleanName && cleanName !== 'Fornecedor' || item.amount || item.due_date) {
+            normalizedEntries.push({
+              supplier_or_customer: cleanName,
+              amount: item.amount ? Number(item.amount) : null,
+              due_date: item.due_date || null,
+              entry_type: item.entry_type || 'payable',
+              category_suggestion: item.category_suggestion || 'despesa_administrativa',
+              is_provision: Boolean(item.is_provision),
+              is_recurring: Boolean(item.is_recurring),
+              recurrence_day: item.recurrence_day || null,
+            });
+          }
         }
-      } else {
-        // Se entries foi preenchido, garante que o primeiro item preencha os campos raiz
+      }
+
+      parsed.entries = normalizedEntries;
+
+      if (parsed.entries.length > 0) {
+        parsed.is_financial_entry = true;
+        parsed.needs_clarification = false;
         const first = parsed.entries[0];
-        if (first) {
-          parsed.supplier_or_customer = parsed.supplier_or_customer || first.supplier_or_customer;
-          parsed.amount = parsed.amount ?? first.amount;
-          parsed.due_date = parsed.due_date || first.due_date;
-          parsed.entry_type = parsed.entry_type || first.entry_type;
-          parsed.category_suggestion = parsed.category_suggestion || first.category_suggestion;
-          parsed.is_provision = parsed.is_provision ?? first.is_provision;
-        }
-        if (parsed.entries.some((e: any) => e.amount && e.due_date)) {
-          parsed.is_financial_entry = true;
-          parsed.needs_clarification = false;
-        }
+        parsed.supplier_or_customer = first.supplier_or_customer;
+        parsed.amount = first.amount;
+        parsed.due_date = first.due_date;
+        parsed.entry_type = first.entry_type;
+        parsed.category_suggestion = first.category_suggestion;
+        parsed.is_provision = first.is_provision;
       }
 
       return parsed;

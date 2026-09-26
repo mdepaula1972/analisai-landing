@@ -272,7 +272,7 @@ ${billsList}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 *Total previsto para a semana:* R$ ${totalWeek.toFixed(2)}
 
-💡 _O AnalisAí vai te lembrar às 10h da véspera de cada vencimento com o código de barras prontinho para pagar!_
+💡 _O AnalisAí vai te lembrar às 10h da véspera de cada vencimento para você não esquecer da sua obrigação!_
 📊 _Precisa da visão estendida do mês completo ou próximos 60 dias? Digite *Mês* para conhecer nosso Relatório de Fluxo de Caixa Futuro!_`;
   }
 
