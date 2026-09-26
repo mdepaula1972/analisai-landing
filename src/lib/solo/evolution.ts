@@ -3,23 +3,60 @@
  * Gerencia envio de mensagens, documentos, mídias e áudios nativos.
  */
 
-const configuredUrl = process.env.EVOLUTION_API_URL || process.env.WHATSAPP_API_URL || '';
-const EVOLUTION_API_URL =
-  !configuredUrl || !configuredUrl.includes('punk-photographers-windsor-love')
-    ? 'https://punk-photographers-windsor-love.trycloudflare.com'
-    : configuredUrl;
+let cachedUrl: string | null = null;
+let cachedKey: string | null = null;
+let lastCacheTime = 0;
 
-const EVOLUTION_API_KEY =
-  process.env.EVOLUTION_API_KEY ||
-  process.env.WHATSAPP_API_TOKEN ||
-  process.env.WHATSAPP_KEY ||
-  'analisai_secret_2026';
+export async function getEvolutionConfig() {
+  const now = Date.now();
+  if (cachedUrl && cachedKey && now - lastCacheTime < 30000) {
+    return {
+      apiUrl: cachedUrl,
+      apiKey: cachedKey,
+      instance: process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_INSTANCE_ID || 'analisai_solo',
+    };
+  }
 
-const EVOLUTION_INSTANCE =
-  process.env.EVOLUTION_INSTANCE_NAME ||
-  process.env.WHATSAPP_INSTANCE_ID ||
-  process.env.WHATSAPP_INSTANCE ||
-  'analisai_solo';
+  // 1. Tenta carregar do Supabase (bot_config)
+  try {
+    const { createServiceRoleClient } = await import('@/lib/supabase-server');
+    const supabase = createServiceRoleClient();
+    const { data } = await supabase.from('bot_config').select('key, value');
+    if (data && Array.isArray(data)) {
+      const urlRow = data.find((r: any) => r.key === 'evolution_api_url');
+      const keyRow = data.find((r: any) => r.key === 'evolution_api_key');
+      if (urlRow?.value) cachedUrl = urlRow.value.trim().replace(/\/+$/, '');
+      if (keyRow?.value) cachedKey = keyRow.value.trim();
+    }
+  } catch (err) {
+    console.warn('[Evolution Config] Erro ao buscar bot_config no Supabase:', err);
+  }
+
+  // 2. Fallbacks
+  if (!cachedUrl) {
+    const envUrl = process.env.EVOLUTION_API_URL || process.env.WHATSAPP_API_URL;
+    if (envUrl && !envUrl.includes('punk-photographers-windsor-love')) {
+      cachedUrl = envUrl.trim().replace(/\/+$/, '');
+    } else {
+      cachedUrl = 'https://firewire-turbo-telephony-delivery.trycloudflare.com';
+    }
+  }
+
+  if (!cachedKey) {
+    cachedKey =
+      process.env.EVOLUTION_API_KEY ||
+      process.env.WHATSAPP_API_TOKEN ||
+      process.env.WHATSAPP_KEY ||
+      'analisai_secret_2026';
+  }
+
+  lastCacheTime = now;
+  return {
+    apiUrl: cachedUrl,
+    apiKey: cachedKey,
+    instance: process.env.EVOLUTION_INSTANCE_NAME || process.env.WHATSAPP_INSTANCE_ID || 'analisai_solo',
+  };
+}
 
 export function formatWhatsAppNumber(phone: string): string {
   if (phone.includes('@')) {
@@ -52,12 +89,13 @@ export interface SendEvolutionMediaParams {
 
 export async function sendEvolutionText({ phone, text }: SendEvolutionTextParams) {
   const formattedPhone = formatWhatsAppNumber(phone);
+  const { apiUrl, apiKey, instance } = await getEvolutionConfig();
 
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
+    const res = await fetch(`${apiUrl}/message/sendText/${instance}`, {
       method: 'POST',
       headers: {
-        'apikey': EVOLUTION_API_KEY,
+        'apikey': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -95,6 +133,7 @@ export async function sendEvolutionMedia({
   const formattedPhone = formatWhatsAppNumber(phone);
   const resolvedFileName = fileName || (mediaType === 'document' ? 'documento.pdf' : 'arquivo');
   const mimeType = mediaType === 'document' ? 'application/pdf' : (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream');
+  const { apiUrl, apiKey, instance } = await getEvolutionConfig();
 
   let cleanMedia = mediaUrl || mediaBase64 || '';
   if (cleanMedia && !cleanMedia.startsWith('http') && !cleanMedia.startsWith('data:')) {
@@ -102,10 +141,10 @@ export async function sendEvolutionMedia({
   }
 
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
+    const res = await fetch(`${apiUrl}/message/sendMedia/${instance}`, {
       method: 'POST',
       headers: {
-        'apikey': EVOLUTION_API_KEY,
+        'apikey': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -144,6 +183,7 @@ export async function sendEvolutionMedia({
 export async function fetchMediaBase64FromEvolution(messageData: any): Promise<string | null> {
   try {
     if (!messageData) return null;
+    const { apiUrl, apiKey, instance } = await getEvolutionConfig();
 
     // 1. Se o próprio objeto já tiver o base64 (webhookBase64: true da Evolution API)
     const directBase64 =
@@ -162,7 +202,6 @@ export async function fetchMediaBase64FromEvolution(messageData: any): Promise<s
     }
 
     // 2. Monta o objeto message completo exigido pelo endpoint /chat/getBase64FromMediaMessage
-    // O Baileys/Evolution API precisa de { key: ..., message: ... } para descriptografar com a mediaKey
     let fullMessage: any = messageData;
 
     if (messageData.data?.key && messageData.data?.message) {
@@ -182,10 +221,10 @@ export async function fetchMediaBase64FromEvolution(messageData: any): Promise<s
       };
     }
 
-    const res = await fetch(`${EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${EVOLUTION_INSTANCE}`, {
+    const res = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${instance}`, {
       method: 'POST',
       headers: {
-        'apikey': EVOLUTION_API_KEY,
+        'apikey': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -230,12 +269,13 @@ export async function sendEvolutionPoll({
   selectableCount = 1,
 }: SendEvolutionPollParams) {
   const formattedPhone = formatWhatsAppNumber(phone);
+  const { apiUrl, apiKey, instance } = await getEvolutionConfig();
 
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/message/sendPoll/${EVOLUTION_INSTANCE}`, {
+    const res = await fetch(`${apiUrl}/message/sendPoll/${instance}`, {
       method: 'POST',
       headers: {
-        apikey: EVOLUTION_API_KEY,
+        apikey: apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -259,6 +299,6 @@ export async function sendEvolutionPoll({
   }
 
   // Fallback garantido: Envia como texto formatado com instruções claras
-  const fallbackText = `${question}\n\n${options.map((opt, idx) => `👉 ${opt}`).join('\n')}\n\n_(Você também pode responder digitando *Sim* ou *Não*)_`;
+  const fallbackText = `${question}\n\n${options.map((opt) => `👉 ${opt}`).join('\n')}\n\n_(Você também pode responder digitando *Sim* ou *Não*)_`;
   return sendEvolutionText({ phone, text: fallbackText });
 }

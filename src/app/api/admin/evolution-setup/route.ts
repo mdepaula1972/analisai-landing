@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendEvolutionText } from '@/lib/solo/evolution';
+import { sendEvolutionText, getEvolutionConfig } from '@/lib/solo/evolution';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://localhost:8080';
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'analisai_solo';
 
 /**
  * Endpoint de Diagnóstico e Painel Visual da Evolution API
  */
 export async function GET(req: NextRequest) {
   const acceptsHtml = req.headers.get('accept')?.includes('text/html');
+  const { apiUrl: EVOLUTION_API_URL, apiKey: EVOLUTION_API_KEY, instance: EVOLUTION_INSTANCE } = await getEvolutionConfig();
 
   let connectionState = 'unknown';
   let qrBase64 = '';
@@ -236,6 +233,27 @@ export async function POST(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
+    const { apiUrl: EVOLUTION_API_URL, apiKey: EVOLUTION_API_KEY, instance: EVOLUTION_INSTANCE } = await getEvolutionConfig();
+
+    // Atualização de túnel via POST
+    if (action === 'set_tunnel') {
+      const body = await req.json().catch(() => ({}));
+      const tunnelUrl = body.tunnelUrl || searchParams.get('url');
+      if (!tunnelUrl) {
+        return NextResponse.json({ error: 'url_required' }, { status: 400 });
+      }
+      const { createServiceRoleClient } = await import('@/lib/supabase-server');
+      const supabase = createServiceRoleClient();
+      await supabase.from('bot_config').upsert(
+        {
+          key: 'evolution_api_url',
+          value: tunnelUrl.trim().replace(/\/+$/, ''),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'key' }
+      );
+      return NextResponse.json({ success: true, updated_url: tunnelUrl.trim() });
+    }
 
     // Disparo de teste simples
     if (action === 'test_send') {

@@ -252,6 +252,47 @@ Seu perfil está 100% limpo, exatamente como o de um cliente que acabou de se ca
     };
   }
 
+  // ── !tunnel [url] ─────────────────────────────────────────────────────────
+  if (action === 'tunnel') {
+    const newUrl = parts[1]?.trim();
+    if (!newUrl) {
+      const { data: currentUrlRow } = await supabase
+        .from('bot_config')
+        .select('value')
+        .eq('key', 'evolution_api_url')
+        .maybeSingle();
+      return {
+        handled: true,
+        message: `🌐 *Túnel Ativo da Evolution API:*
+👉 \`${currentUrlRow?.value || 'Não configurado'}\`
+
+Para alterar, envie:
+*!tunnel https://novo-tunnel.trycloudflare.com*`,
+      };
+    }
+
+    if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
+      return {
+        handled: true,
+        message: `⚠️ *URL inválida!* O endereço deve começar com http:// ou https://\nEx: *!tunnel https://meu-tunnel.trycloudflare.com*`,
+      };
+    }
+
+    const cleanUrl = newUrl.replace(/\/+$/, '');
+    await supabase.from('bot_config').upsert(
+      { key: 'evolution_api_url', value: cleanUrl, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    );
+
+    return {
+      handled: true,
+      message: `✅ *Túnel da Evolution API Atualizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Novo endpoint: \`${cleanUrl}\`
+O robô já começará a usar este novo endereço em todas as mensagens imediatamente!`,
+    };
+  }
+
   // ── !simular [start|solo|plus|lembrete|termometro] ──────────────────────────
   if (action === 'simular') {
     if (arg1 === 'lembrete') {
