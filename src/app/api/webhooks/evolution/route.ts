@@ -730,6 +730,22 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
+  const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
+
+  // Verifica se este número está em Modo Simulação de Lead Novo (Degustação)
+  const { data: simLeadRow } = await supabase
+    .from('bot_config')
+    .select('value')
+    .or(`key.eq.simulating_lead_${cleanPhone},key.eq.simulating_lead_${altPhone}`)
+    .maybeSingle();
+
+  const isSimulatingLead = simLeadRow?.value === 'true';
+
+  // Se estiver simulando lead e NÃO for comando de controle administrativo, mascara client = null
+  // para que o fluxo execute 100% da Degustação Gratuita real do novo cliente
+  if (isSimulatingLead && !isCommand) {
+    client = null;
+  }
 
   // ── 0. INTERCEPTADOR DE CONFIRMAÇÕES PENDENTES (AÇÕES QUE MEXEM EM LANÇAMENTOS) ──
   const nowIso = new Date().toISOString();
@@ -953,6 +969,54 @@ Nenhum lançamento foi alterado ou excluído. Seus dados e histórico permanecem
     cleanText === 'excluir tudo';
 
   if (isResetCommand) {
+    if (client?.is_admin || isAdminTester) {
+      await supabase
+        .from('trial_leads')
+        .delete()
+        .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+
+      await supabase
+        .from('bot_loop_tracking')
+        .delete()
+        .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+
+      if (client) {
+        await supabase.from('payables_receivables').delete().eq('client_id', client.id);
+        await supabase.from('cash_ledger_entries').delete().eq('client_id', client.id);
+        await supabase
+          .from('usage_cycles')
+          .update({
+            docs_processed_count: 0,
+            bot_interactions_count: 0,
+            cash_flow_analyses_count: 0,
+            hit_doc_limit: false,
+            hit_bot_limit: false,
+            hit_analysis_limit: false,
+            upsell_status: 'none',
+          })
+          .eq('client_id', client.id);
+      }
+
+      await supabase
+        .from('bot_action_confirmations')
+        .update({ status: 'confirmed' })
+        .or(`phone_number.eq.${cleanPhone},phone_number.eq.${altPhone}`)
+        .eq('status', 'pending');
+
+      await sendEvolutionText({
+        phone,
+        text: `🔄 *Reset do Perfil Realizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Contas a pagar e lançamentos anteriores foram apagados.
+✅ Histórico de degustação (trial) foi zerado.
+✅ Contadores de uso restaurados para 0.
+
+💡 *Dica:* Para testar a experiência exata de um *Cliente Novo (Degustação)*, envie:
+👉 *!simular lead*`,
+      });
+      return;
+    }
+
     await supabase.from('bot_action_confirmations').insert({
       client_id: client?.id || null,
       phone_number: cleanPhone,

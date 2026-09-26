@@ -293,8 +293,72 @@ O robô já começará a usar este novo endereço em todas as mensagens imediata
     };
   }
 
-  // ── !simular [start|solo|plus|lembrete|termometro] ──────────────────────────
+  // ── !admin / !sair ────────────────────────────────────────────────────────
+  if (action === 'admin' || action === 'sair') {
+    const cleanPhoneDigits = (client.whatsapp_number || '').replace(/\D/g, '');
+    await supabase.from('bot_config').upsert(
+      {
+        key: `simulating_lead_${cleanPhoneDigits}`,
+        value: 'false',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' }
+    );
+    return {
+      handled: true,
+      message: `👑 *Modo Administrador Reativado!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Você saiu da simulação de Lead e está de volta com controle total do sistema.
+Digite *!ajuda* ou *!marcos* para ver o painel executivo.`,
+    };
+  }
+
+  // ── !simular [lead|start|solo|plus|pro|super|lembrete|termometro] ───────────
   if (action === 'simular') {
+    const cleanPhoneDigits = (client.whatsapp_number || '').replace(/\D/g, '');
+
+    if (arg1 === 'lead' || arg1 === 'trial' || arg1 === 'degustacao' || arg1 === 'degustação') {
+      await supabase.from('bot_config').upsert(
+        {
+          key: `simulating_lead_${cleanPhoneDigits}`,
+          value: 'true',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'key' }
+      );
+
+      // Limpa dados de degustação prévios para começar do zero
+      await supabase
+        .from('trial_leads')
+        .delete()
+        .or(`whatsapp_number.eq.${cleanPhoneDigits},whatsapp_number.eq.55${cleanPhoneDigits}`);
+
+      return {
+        handled: true,
+        message: `🎭 *Modo Simulação de Lead Novo (Degustação) ATIVADO!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A partir de agora, o robô vai te tratar exatamente como um **novo visitante que clicou no seu anúncio e chegou ao WhatsApp**.
+
+🧪 *O que testar agora:*
+1. Mande *"Olá, como funciona?"* para ver a saudação de boas-vindas do Lead.
+2. Envie uma **foto ou PDF de boleto** ou **áudio** de despesa para ver a IA agendando, gerando o Demonstrativo Contábil em PDF e enviando os botões de pagamento!
+3. Veja como ele calcula sua cota restante de degustação.
+
+💡 _Para sair da simulação e voltar ao Modo Administrador a qualquer momento, basta digitar:_
+👉 *!admin* ou *!sair*`,
+      };
+    }
+
+    // Se estiver simulando qualquer outro plano, desliga o modo lead
+    await supabase.from('bot_config').upsert(
+      {
+        key: `simulating_lead_${cleanPhoneDigits}`,
+        value: 'false',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' }
+    );
+
     if (arg1 === 'lembrete') {
       const subType = parts[2] || 'vencimento';
       const mockLead = {
@@ -343,7 +407,7 @@ O robô já começará a usar este novo endereço em todas as mensagens imediata
       return {
         handled: true,
         message:
-          'Informe a simulação desejada:\n• `!simular start` (15 lançamentos)\n• `!simular solo` (30 lançamentos)\n• `!simular plus` (60 lançamentos)\n• `!simular pro` (500 lançamentos)\n• `!simular super` (1.000 lançamentos)\n• `!simular lembrete grupo` (CPFL + Sabesp unificadas)\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`\n• `!simular termometro` (Régua Fiscal MEI/Simples)',
+          'Informe a simulação desejada:\n• `!simular lead` (Testar Degustação como novo visitante)\n• `!simular start` (15 lançamentos)\n• `!simular solo` (30 lançamentos)\n• `!simular plus` (60 lançamentos)\n• `!simular pro` (500 lançamentos)\n• `!simular super` (1.000 lançamentos)\n• `!simular lembrete grupo` (CPFL + Sabesp unificadas)\n• `!simular lembrete vespera`\n• `!simular lembrete vencimento`\n• `!simular termometro` (Régua Fiscal MEI/Simples)',
       };
     }
 
