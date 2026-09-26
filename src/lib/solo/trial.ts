@@ -97,7 +97,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 
     const totalLeads = count || 0;
     const isVipEligible = totalLeads < MAX_BETA_VIP_USERS;
-    const initialLimit = isVipEligible ? BETA_VIP_DOCS_LIMIT : 1;
+    // Se VIP: 10 contas. Se cota VIP esgotada: 3 contas na Degustação Express (sem barrar lead)
+    const initialLimit = isVipEligible ? BETA_VIP_DOCS_LIMIT : 3;
 
     return {
       hasUsedTrial: false,
@@ -392,8 +393,8 @@ export async function getHowItWorksMessage(phone?: string): Promise<string> {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 O *AnalisAí* é o seu assistente financeiro no WhatsApp para desburocratizar a sua rotina:
 
-• 📸 *Zero digitação:* Envie fotos de boletos, notas fiscais, áudios ou textos com suas contas a pagar e receber.
-• ⏰ *Lembretes na véspera:* Te aviso com antecedência para você nunca mais pagar juros ou multas por esquecimento.
+• 📸 *Praticidade total:* Envie fotos de boletos, notas fiscais, áudios ou digite textos com suas contas a pagar e receber do jeito que preferir.
+• ⏰ *Lembretes na véspera:* Te aviso com antecedência para te ajudar a evitar juros e multas por atraso ou esquecimento.
 • 📊 *Fluxo de Caixa Descomplicado:* Veja o saldo futuro e receba relatórios de Livro Caixa direto no celular.
 
 🎁 *Quer experimentar gratuitamente?*
@@ -408,21 +409,23 @@ Em segundos eu organizo tudo para você! 🚀
 💡 _Já possui cadastro? Digite seu *CPF ou CNPJ* para carregar seus dados._`;
   }
 
+  // Se a cota dos 50 Pioneiros VIP estiver preenchida, NUNCA perde o lead: oferece a Degustação Express (3 contas)
   return `👋 *Olá! Que bom ter você por aqui!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *AnalisAí* é o seu assistente financeiro no WhatsApp para MEIs e pequenas empresas: organizamos suas contas a pagar e receber por foto, áudio ou texto, lembramos seus vencimentos na véspera para evitar juros e emitimos seu Livro Caixa automaticamente.
+O *AnalisAí* é o seu assistente financeiro no WhatsApp para MEIs e pequenas empresas:
 
-ℹ️ *Status de Avaliação Gratuita:*
-No momento, a nossa cota de vagas para avaliadores gratuitos VIP está **temporariamente preenchida**.
+• 📸 *Praticidade total:* Envie fotos de boletos, notas fiscais, áudios ou digite textos com suas contas a pagar e receber do jeito que preferir.
+• ⏰ *Lembretes na véspera:* Te aviso com antecedência para te ajudar a evitar juros e multas por atraso ou esquecimento.
+• 📊 *Fluxo de Caixa Descomplicado:* Acompanhe seu saldo e livro caixa direto na conversa.
 
-Mas você pode começar agora mesmo a proteger o caixa do seu negócio com nossos planos super acessíveis:
-• ⭐ *AnalisAí Start — R$ 39,90/mês* (menos de R$ 1,35/dia — até 15 lançamentos/mês):
-👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
-• 🚀 *AnalisAí Solo — R$ 87,99/mês* (30 lançamentos/mês + Inteligência de Caixa):
-👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
+🎁 *Quer experimentar gratuitamente?*
+Nossa cota de 50 vagas VIP completas foi preenchida, mas liberamos para você uma **Degustação Express Gratuita (com até 3 contas)** para você testar a inteligência agora mesmo sem nenhum compromisso!
 
-💳 _Todos os planos contam com 7 dias de garantia total!_
-💡 _Digite *planos* para conhecer todas as opções ou envie uma mensagem para entrar na lista de espera._`;
+👉 *Para testar imediatamente:*
+Envie uma foto de um **boleto** ou mande um áudio/texto com uma conta sua (ex: *"Pagar internet R$ 90 dia 21"*). Em segundos eu organizo para você! 🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 _Deseja assinar agora? Planos a partir de R$ 39,90/mês. Digite *planos* para ver as opções._`;
 }
 
 /**
@@ -433,7 +436,7 @@ export function getTrialWelcomeMessage(): string {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 O *AnalisAí* é o seu assistente financeiro no WhatsApp que cuida das suas contas a pagar e receber sem burocracia!
 
-✨ *O que você ganha durante seus 30 dias de teste:*
+✨ *O que você ganha durante seu período de teste:*
 • *Até 10 contas e boletos* cadastrados por foto, PDF, áudio ou texto;
 • *Lembretes diários no WhatsApp* às 10h da véspera com código Pix pronto para cópia (evite juros e multas de atraso);
 • *Relatório de Livro Caixa e DRE em PDF* com gráficos gerenciais direto no seu celular;

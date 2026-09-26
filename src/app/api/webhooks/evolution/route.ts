@@ -674,14 +674,38 @@ async function handleDeleteBill(
   });
 }
 
+function unwrapMessage(msg: any): any {
+  if (!msg) return {};
+  if (msg.ephemeralMessage?.message) return unwrapMessage(msg.ephemeralMessage.message);
+  if (msg.viewOnceMessage?.message) return unwrapMessage(msg.viewOnceMessage.message);
+  if (msg.viewOnceMessageV2?.message) return unwrapMessage(msg.viewOnceMessageV2.message);
+  if (msg.documentWithCaptionMessage?.message) return unwrapMessage(msg.documentWithCaptionMessage.message);
+  return msg;
+}
+
+function extractTextFromMessage(msg: any): string {
+  const unwrapped = unwrapMessage(msg);
+  return (
+    unwrapped?.conversation ||
+    unwrapped?.extendedTextMessage?.text ||
+    unwrapped?.imageMessage?.caption ||
+    unwrapped?.videoMessage?.caption ||
+    unwrapped?.documentMessage?.caption ||
+    ''
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
 
-    const message = body.data?.message;
-    const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
+    const message = unwrapMessage(body.data?.message);
+    const rawText = extractTextFromMessage(body.data?.message);
     const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
-    const isAudio = body.data?.messageType === 'audioMessage' || !!message?.audioMessage;
+    const isAudio =
+      body.data?.messageType === 'audioMessage' ||
+      !!message?.audioMessage ||
+      !!body.data?.message?.audioMessage;
 
     const key = body.data?.key || ({} as any);
     const remoteJid = key.remoteJid || '';
@@ -804,8 +828,8 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     phone = cleanPhone;
   }
 
-  const message = body.data?.message;
-  const rawText = message?.conversation || message?.extendedTextMessage?.text || '';
+  const message = unwrapMessage(body.data?.message);
+  const rawText = extractTextFromMessage(body.data?.message);
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
   const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
@@ -1494,20 +1518,15 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
 
   // ── Interceptação: "Olá, como funciona?" / Apresentação e Dúvidas Gerais ──
   const isHowItWorksIntent =
-    cleanText === 'como funciona' ||
-    cleanText === 'como funciona?' ||
-    cleanText === 'olá, como funciona?' ||
-    cleanText === 'ola, como funciona?' ||
-    cleanText === 'olá como funciona' ||
-    cleanText === 'ola como funciona' ||
-    cleanText === 'o que é' ||
-    cleanText === 'o que e' ||
-    cleanText === 'o que faz' ||
-    cleanText === 'quem é você' ||
-    cleanText === 'quem e voce' ||
-    cleanText === 'como usar' ||
-    cleanText === 'quero entender' ||
-    cleanText === 'explicar';
+    /como funciona/i.test(cleanText) ||
+    /o que [eé]\??$/i.test(cleanText) ||
+    /o que [eé] o analisai/i.test(cleanText) ||
+    /quem [eé] voc[eê]/i.test(cleanText) ||
+    /como usar/i.test(cleanText) ||
+    /quero entender/i.test(cleanText) ||
+    /me explica/i.test(cleanText) ||
+    /o que voc[eê] faz/i.test(cleanText) ||
+    ((!client || isSimulatingLead) && /^(oi|ola|olá|bom dia|boa tarde|boa noite|oie|opa)[!.]*$/i.test(cleanText));
 
   if (isHowItWorksIntent && !hasMonetaryPattern && !isFinancialAction) {
     const howItWorksMsg = await getHowItWorksMessage(cleanPhone);
