@@ -62,6 +62,7 @@ import {
   iniciarDesafioRecuperacaoEmail,
   processarRespostaDesafioEmail,
 } from '@/lib/solo/email-recovery';
+import { escalateToHumanConsultant } from '@/lib/solo/consultant-escalation';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -833,6 +834,9 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
   const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
+  const isAdminTester = isAdminPhone;
+  const hasMonetaryPattern = /(?:r\$\s*|reais|\b\d+[,.]\d{2}\b)/i.test(rawText);
+  const isFinancialAction = /(?:pagar|receber|comprei|gastei|transferir|lance|lançar)/i.test(cleanText);
 
   // Verifica se este número está em Modo Simulação de Lead Novo (Degustação)
   const { data: simLeadRow } = await supabase
@@ -1888,9 +1892,9 @@ ${BANK_SAFETY_NOTICE}`,
       }
 
       let audioBase64 =
-        body.data?.base64 ||
-        body.data?.message?.base64 ||
-        body.data?.message?.audioMessage?.base64 ||
+        (body.data as any)?.base64 ||
+        (body.data as any)?.message?.base64 ||
+        (body.data as any)?.message?.audioMessage?.base64 ||
         message?.base64 ||
         message?.audioMessage?.base64 ||
         '';
@@ -1910,7 +1914,7 @@ ${BANK_SAFETY_NOTICE}`,
       try {
         const rawMimeType =
           body.data?.message?.audioMessage?.mimetype ||
-          body.data?.mimetype ||
+          (body.data as any)?.mimetype ||
           'audio/ogg';
 
         // transcribeOnly = true garante transcrição rápida sem passar por function calls desnecessárias
@@ -2504,7 +2508,7 @@ Deseja migrar para o Solo agora?
     try {
       const rawMimeType =
         body.data?.message?.audioMessage?.mimetype ||
-        body.data?.mimetype ||
+        (body.data as any)?.mimetype ||
         'audio/ogg';
       const audioResult = await processVoiceCommandWithGemini(audioBase64, rawMimeType);
 
@@ -2530,7 +2534,7 @@ Deseja migrar para o Solo agora?
         // 1) Function Call: Alterar Valor de Conta por Voz
         if (call.name === 'propose_amount_change') {
           const vArgs = call.args as any;
-          await handleAmountChange(client.id, phone, vArgs?.supplier_name, Number(vArgs?.new_amount));
+          await handleAmountChange(client, phone, cleanPhone, vArgs?.supplier_name, Number(vArgs?.new_amount));
           return;
         }
 
