@@ -189,25 +189,45 @@ export async function recordTrialUsage(
 
   const newLimit = grantedLimit || detectedLimit;
 
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
   // Recupera lista de contas já cadastradas para não perder histórico de múltiplos boletos
   const { data: leadRecord } = await supabase
     .from('trial_leads')
-    .select('bills_list')
-    .eq('whatsapp_number', cleanPhone)
+    .select('id, bills_list, trial_docs_count, whatsapp_number')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
+  const targetPhone = leadRecord?.whatsapp_number || cleanPhone;
   const billsList: any[] = Array.isArray(leadRecord?.bills_list) ? leadRecord.bills_list : [];
   const supplierCandidate = (docData.supplier_name || docData.counterparty_name || 'Fornecedor').trim();
   const isProvision = Boolean(docData.is_provision);
+  const rawAmount = docData.amount !== undefined && docData.amount !== null ? docData.amount : docData.total_amount;
+  const numAmount = rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) && Number(rawAmount) > 0 ? Number(rawAmount) : null;
+  const categoryCandidate = docData.category || docData.category_suggestion || null;
+  const barcodeOrPixCandidate = docData.barcode_or_pix || null;
 
-  // Se for uma conta definitiva com valor real e existir uma provisão prévia para o mesmo fornecedor, concilia!
+  // Se for uma conta definitiva com valor real e existir uma provisão prévia para o mesmo fornecedor ou serviço, concilia!
   let reconciled = false;
-  if (!isProvision && docData.amount && Number(docData.amount) > 0) {
+  if (!isProvision && numAmount && numAmount > 0) {
     const existingIndex = billsList.findIndex((b: any) => {
-      const bName = (b.supplier_name || '').toLowerCase();
+      const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase();
       const candName = supplierCandidate.toLowerCase();
-      return (b.is_provision || bName.includes(candName) || candName.includes(bName)) &&
-             (bName.includes(candName) || candName.includes(bName) || bName.slice(0, 4) === candName.slice(0, 4));
+      const bCat = (b.category || '').toLowerCase();
+      const candCat = (categoryCandidate || '').toLowerCase();
+
+      const nameMatch = bName.includes(candName) || candName.includes(bName) || bName.slice(0, 4) === candName.slice(0, 4);
+      const categoryMatch = (bCat && candCat && (bCat.includes(candCat) || candCat.includes(bCat))) ||
+        (candCat.includes('agua') && (bName.includes('água') || bName.includes('agua') || bName.includes('sabesp'))) ||
+        (candCat.includes('energia') && (bName.includes('energia') || bName.includes('luz') || bName.includes('cpfl') || bName.includes('enel'))) ||
+        (candCat.includes('telecom') && (bName.includes('internet') || bName.includes('vivo') || bName.includes('claro') || bName.includes('tim')));
+
+      return (b.is_provision && (nameMatch || categoryMatch)) || nameMatch;
     });
 
     if (existingIndex >= 0) {
@@ -215,9 +235,10 @@ export async function recordTrialUsage(
       billsList[existingIndex] = {
         ...old,
         supplier_name: supplierCandidate,
-        amount: Number(docData.amount),
+        amount: numAmount,
         due_date: docData.due_date || old.due_date,
-        barcode_or_pix: docData.barcode_or_pix || old.barcode_or_pix,
+        barcode_or_pix: barcodeOrPixCandidate || old.barcode_or_pix,
+        category: categoryCandidate || old.category,
         is_provision: false,
         reconciled_at: new Date().toISOString(),
       };
@@ -229,9 +250,10 @@ export async function recordTrialUsage(
     billsList.push({
       id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       supplier_name: supplierCandidate,
-      amount: docData.amount ? Number(docData.amount) : null,
+      amount: numAmount,
       due_date: docData.due_date || null,
-      barcode_or_pix: docData.barcode_or_pix || null,
+      barcode_or_pix: barcodeOrPixCandidate,
+      category: categoryCandidate,
       is_provision: isProvision,
       reminder_eve_sent: false,
       reminder_due_sent: false,
@@ -243,13 +265,14 @@ export async function recordTrialUsage(
     .from('trial_leads')
     .upsert(
       {
-        whatsapp_number: cleanPhone,
+        whatsapp_number: targetPhone,
         doc_processed: true,
         doc_data: docData,
-        supplier_name: docData.supplier_name || null,
-        amount: docData.amount ? Number(docData.amount) : null,
+        supplier_name: supplierCandidate,
+        amount: numAmount,
         due_date: docData.due_date || null,
-        barcode_or_pix: docData.barcode_or_pix || null,
+        barcode_or_pix: barcodeOrPixCandidate,
+        category: categoryCandidate,
         trial_docs_count: reconciled ? (leadRecord as any)?.trial_docs_count || newCount : newCount,
         trial_docs_limit: newLimit,
         interested_plan: suggestedPlan,
@@ -554,18 +577,49 @@ Dúvidas? Pode perguntar por aqui!`;
  */
 export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): string {
   const dueInfo = doc.due_date ? formatDueDateDetails(doc.due_date) : 'Não identificado';
-  const valFormatted = doc.amount
-    ? Number(doc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const rawAmount = doc.amount !== undefined && doc.amount !== null ? doc.amount : doc.total_amount;
+  const valFormatted = rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) && Number(rawAmount) > 0
+    ? Number(rawAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : 'Não identificado';
+
+  const supplier = doc.supplier_name || doc.counterparty_name || 'Não identificado';
+
+  // Mapeamento amigável de tipos de documento
+  const docTypeRaw = (doc.document_type || doc.doc_type || 'boleto').toLowerCase();
+  const docTypeMap: Record<string, string> = {
+    nfe: 'Nota Fiscal (NF-e)',
+    nfse: 'Nota Fiscal de Serviço (NFS-e)',
+    boleto: 'Boleto/Conta de Consumo',
+    recibo: 'Recibo',
+    cupom: 'Cupom Fiscal',
+    outro: 'Boleto/Fatura de Consumo',
+  };
+  const docTypeFormatted = docTypeMap[docTypeRaw] || doc.document_type || doc.doc_type || 'Boleto/Conta';
+
+  // Mapeamento amigável de categorias
+  const categoryRaw = doc.category || doc.category_suggestion;
+  const categoryMap: Record<string, string> = {
+    energia_eletrica: 'Energia Elétrica',
+    telecomunicacoes: 'Telecomunicações / Internet',
+    agua_saneamento: 'Água e Saneamento',
+    fornecedores_mercadoria: 'Fornecedores / Mercadorias',
+    servicos_terceiros: 'Serviços de Terceiros',
+    tributos: 'Impostos e Tributos',
+    aluguel: 'Aluguel / Imóvel',
+    combustivel: 'Combustível',
+    alimentacao: 'Alimentação',
+    outros: 'Outros',
+  };
+  const categoryFormatted = categoryRaw ? (categoryMap[categoryRaw] || categoryRaw) : null;
 
   let txt = `📄 *Lançamento Registrado — Degustação AnalisAí*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  txt += `🏢 *Cedente/Fornecedor:* ${doc.supplier_name || 'Não identificado'}\n`;
-  txt += `📑 *Tipo de Documento:* ${doc.document_type || 'Boleto/Conta'}\n`;
+  txt += `🏢 *Cedente/Fornecedor:* ${supplier}\n`;
+  txt += `📑 *Tipo de Documento:* ${docTypeFormatted}\n`;
   txt += `💰 *Valor:* ${valFormatted}\n`;
   txt += `📅 *Vencimento:* ${dueInfo}\n`;
-  if (doc.category) {
-    txt += `📂 *Categoria:* ${doc.category}\n`;
+  if (categoryFormatted) {
+    txt += `📂 *Categoria:* ${categoryFormatted}\n`;
   }
 
   const reminderText = doc.barcode_or_pix
@@ -720,9 +774,10 @@ export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de conf
 export function formatBillsList(bills: any[]): string {
   return bills
     .map((b) => {
-      const fornecedor = b.supplier_name || 'Conta / Fornecedor';
-      const valFmt = b.amount && Number(b.amount) > 0
-        ? Number(b.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      const fornecedor = b.supplier_name || b.counterparty_name || 'Conta / Fornecedor';
+      const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+      const valFmt = rawVal && Number(rawVal) > 0
+        ? Number(rawVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '_(Valor em aberto - Provisão)_';
       const provTag = b.is_provision ? ' 📝 _[Provisão]_' : '';
       let line = `• *${fornecedor}*: ${valFmt}${provTag}`;
@@ -740,7 +795,10 @@ export function formatBillsList(bills: any[]): string {
 export function getEveReminderMessage(leadOrBills: any): string {
   const bills: any[] = Array.isArray(leadOrBills) ? leadOrBills : [leadOrBills];
   const isMultiple = bills.length > 1;
-  const totalAmount = bills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const totalAmount = bills.reduce((acc, b) => {
+    const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+    return acc + (Number(rawVal) || 0);
+  }, 0);
   const totalFmt = totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   let txt = `⏰ *Lembrete de Vencimento — AnalisAí*\n`;
@@ -748,9 +806,10 @@ export function getEveReminderMessage(leadOrBills: any): string {
 
   if (!isMultiple) {
     const single = bills[0] || {};
-    const fornecedor = single.supplier_name || 'seu fornecedor';
-    const valFormatted = single.amount && Number(single.amount) > 0
-      ? Number(single.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    const fornecedor = single.supplier_name || single.counterparty_name || 'seu fornecedor';
+    const rawVal = single.amount !== undefined && single.amount !== null ? single.amount : single.total_amount;
+    const valFormatted = rawVal && Number(rawVal) > 0
+      ? Number(rawVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       : 'valor cadastrado';
     const provTag = single.is_provision ? ' 📝 _(Provisão de valor)_' : '';
 
@@ -788,16 +847,20 @@ export function getEveReminderMessage(leadOrBills: any): string {
 export function getDueReminderMessage(leadOrBills: any): string {
   const bills: any[] = Array.isArray(leadOrBills) ? leadOrBills : [leadOrBills];
   const isMultiple = bills.length > 1;
-  const totalAmount = bills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const totalAmount = bills.reduce((acc, b) => {
+    const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+    return acc + (Number(rawVal) || 0);
+  }, 0);
   const totalFmt = totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   let txt = '';
 
   if (!isMultiple) {
     const single = bills[0] || {};
-    const fornecedor = single.supplier_name || 'seu fornecedor';
-    const valFormatted = single.amount && Number(single.amount) > 0
-      ? Number(single.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    const fornecedor = single.supplier_name || single.counterparty_name || 'seu fornecedor';
+    const rawVal = single.amount !== undefined && single.amount !== null ? single.amount : single.total_amount;
+    const valFormatted = rawVal && Number(rawVal) > 0
+      ? Number(rawVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       : 'valor cadastrado';
     const provTag = single.is_provision ? ' 📝 _(Provisão de valor)_' : '';
 
@@ -841,8 +904,14 @@ export function getConsolidatedDailyReminderMessage(params: {
   dueTomorrowBills: any[];
 }): string {
   const { dueTodayBills, dueTomorrowBills } = params;
-  const todayTotal = dueTodayBills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
-  const tomorrowTotal = dueTomorrowBills.reduce((acc, b) => acc + (Number(b.amount) || 0), 0);
+  const todayTotal = dueTodayBills.reduce((acc, b) => {
+    const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+    return acc + (Number(rawVal) || 0);
+  }, 0);
+  const tomorrowTotal = dueTomorrowBills.reduce((acc, b) => {
+    const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+    return acc + (Number(rawVal) || 0);
+  }, 0);
   const grandTotal = todayTotal + tomorrowTotal;
 
   const todayFmt = todayTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1135,12 +1204,14 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
   if (payables.length > 0) {
     text += `🔴 *CONTAS A PAGAR / DESPESAS (${payables.length}):*\n`;
     for (const b of payables) {
-      const val = Number(b.amount || 0);
+      const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+      const val = Number(rawVal || 0);
       totalPayables += val;
-      const valFmt = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
-      text += `• *${b.supplier_name}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
+      const sup = b.supplier_name || b.counterparty_name || 'Conta';
+      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
     }
     text += `\n`;
   }
@@ -1148,12 +1219,14 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
   if (receivables.length > 0) {
     text += `🟢 *CONTAS A RECEBER / RECEITAS (${receivables.length}):*\n`;
     for (const b of receivables) {
-      const val = Number(b.amount || 0);
+      const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+      const val = Number(rawVal || 0);
       totalReceivables += val;
-      const valFmt = val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
-      text += `• *${b.supplier_name}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
+      const sup = b.supplier_name || b.counterparty_name || 'Origem';
+      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
     }
     text += `\n`;
   }
@@ -1161,12 +1234,14 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
   if (provisions.length > 0) {
     text += `📌 *PROVISÕES / ESTIMATIVAS (${provisions.length}):*\n`;
     for (const b of provisions) {
-      const val = Number(b.amount || 0);
+      const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+      const val = Number(rawVal || 0);
       totalProvisions += val;
       const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const typeStr = (b.entry_type || 'payable') === 'receivable' ? 'Receita Prevista' : 'Despesa Estimada';
-      text += `• *${b.supplier_name}* _(${typeStr})_\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}\n`;
+      const sup = b.supplier_name || b.counterparty_name || 'Conta';
+      text += `• *${sup}* _(${typeStr})_\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}\n`;
     }
     text += `\n`;
   }

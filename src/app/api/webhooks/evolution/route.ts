@@ -1794,12 +1794,21 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
         return;
       }
 
+      // Normaliza os campos para compatibilidade total entre extratores e formatadores
+      const normalizedDoc = {
+        ...extraction,
+        supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || 'Fornecedor',
+        amount: extraction.total_amount !== undefined && extraction.total_amount !== null ? extraction.total_amount : (extraction as any).amount,
+        document_type: extraction.doc_type || (extraction as any).document_type || 'Boleto/Conta',
+        category: extraction.category_suggestion || (extraction as any).category || null,
+      };
+
       // Registra que a degustação foi realizada
-      await recordTrialUsage(cleanPhone, extraction);
+      await recordTrialUsage(cleanPhone, normalizedDoc);
 
       // 1. Envia resumo executivo do documento informando a cota restante
       const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
-      const summaryText = formatTrialDocSummary(extraction, remainingAfter);
+      const summaryText = formatTrialDocSummary(normalizedDoc, remainingAfter);
       await sendEvolutionText({ phone, text: summaryText });
 
       // 2. Se houver código de barras / Pix / linha digitável, envia separado para cópia rápida

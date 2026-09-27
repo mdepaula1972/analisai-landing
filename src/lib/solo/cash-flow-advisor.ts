@@ -334,13 +334,14 @@ export async function getUpcomingBillsSummary(
         .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
         .maybeSingle();
 
-      if (lead && lead.due_date && lead.amount) {
+      if (lead && lead.due_date && (lead.amount || lead.doc_data?.total_amount)) {
+        const leadAmount = lead.amount !== undefined && lead.amount !== null ? lead.amount : lead.doc_data?.total_amount;
         rawBills = [
           {
-            supplier_name: lead.supplier_name || 'Fornecedor',
-            amount: Number(lead.amount),
+            supplier_name: lead.supplier_name || lead.doc_data?.counterparty_name || 'Fornecedor',
+            amount: Number(leadAmount),
             due_date: lead.due_date,
-            barcode_or_pix: lead.barcode_or_pix || null,
+            barcode_or_pix: lead.barcode_or_pix || lead.doc_data?.barcode_or_pix || null,
             is_provision: false,
             entry_type: 'payable',
           },
