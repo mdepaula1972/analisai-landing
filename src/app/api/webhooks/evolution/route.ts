@@ -1764,7 +1764,21 @@ ${BANK_SAFETY_NOTICE}`,
         });
       }
 
-      // 3. Documento registrado na degustação
+      // 3. Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
+      const patrimonialTrial = analyzePatrimonialExpense({
+        supplier_name: extraction.counterparty_name,
+        counterparty_name: extraction.counterparty_name,
+        category: extraction.category_suggestion,
+        amount: Number(extraction.total_amount),
+      });
+      if (patrimonialTrial.isPersonalExpense && patrimonialTrial.adviceMessage) {
+        await sendEvolutionText({
+          phone,
+          text: patrimonialTrial.adviceMessage,
+        });
+      }
+
+      // 4. Documento registrado na degustação
       return;
     }
 
@@ -1866,6 +1880,19 @@ ${BANK_SAFETY_NOTICE}`,
           const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - validEntries.length);
           const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, remainingAfter) + trialTaxBadge;
           await sendEvolutionText({ phone, text: confirmationText });
+
+          // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
+          for (const ent of validEntries) {
+            const patrimonial = analyzePatrimonialExpense({
+              supplier_name: ent.supplier_or_customer,
+              category: ent.category_suggestion,
+              amount: Number(ent.amount),
+            });
+            if (patrimonial.isPersonalExpense && patrimonial.adviceMessage) {
+              await sendEvolutionText({ phone, text: patrimonial.adviceMessage });
+              break;
+            }
+          }
           return;
         } else if (conv.is_financial_entry && conv.needs_clarification) {
           await sendEvolutionText({
@@ -1971,6 +1998,19 @@ ${BANK_SAFETY_NOTICE}`,
             phone,
             text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n${confirmationText}`,
           });
+
+          // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
+          for (const ent of validEntries) {
+            const patrimonial = analyzePatrimonialExpense({
+              supplier_name: ent.supplier_or_customer,
+              category: ent.category_suggestion,
+              amount: Number(ent.amount),
+            });
+            if (patrimonial.isPersonalExpense && patrimonial.adviceMessage) {
+              await sendEvolutionText({ phone, text: patrimonial.adviceMessage });
+              break;
+            }
+          }
           return;
         } else if (conv.is_financial_entry && conv.needs_clarification) {
           // Bate-bola conversacional: usuário pediu para registrar mas faltaram dados essenciais
