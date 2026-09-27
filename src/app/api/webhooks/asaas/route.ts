@@ -534,14 +534,61 @@ Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
         );
       }
 
-      // Transiciona o lead em degustação para cliente pagante ativo
+      // Transiciona o lead em degustação para cliente pagante ativo e migra histórico
       if (clientPhone) {
         const cleanDigits = clientPhone.replace(/\D/g, '');
         const phoneNoCountry = cleanDigits.replace(/^55/, '');
-        await supabase
+
+        const { data: lead } = await supabase
           .from('trial_leads')
-          .update({ converted_to_client: true })
-          .or(`whatsapp_number.eq.${cleanDigits},whatsapp_number.eq.${phoneNoCountry}`);
+          .select('id, bills_list, supplier_name, amount, due_date, barcode_or_pix, doc_data')
+          .or(`whatsapp_number.eq.${cleanDigits},whatsapp_number.eq.${phoneNoCountry}`)
+          .maybeSingle();
+
+        if (lead) {
+          await supabase
+            .from('trial_leads')
+            .update({ converted_to_client: true })
+            .eq('id', lead.id);
+
+          // Se o cliente foi cadastrado no CPF mas o boleto/degustação identificou a empresa (CNPJ), salva o nome da empresa
+          const detectedCompany = lead.doc_data?.company_name || lead.doc_data?.razao_social || null;
+          if (detectedCompany) {
+            await supabase
+              .from('clients')
+              .update({ company_name: detectedCompany })
+              .eq('id', clientId)
+              .is('company_name', null);
+          }
+
+          // Migra todas as contas cadastradas no período de degustação para o Livro Caixa oficial
+          const billsToMigrate: any[] = Array.isArray(lead.bills_list) && lead.bills_list.length > 0
+            ? lead.bills_list
+            : (lead.due_date && lead.amount ? [{
+                supplier_name: lead.supplier_name || 'Fornecedor',
+                amount: Number(lead.amount),
+                due_date: lead.due_date,
+                barcode_or_pix: lead.barcode_or_pix || null,
+                is_provision: false,
+                entry_type: 'payable',
+              }] : []);
+
+          for (const b of billsToMigrate) {
+            const dueDate = b.due_date || new Date().toISOString().split('T')[0];
+            await supabase.from('payables_receivables').insert({
+              client_id: clientId,
+              counterparty_name: b.supplier_name || b.supplier_or_customer || 'Fornecedor',
+              type: b.entry_type || 'payable',
+              amount: Number(b.amount || 0),
+              original_due_date: dueDate,
+              current_due_date: dueDate,
+              status: 'open',
+              barcode_or_pix: b.barcode_or_pix || null,
+              is_provision: Boolean(b.is_provision),
+              notes: 'Migrado automaticamente da degustação gratuita do AnalisAí',
+            });
+          }
+        }
       }
 
       if (clientPhone) {
