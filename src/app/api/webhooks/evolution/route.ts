@@ -922,6 +922,55 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       }
     }
 
+    // Trata Confirmação de Onboarding pós-assinatura: Limpar Contas de Teste vs Manter
+    if (pendingAction.action_type === 'onboarding_clean_test_bills') {
+      const isClean =
+        /^(1\b|limpar|apagar|zerar|come[çc]ar do zero|novo|apaga|limpa|zera|excluir|1\.|sim\b)/i.test(trimmed);
+      const isKeep =
+        /^(2\b|manter|fica|deixar|continua|continuar|importar|2\.|n[aã]o\b)/i.test(trimmed);
+
+      if (isClean) {
+        await supabase
+          .from('bot_action_confirmations')
+          .update({ status: 'confirmed' })
+          .eq('id', pendingAction.id);
+
+        if (client?.id) {
+          await supabase.from('payables_receivables').delete().eq('client_id', client.id);
+          await supabase.from('cash_ledger_entries').delete().eq('client_id', client.id);
+        }
+        await supabase
+          .from('trial_leads')
+          .delete()
+          .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+
+        await sendEvolutionText({
+          phone,
+          text: `🧹 *Livro Caixa Zerado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Todas as contas e documentos de teste enviados durante a degustação foram removidos.
+
+Seu assistente está pronto com a "folha em branco" para organizar as contas reais da sua empresa e da sua vida pessoal! Pode me enviar suas notas, boletos ou áudios do dia a dia a qualquer momento. 🚀`,
+        });
+        return;
+      } else if (isKeep) {
+        await supabase
+          .from('bot_action_confirmations')
+          .update({ status: 'rejected' })
+          .eq('id', pendingAction.id);
+
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Contas Mantidas com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Seus lançamentos foram preservados no seu Livro Caixa oficial e os lembretes de véspera às 10h continuam agendados.
+
+💡 Digite *contas* para ver sua agenda ou envie novos boletos a qualquer momento!`,
+        });
+        return;
+      }
+    }
+
     if (isAffirmative) {
       await supabase
         .from('bot_action_confirmations')

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { sendEvolutionText } from '@/lib/solo/evolution';
+import { sendEvolutionText, sendEvolutionPoll } from '@/lib/solo/evolution';
 import { ASAAS_WEBHOOK_AUTH_TOKEN, ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 import { addDays, format } from 'date-fns';
 
@@ -535,6 +535,9 @@ Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
       }
 
       // Transiciona o lead em degustação para cliente pagante ativo e migra histórico
+      let migratedBillsCount = 0;
+      let firstBillName = '';
+
       if (clientPhone) {
         const cleanDigits = clientPhone.replace(/\D/g, '');
         const phoneNoCountry = cleanDigits.replace(/^55/, '');
@@ -572,6 +575,11 @@ Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
                 is_provision: false,
                 entry_type: 'payable',
               }] : []);
+
+          migratedBillsCount = billsToMigrate.length;
+          if (migratedBillsCount > 0) {
+            firstBillName = billsToMigrate[0]?.supplier_name || billsToMigrate[0]?.supplier_or_customer || 'Conta de Teste';
+          }
 
           for (const b of billsToMigrate) {
             const dueDate = b.due_date || new Date().toISOString().split('T')[0];
@@ -621,6 +629,41 @@ ${inviteLink}
 
 💡 Digite *!analisador* a qualquer momento para ver seu painel completo ou *!pix sua_chave* para cadastrar sua chave Pix!`,
         });
+
+        // Se o usuário possuía contas de teste durante a degustação, pergunta proativamente se deseja mantê-las ou zerar
+        if (migratedBillsCount > 0) {
+          await supabase.from('bot_action_confirmations').insert({
+            client_id: clientId,
+            phone_number: cleanDigits,
+            action_type: 'onboarding_clean_test_bills',
+            proposed_payload: {
+              clientId,
+              cleanDigits,
+              migratedBillsCount,
+            },
+            status: 'pending',
+            expires_at: addDays(new Date(), 3).toISOString(),
+          });
+
+          await sendEvolutionPoll({
+            phone: clientPhone,
+            question: `Como deseja iniciar seu Livro Caixa oficial?`,
+            options: ['1. Começar do zero (apagar contas de teste)', '2. Manter contas cadastradas'],
+          });
+
+          await sendEvolutionText({
+            phone: clientPhone,
+            text: `📋 *Configuração Inicial do seu Livro Caixa:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que você enviou *${migratedBillsCount} conta(s)* durante o período de testes (ex: *${firstBillName}*).
+
+Como você prefere iniciar seu Livro Caixa oficial?
+1️⃣ *Começar do zero* (se eram apenas boletos de teste ou da empresa onde trabalha)
+2️⃣ *Manter contas* (se eram contas reais suas)
+
+👉 *Toque na opção da enquete acima ou responda com 1 para COMEÇAR DO ZERO ou 2 para MANTER.*`,
+          });
+        }
       }
 
       // Qualifica indicação automaticamente se o novo cliente veio de uma indicação
