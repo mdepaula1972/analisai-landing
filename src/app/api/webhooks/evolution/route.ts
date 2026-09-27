@@ -675,6 +675,537 @@ async function handleDeleteBill(
   });
 }
 
+/**
+ * Extrai valores monetários falados ou digitados em português de forma resiliente
+ * Trata: "81,24", "81.24", "81 e 24", "81 com 24", "81 reais e 5 centavos", "81 reais"
+ */
+function parseAmountFromSpokenText(str: string): number | null {
+  if (!str) return null;
+  const clean = str.toLowerCase().trim();
+
+  // 1. "81 reais e 5 centavos" ou "81 e 5 centavos"
+  const centavosMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:reais)?\s*e\s*(\d{1,2})\s*centavos?/i);
+  if (centavosMatch) {
+    const intPart = centavosMatch[1].replace(/\./g, '');
+    const centPart = centavosMatch[2].padStart(2, '0');
+    const val = parseFloat(`${intPart}.${centPart}`);
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // 2. "81 e 24", "81 com 24", "81,24", "81.24"
+  const compoundMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:reais)?\s*(?:e|com|,|\.)\s*(\d{1,2})/i);
+  if (compoundMatch) {
+    const intPart = compoundMatch[1].replace(/\./g, '');
+    let centPart = compoundMatch[2];
+    if (centPart.length === 1) centPart = centPart + '0';
+    const val = parseFloat(`${intPart}.${centPart}`);
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // 3. Padrão numérico brasileiro com separador de milhar: "1.250,00" ou "81,00"
+  const brlMatch = clean.match(/(\d{1,3}(?:\.\d{3})+,\d{2})/);
+  if (brlMatch) {
+    const val = parseFloat(brlMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // 4. Padrão numérico direto simples: "81", "81.00", "81,00"
+  const directMatch = clean.match(/(?:r\$\s*)?(\d+(?:[.,]\d+)?)/i);
+  if (directMatch) {
+    const val = parseFloat(directMatch[1].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  return null;
+}
+
+/**
+ * Normaliza datas faladas ou digitadas em português
+ * Trata: "dia 10", "dia 15 de outubro", "quinze", "10/10", "15/10/2026", "2026-10-15"
+ */
+function parseDateFromSpokenText(str: string): string | null {
+  if (!str) return null;
+  let clean = str.toLowerCase().trim();
+  clean = clean.replace(/^(?:pro\s+dia|para\s+o\s+dia|para\s+dia|no\s+dia|o\s+dia|dia)\s*/i, '').trim();
+
+  const wordToDay: Record<string, string> = {
+    primeiro: '01', um: '01', dois: '02', tres: '03', três: '03', quatro: '04', cinco: '05',
+    seis: '06', sete: '07', oito: '08', nove: '09', dez: '10', onze: '11', doze: '12',
+    treze: '13', catorze: '14', quatorze: '14', quinze: '15', dezesseis: '16', dezessete: '17',
+    dezoito: '18', dezenove: '19', vinte: '20', 'vinte e um': '21', 'vinte e dois': '22',
+    'vinte e tres': '23', 'vinte e três': '23', 'vinte e quatro': '24', 'vinte e cinco': '25',
+    'vinte e seis': '26', 'vinte e sete': '27', 'vinte e oito': '28', 'vinte e nove': '29',
+    trinta: '30', 'trinta e um': '31'
+  };
+
+  const monthWords: Record<string, string> = {
+    janeiro: '01', fevereiro: '02', marco: '03', março: '03', abril: '04', maio: '05',
+    junho: '06', julho: '07', agosto: '08', setembro: '09', outubro: '10', novembro: '11', dezembro: '12'
+  };
+
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+  // "15 de outubro" ou "dia 15 de outubro" ou "quinze de outubro"
+  const dayMonthNameMatch = clean.match(/^(\d{1,2}|[a-z\s]+?)\s+de\s+([a-z]+)(?:\s+de\s+(\d{4}))?$/);
+  if (dayMonthNameMatch) {
+    let dayStr = dayMonthNameMatch[1].trim();
+    if (wordToDay[dayStr]) dayStr = wordToDay[dayStr];
+    const mStr = monthWords[dayMonthNameMatch[2].trim()];
+    const yStr = dayMonthNameMatch[3] || String(curYear);
+    if (dayStr && mStr) {
+      return `${yStr}-${mStr}-${dayStr.padStart(2, '0')}`;
+    }
+  }
+
+  // Se for palavra simples de dia ("quinze", "dez", etc.)
+  if (wordToDay[clean]) {
+    return `${curYear}-${curMonth}-${wordToDay[clean]}`;
+  }
+
+  // Apenas número do dia: "10", "15", "5"
+  if (/^\d{1,2}$/.test(clean)) {
+    return `${curYear}-${curMonth}-${clean.padStart(2, '0')}`;
+  }
+
+  // Formato dd/mm
+  if (/^\d{1,2}\/\d{1,2}$/.test(clean)) {
+    const [d, m] = clean.split('/');
+    return `${curYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // Formato dd/mm/aaaa
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(clean)) {
+    const [d, m, y] = clean.split('/');
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // Formato aaaa-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+
+  return null;
+}
+
+async function handleDueDateChange(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  supplierQuery: string,
+  newDateRaw: string
+) {
+  const supabase = createServiceRoleClient();
+  const normalizedDate = parseDateFromSpokenText(newDateRaw);
+
+  if (!normalizedDate) {
+    await sendEvolutionText({
+      phone,
+      text: `⚠️ Não consegui entender a nova data de vencimento informada ("${newDateRaw}").\n\n💡 Por favor, informe no formato:\n*"Mudar vencimento da Sabesp para dia 15"* ou *"para 15/10"*.`,
+    });
+    return;
+  }
+
+  // 1. Cliente cadastrado
+  if (client?.id) {
+    const { data: openBills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .eq('type', 'payable')
+      .in('status', ['open', 'postponed']);
+
+    const cleanQuery = supplierQuery.toLowerCase().trim();
+    const matchedBill = openBills?.find((b: any) => (b.counterparty_name || '').toLowerCase().includes(cleanQuery));
+    if (matchedBill) {
+      await supabase
+        .from('payables_receivables')
+        .update({
+          current_due_date: normalizedDate,
+          notes: `Vencimento alterado para ${formatDueDateDetails(normalizedDate)} em ${new Date().toLocaleDateString('pt-BR')}`,
+        })
+        .eq('id', matchedBill.id);
+
+      await sendEvolutionText({
+        phone,
+        text: `✅ *Vencimento Atualizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${matchedBill.counterparty_name}
+• *Novo Vencimento:* *${formatDueDateDetails(normalizedDate)}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 O lembrete da véspera foi reprogramado automaticamente (às 10h)!`,
+      });
+
+      await sendEvolutionPoll({
+        phone,
+        question: `⚡ *O que deseja fazer a seguir?*`,
+        options: [
+          '📅 Ver Minhas Contas',
+          '📋 Solicitar Código para Pagar',
+          '✏️ Alterar Valor de uma Conta',
+          '💳 Conhecer Planos Oficiais',
+        ],
+      });
+      return;
+    }
+  }
+
+  // 2. Lead em degustação
+  const trialRes = await updateTrialBill(cleanPhone, supplierQuery, { due_date: normalizedDate });
+  if (trialRes.updated && trialRes.newBill) {
+    await sendEvolutionText({
+      phone,
+      text: `✅ *Vencimento Atualizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${trialRes.newBill.supplier_name}
+• *Novo Vencimento:* *${formatDueDateDetails(normalizedDate)}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 O lembrete da véspera foi reprogramado automaticamente (às 10h)!`,
+    });
+
+    await sendEvolutionPoll({
+      phone,
+      question: `⚡ *O que deseja fazer a seguir?*`,
+      options: [
+        '📅 Ver Minhas Contas',
+        '📋 Solicitar Código para Pagar',
+        '✏️ Alterar Valor de uma Conta',
+        '💳 Conhecer Planos Oficiais',
+      ],
+    });
+    return;
+  }
+
+  await sendEvolutionText({
+    phone,
+    text: `⚠️ Não consegui localizar a conta "*${supplierQuery}*" para alterar o vencimento.\n\n💡 Digite *contas* para consultar a sua lista de compromissos.`,
+  });
+}
+
+async function handleGetBarcodeOrPix(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  supplierQuery: string
+) {
+  const supabase = createServiceRoleClient();
+  const cleanQuery = (supplierQuery || '').toLowerCase().trim();
+  const stopWords = ['pagar', 'codigo', 'código', 'linha', 'pix', 'de', 'barras', 'conta', 'da', 'do', 'a', 'o', 'para', 'quero', 'antecipar', 'me', 'manda'];
+  const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+  const searchName = tokens.join(' ') || cleanQuery;
+
+  // 1. Se cliente cadastrado
+  if (client?.id) {
+    const { data: bills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .eq('type', 'payable')
+      .in('status', ['open', 'postponed']);
+
+    const matched = bills?.find((b: any) => {
+      const bName = (b.counterparty_name || '').toLowerCase();
+      return bName.includes(searchName) || tokens.some((t: string) => bName.includes(t));
+    });
+
+    if (matched) {
+      if (matched.barcode_or_pix) {
+        await sendEvolutionText({
+          phone,
+          text: `📋 *Código de Barras / Linha Digitável — ${matched.counterparty_name}*
+💰 *Valor:* R$ ${Number(matched.amount).toFixed(2)} | 📅 *Vencimento:* ${formatDueDateDetails(matched.current_due_date)}
+
+(Toque no código abaixo para copiar):
+\`${matched.barcode_or_pix.trim()}\`
+
+${BANK_SAFETY_NOTICE}`,
+        });
+
+        await sendEvolutionPoll({
+          phone,
+          question: `⚡ *O que deseja fazer com a conta de ${matched.counterparty_name}?*`,
+          options: [
+            '📅 Ver Minhas Contas',
+            '✏️ Alterar Valor da Conta',
+            '🗓️ Alterar Vencimento',
+            '💳 Conhecer Planos Oficiais',
+          ],
+        });
+        return;
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `ℹ️ A conta de *${matched.counterparty_name}* não possui código de barras ou Pix cadastrado ainda.\n\n👉 Envie uma foto do boleto ou cole a linha digitável aqui para anexar!`,
+        });
+        return;
+      }
+    }
+  }
+
+  // 2. Lead em degustação
+  const trialBills = await getTrialBills(cleanPhone);
+  const matchedTrial = trialBills.find((b: any) => {
+    const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase();
+    return bName.includes(searchName) || tokens.some((t: string) => bName.includes(t));
+  });
+
+  if (matchedTrial) {
+    const rawVal = matchedTrial.amount !== undefined && matchedTrial.amount !== null ? matchedTrial.amount : matchedTrial.total_amount;
+    const valFmt = rawVal && Number(rawVal) > 0 ? Number(rawVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
+    const dueFmt = matchedTrial.due_date ? formatDueDateDetails(matchedTrial.due_date) : 'Data a confirmar';
+
+    if (matchedTrial.barcode_or_pix) {
+      await sendEvolutionText({
+        phone,
+        text: `📋 *Código de Barras / Linha Digitável — ${matchedTrial.supplier_name}*
+💰 *Valor:* ${valFmt} | 📅 *Vencimento:* ${dueFmt}
+
+(Toque no código abaixo para copiar):
+\`${matchedTrial.barcode_or_pix.trim()}\`
+
+${BANK_SAFETY_NOTICE}`,
+      });
+
+      await sendEvolutionPoll({
+        phone,
+        question: `⚡ *O que deseja fazer com a conta de ${matchedTrial.supplier_name}?*`,
+        options: [
+          '📅 Ver Minhas Contas',
+          '✏️ Alterar Valor da Conta',
+          '🗓️ Alterar Vencimento',
+          '💳 Conhecer Planos Oficiais',
+        ],
+      });
+      return;
+    } else {
+      await sendEvolutionText({
+        phone,
+        text: `ℹ️ A conta de *${matchedTrial.supplier_name}* (${valFmt}) foi cadastrada sem código de barras numérico legível (ou a foto continha apenas QR Code Pix impresso).\n\n👉 Se você tiver a linha digitável ou chave Pix, basta digitar ou colar aqui que anexamos na hora!`,
+      });
+      return;
+    }
+  }
+
+  await sendEvolutionText({
+    phone,
+    text: `⚠️ Não encontrei nenhuma conta com o nome "*${supplierQuery}*" na sua lista.\n\n💡 Digite *contas* para ver seus compromissos agendados.`,
+  });
+}
+
+/**
+ * Despachante unificado de comandos de ação para Texto, Respostas de Enquetes/Botões e Áudio transcrito
+ */
+async function dispatchUserActionCommand(params: {
+  text: string;
+  phone: string;
+  cleanPhone: string;
+  client: any;
+}): Promise<boolean> {
+  const { text, phone, cleanPhone, client } = params;
+  if (!text) return false;
+  const clean = text.toLowerCase().trim();
+
+  // A) Interceptação de botões interativos de sequência / Enquetes
+  if (
+    clean.includes('ver minhas contas') ||
+    clean.includes('ver todas as contas') ||
+    clean === '📅 ver minhas contas'
+  ) {
+    const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, { periodDays: 'all', periodLabel: 'Todas as Contas' });
+    await sendEvolutionText({ phone, text: billsMsg });
+    await sendEvolutionPoll({
+      phone,
+      question: `⚡ *O que deseja fazer com as suas contas?*`,
+      options: [
+        '📋 Solicitar Código para Pagar',
+        '✏️ Alterar Valor de uma Conta',
+        '🗓️ Alterar Vencimento',
+        '💳 Conhecer Planos Oficiais',
+      ],
+    });
+    return true;
+  }
+
+  if (
+    clean.includes('solicitar código') ||
+    clean.includes('solicitar codigo') ||
+    clean.includes('código para pagar') ||
+    clean.includes('codigo para pagar')
+  ) {
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Para obter o código de barras ou Pix para pagar/antecipar:*
+Envie um texto ou áudio dizendo:
+*"Pagar [nome da conta]"* ou *"Código [nome da conta]"*
+
+Exemplo: *"Pagar Sabesp"* ou *"Código da Vivo"*`,
+    });
+    return true;
+  }
+
+  if (
+    clean.includes('alterar valor da conta') ||
+    clean.includes('alterar valor de uma conta') ||
+    clean === '✏️ alterar valor da conta' ||
+    clean === 'alterar valor'
+  ) {
+    await sendEvolutionText({
+      phone,
+      text: `✏️ *Para alterar o valor de uma conta:*
+Envie um texto ou áudio dizendo:
+*"Mudar o valor da [nome] para [valor]"*
+
+Exemplo: *"Mudar valor da Sabesp para 81,24"*`,
+    });
+    return true;
+  }
+
+  if (
+    clean.includes('alterar vencimento') ||
+    clean === '🗓️ alterar vencimento' ||
+    clean === 'mudar vencimento'
+  ) {
+    await sendEvolutionText({
+      phone,
+      text: `🗓️ *Para alterar a data de vencimento:*
+Envie um texto ou áudio dizendo:
+*"Mudar vencimento da [nome] para dia [dia]"*
+
+Exemplo: *"Mudar vencimento da Sabesp para dia 15"* ou *"para 15/10"*`,
+    });
+    return true;
+  }
+
+  if (
+    clean.includes('conhecer planos oficiais') ||
+    clean.includes('conhecer planos') ||
+    clean === '💳 conhecer planos oficiais'
+  ) {
+    await sendEvolutionText({ phone, text: getTrialConversionMenu() });
+    return true;
+  }
+
+  if (
+    clean.includes('excluir esta conta') ||
+    clean.includes('excluir uma conta') ||
+    clean === '🗑️ excluir esta conta'
+  ) {
+    await sendEvolutionText({
+      phone,
+      text: `🗑️ *Para excluir um lançamento:*
+Envie um texto ou áudio dizendo:
+*"Excluir conta da [nome da conta]"*
+
+Exemplo: *"Excluir conta da Sabesp"*`,
+    });
+    return true;
+  }
+
+  // B) Consulta de planos / assinatura
+  if (
+    clean === 'planos' || clean === 'plano' || clean === 'assinar' ||
+    clean === 'preços' || clean === 'precos' || clean === 'valores' ||
+    clean === 'quanto custa' || clean.includes('ver planos') ||
+    clean.includes('quais planos') || clean.includes('quero assinar')
+  ) {
+    await sendEvolutionText({ phone, text: getTrialConversionMenu() });
+    return true;
+  }
+
+  // C) Consulta de Contas / Agenda Financeira
+  if (
+    isWeeklyBillsQuery(clean) ||
+    clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
+    clean.includes('listar contas') || clean.includes('mostrar contas') ||
+    clean.includes('quais contas') || clean.includes('o que tenho a pagar') ||
+    clean.includes('o que tenho que pagar') || clean.includes('contas a pagar')
+  ) {
+    const periodOption = extractBillsQueryPeriod(clean);
+    const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
+    await sendEvolutionText({ phone, text: billsMsg });
+
+    // Oferece ações de sequência nativas via Enquete
+    await sendEvolutionPoll({
+      phone,
+      question: `⚡ *O que deseja fazer com as suas contas?*`,
+      options: [
+        '📋 Solicitar Código para Pagar',
+        '✏️ Alterar Valor de uma Conta',
+        '🗓️ Alterar Vencimento',
+        '💳 Conhecer Planos Oficiais',
+      ],
+    });
+    return true;
+  }
+
+  // D) Solicitação de Código de Barras / Linha Digitável / Pix para Pagamento/Antecipação
+  const payMatch =
+    clean.match(/^(?:pagar|codigo|código|linha|pix|copiar|antecipar)\s+(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|a\s+|o\s+)?(.+)/i) ||
+    clean.match(/(?:código|codigo|linha)\s+(?:de\s+barras\s+|digit[aá]vel\s+)(?:d[ao]\s+)?(.+)/i) ||
+    clean.match(/(?:quero\s+pagar|vou\s+pagar|passa\s+o\s+código|passa\s+o\s+codigo|manda\s+o\s+código|manda\s+o\s+codigo)\s+(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|a\s+)?(.+)/i) ||
+    clean.match(/(?:qual\s+(?:é|e)\s+o\s+)?(?:código|codigo|linha|pix)\s+(?:d[ao]\s+)?(.+)/i);
+
+  if (payMatch) {
+    let targetSup = payMatch[1]
+      .replace(/[?.!]+$/, '')
+      .replace(/\s+(?:por\s+favor|pfv|a[ií]|hoje)$/i, '')
+      .trim();
+
+    if (targetSup.length >= 2 && !['conta', 'contas', 'plano', 'planos', 'status'].includes(targetSup)) {
+      await handleGetBarcodeOrPix(client, phone, cleanPhone, targetSup);
+      return true;
+    }
+  }
+
+  // E) Exclusão de Conta
+  const delMatch =
+    clean.match(/^(?:excluir|apagar|remover|deletar|cancelar)\s+(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|o\s+boleto\s+d[ao]|boleto\s+d[ao]|o\s+boleto|boleto)?\s*(.+)/i) ||
+    clean.match(/(?:excluir|apagar|remover|deletar)\s+conta\s+(?:d[ao]\s+)?(.+)/i);
+
+  if (delMatch) {
+    let targetSup = delMatch[1].replace(/[?.!]+$/, '').trim();
+    if (targetSup.length >= 2 && !['conta', 'contas', 'tudo'].includes(targetSup)) {
+      await handleDeleteBill(client, phone, cleanPhone, targetSup);
+      return true;
+    }
+  }
+
+  // F) Alteração de Valor
+  const amountMatch =
+    clean.match(/(?:mudar|alterar|corrigir|trocar|atualizar)\s+(?:o\s+)?valor\s+(?:d[ao]\s+)?([a-zA-Z0-9\s]+?)\s+(?:de\s+[\d.,\s]+(?:reais)?\s+)?para\s+(.+)/i) ||
+    clean.match(/([a-zA-Z0-9\s]+?)[,;:\s]+(?:mudar|alterar|corrigir|trocar|atualizar)\s+(?:o\s+)?valor\s+(?:de\s+[\d.,\s]+(?:reais)?\s+)?para\s+(.+)/i) ||
+    clean.match(/(?:mudar|alterar|corrigir|trocar|atualizar)\s+([a-zA-Z0-9\s]+?)\s+para\s+([0-9.,\s]+(?:reais)?(?:\s*e\s*[0-9.,\s]+)?(?:\s*centavos)?)/i);
+
+  if (amountMatch) {
+    const rawSup = amountMatch[1].replace(/^(conta\s+d[ao]|fornecedor\s+d[ao]|conta)\s+/i, '').trim();
+    const rawValStr = amountMatch[2].replace(/[?.!]+$/, '').trim();
+    const parsedVal = parseAmountFromSpokenText(rawValStr);
+    if (parsedVal && parsedVal > 0 && rawSup.length >= 2) {
+      await handleAmountChange(client, phone, cleanPhone, rawSup, parsedVal);
+      return true;
+    }
+  }
+
+  // G) Alteração de Vencimento
+  const dueDateMatch =
+    clean.match(/(?:mudar|alterar|trocar|prorrogar|adiar|atualizar)\s+(?:o\s+)?vencimento\s+(?:d[ao]\s+)?([a-zA-Z0-9\s]+?)\s+para\s+(?:o\s+)?(?:dia\s+)?([\w\s/-]+)/i) ||
+    clean.match(/(?:mudar|alterar|trocar|prorrogar|adiar|atualizar)\s+(?:a\s+data\s+d[ao]\s+)?([a-zA-Z0-9\s]+?)\s+para\s+(?:o\s+)?(?:dia\s+)?([\w\s/-]+)/i);
+
+  if (dueDateMatch) {
+    const rawSup = dueDateMatch[1].replace(/^(conta\s+d[ao]|fornecedor\s+d[ao]|conta)\s+/i, '').trim();
+    const targetDate = dueDateMatch[2].replace(/[?.!]+$/, '').trim();
+    if (rawSup.length >= 2 && targetDate) {
+      await handleDueDateChange(client, phone, cleanPhone, rawSup, targetDate);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const dispatchTrialUserCommand = dispatchUserActionCommand;
+
 function unwrapMessage(msg: any): any {
   if (!msg) return {};
   if (msg.ephemeralMessage?.message) return unwrapMessage(msg.ephemeralMessage.message);
@@ -689,6 +1220,13 @@ function extractTextFromMessage(msg: any): string {
   return (
     unwrapped?.conversation ||
     unwrapped?.extendedTextMessage?.text ||
+    unwrapped?.buttonsResponseMessage?.selectedDisplayText ||
+    unwrapped?.buttonsResponseMessage?.selectedButtonId ||
+    unwrapped?.templateButtonReplyMessage?.selectedDisplayText ||
+    unwrapped?.templateButtonReplyMessage?.selectedId ||
+    unwrapped?.listResponseMessage?.title ||
+    unwrapped?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+    unwrapped?.pollUpdateMessage?.vote?.selectedOptions?.[0]?.name ||
     unwrapped?.imageMessage?.caption ||
     unwrapped?.videoMessage?.caption ||
     unwrapped?.documentMessage?.caption ||
@@ -1594,11 +2132,14 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
-  // ── Interceptação 1.3: Agenda Financeira de Contas (Semana, 15 dias, Mês ou Todas) ──
-  if (isWeeklyBillsQuery(cleanText) && (!hasMonetaryPattern || !isFinancialAction)) {
-    const periodOption = extractBillsQueryPeriod(cleanText);
-    const billsSummary = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
-    await sendEvolutionText({ phone, text: billsSummary });
+  // ── Interceptação Unificada: Comandos do Usuário (Botões de Ação, Contas, Pagar/Código, Mudar Valor/Vencimento, Exclusão) ──
+  const handledUserAction = await dispatchUserActionCommand({
+    text: rawText || cleanText,
+    phone,
+    cleanPhone,
+    client,
+  });
+  if (handledUserAction) {
     return;
   }
 
@@ -1816,7 +2357,7 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
         await sendEvolutionText({
           phone,
           text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
-${extraction.barcode_or_pix.trim()}
+\`${extraction.barcode_or_pix.trim()}\`
 
 ${BANK_SAFETY_NOTICE}`,
         });
@@ -1836,57 +2377,31 @@ ${BANK_SAFETY_NOTICE}`,
         });
       }
 
-      // 4. Documento registrado na degustação
+      // 4. Oferece botões de ações de sequência nativos via Enquete do WhatsApp
+      await sendEvolutionPoll({
+        phone,
+        question: `⚡ *O que deseja fazer a seguir?*`,
+        options: [
+          '📅 Ver Minhas Contas',
+          '✏️ Alterar Valor da Conta',
+          '🗓️ Alterar Vencimento',
+          '💳 Conhecer Planos Oficiais',
+        ],
+      });
+
+      // 5. Documento registrado na degustação
       return;
     }
 
-    // Interceptação de consulta de planos / assinatura
-    if (
-      cleanText === 'planos' || cleanText === 'plano' || cleanText === 'assinar' ||
-      cleanText === 'preços' || cleanText === 'precos' || cleanText === 'valores' ||
-      cleanText === 'quanto custa' || cleanText.includes('ver planos') ||
-      cleanText.includes('quais planos') || cleanText.includes('quero assinar')
-    ) {
-      await sendEvolutionText({ phone, text: getTrialConversionMenu() });
+    // Interceptação de comandos do usuário na degustação (Texto ou Botões de Ação)
+    const handledTrialCommand = await dispatchUserActionCommand({
+      text: rawText || cleanText,
+      phone,
+      cleanPhone,
+      client,
+    });
+    if (handledTrialCommand) {
       return;
-    }
-
-    // 1.35 Comandos de Gestão e Consulta de Contas na Degustação
-    if (
-      isWeeklyBillsQuery(cleanText) ||
-      cleanText === 'contas' || cleanText === '!contas' || cleanText === 'minhas contas' ||
-      cleanText.includes('listar contas') || cleanText.includes('mostrar contas') ||
-      cleanText.includes('quais contas')
-    ) {
-      const periodOption = extractBillsQueryPeriod(cleanText);
-      const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
-      await sendEvolutionText({ phone, text: billsMsg });
-      return;
-    }
-
-    if (
-      cleanText.startsWith('excluir ') || cleanText.startsWith('apagar ') ||
-      cleanText.startsWith('remover ') || cleanText.includes('excluir conta') ||
-      cleanText.includes('apagar conta')
-    ) {
-      const supToDelete = cleanText.replace(/^(excluir|apagar|remover)\s+(a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta)?\s*/i, '').trim();
-      await handleDeleteBill(null, phone, cleanPhone, supToDelete);
-      return;
-    }
-
-    const trialAmountMatch =
-      cleanText.match(/(?:mudar|alterar|corrigir|trocar)\s+(?:o\s+)?valor\s+(?:d[ao]\s+)?([a-zA-Z0-9\s]+?)\s+(?:de\s+[\d.,]+\s+)?para\s+([0-9.,]+)/i) ||
-      cleanText.match(/([a-zA-Z0-9\s]+?)[,;:\s]+(?:mudar|alterar|corrigir|trocar)\s+(?:o\s+)?valor\s+(?:de\s+[\d.,]+\s+)?para\s+([0-9.,]+)/i) ||
-      cleanText.match(/(?:mudar|alterar)\s+([a-zA-Z0-9\s]+?)\s+para\s+([0-9.,]+)\s+reais/i);
-
-    if (trialAmountMatch) {
-      const rawSup = trialAmountMatch[1].replace(/^(conta\s+d[ao]|fornecedor\s+d[ao]|conta)\s+/i, '').trim();
-      const rawValStr = trialAmountMatch[2].replace(/\./g, '').replace(',', '.');
-      const parsedVal = parseFloat(rawValStr);
-      if (!isNaN(parsedVal) && parsedVal > 0 && rawSup.length >= 2) {
-        await handleAmountChange(null, phone, cleanPhone, rawSup, parsedVal);
-        return;
-      }
     }
 
     // 1.4 Se o usuário enviou texto, verifica se é um lançamento financeiro para a degustação
@@ -2011,6 +2526,17 @@ ${BANK_SAFETY_NOTICE}`,
             phone,
             text: `🎙️ Não consegui compreender com nitidez o que foi falado no áudio. Por favor, envie novamente ou digite o fornecedor, valor e vencimento por texto.`,
           });
+          return;
+        }
+
+        // 1. Verifica se o áudio falado é um comando de ação (mudar valor, mudar vencimento, código/pagar, excluir, ver contas, etc.)
+        const handledAudioCommand = await dispatchUserActionCommand({
+          text: cleanTranscribed,
+          phone,
+          cleanPhone,
+          client,
+        });
+        if (handledAudioCommand) {
           return;
         }
 
@@ -2609,6 +3135,18 @@ Deseja migrar para o Solo agora?
         (body.data as any)?.mimetype ||
         'audio/ogg';
       const audioResult = await processVoiceCommandWithGemini(audioBase64, rawMimeType);
+
+      if (audioResult.textResponse) {
+        const handledSubscriberVoice = await dispatchUserActionCommand({
+          text: audioResult.textResponse.trim(),
+          phone,
+          cleanPhone,
+          client,
+        });
+        if (handledSubscriberVoice) {
+          return;
+        }
+      }
 
       if (audioResult.functionCalls.length > 0) {
         const call = audioResult.functionCalls[0];

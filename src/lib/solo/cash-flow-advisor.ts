@@ -316,6 +316,7 @@ export async function getUpcomingBillsSummary(
         due_date: b.current_due_date || b.original_due_date,
         entry_type: b.type === 'receivable' ? 'receivable' : 'payable',
         barcode_or_pix: b.barcode_or_pix || null,
+        category: b.category || null,
         is_provision: false,
         is_recurring: Boolean(b.is_recurring),
       }));
@@ -342,6 +343,7 @@ export async function getUpcomingBillsSummary(
             amount: Number(leadAmount),
             due_date: lead.due_date,
             barcode_or_pix: lead.barcode_or_pix || lead.doc_data?.barcode_or_pix || null,
+            category: lead.category || lead.doc_data?.category_suggestion || lead.doc_data?.category || null,
             is_provision: false,
             entry_type: 'payable',
           },

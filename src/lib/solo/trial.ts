@@ -573,6 +573,39 @@ Dúvidas? Pode perguntar por aqui!`;
 }
 
 /**
+ * Mapeamento padronizado de categorias contábeis e financeiras para exibição clara
+ */
+export function formatCategoryLabel(rawCategory?: string | null): string {
+  if (!rawCategory) return 'Geral';
+  const clean = rawCategory.trim().toLowerCase();
+  const map: Record<string, string> = {
+    energia_eletrica: 'Energia Elétrica',
+    energia: 'Energia Elétrica',
+    telecomunicacoes: 'Internet / Telefonia',
+    telecom: 'Internet / Telefonia',
+    internet: 'Internet / Telefonia',
+    agua_saneamento: 'Água e Saneamento',
+    agua: 'Água e Saneamento',
+    fornecedores_mercadoria: 'Fornecedores',
+    fornecedores: 'Fornecedores',
+    servicos_terceiros: 'Serviços de Terceiros',
+    servicos: 'Serviços',
+    tributos: 'Impostos e Tributos',
+    impostos: 'Impostos e Tributos',
+    aluguel: 'Aluguel / Imóvel',
+    combustivel: 'Combustível',
+    alimentacao: 'Alimentação',
+    contabilidade: 'Contabilidade',
+    pessoal: 'Pessoal / Pró-labore',
+    emprestimos: 'Empréstimos / Financiamentos',
+    receita_vendas: 'Receita / Clientes',
+    receita: 'Receita / Clientes',
+    outros: 'Outros',
+  };
+  return map[clean] || rawCategory.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * Formata o resumo do documento processado na degustação gratuita (limpo e sem poluição)
  */
 export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): string {
@@ -598,19 +631,7 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
 
   // Mapeamento amigável de categorias
   const categoryRaw = doc.category || doc.category_suggestion;
-  const categoryMap: Record<string, string> = {
-    energia_eletrica: 'Energia Elétrica',
-    telecomunicacoes: 'Telecomunicações / Internet',
-    agua_saneamento: 'Água e Saneamento',
-    fornecedores_mercadoria: 'Fornecedores / Mercadorias',
-    servicos_terceiros: 'Serviços de Terceiros',
-    tributos: 'Impostos e Tributos',
-    aluguel: 'Aluguel / Imóvel',
-    combustivel: 'Combustível',
-    alimentacao: 'Alimentação',
-    outros: 'Outros',
-  };
-  const categoryFormatted = categoryRaw ? (categoryMap[categoryRaw] || categoryRaw) : null;
+  const categoryFormatted = categoryRaw ? formatCategoryLabel(categoryRaw) : null;
 
   let txt = `📄 *Lançamento Registrado — Degustação AnalisAí*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -1211,7 +1232,12 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
       const sup = b.supplier_name || b.counterparty_name || 'Conta';
-      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
+      const catLabel = b.category ? formatCategoryLabel(b.category) : null;
+      const catInfo = catLabel ? ` | 📂 ${catLabel}` : '';
+      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}${catInfo}\n`;
+      if (b.barcode_or_pix) {
+        text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${sup.toLowerCase().split(' ')[0]}* para copiar)_\n`;
+      }
     }
     text += `\n`;
   }
@@ -1226,7 +1252,9 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
       const sup = b.supplier_name || b.counterparty_name || 'Origem';
-      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}\n`;
+      const catLabel = b.category ? formatCategoryLabel(b.category) : null;
+      const catInfo = catLabel ? ` | 📂 ${catLabel}` : '';
+      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}${catInfo}\n`;
     }
     text += `\n`;
   }
@@ -1241,7 +1269,9 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
       const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
       const typeStr = (b.entry_type || 'payable') === 'receivable' ? 'Receita Prevista' : 'Despesa Estimada';
       const sup = b.supplier_name || b.counterparty_name || 'Conta';
-      text += `• *${sup}* _(${typeStr})_\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}\n`;
+      const catLabel = b.category ? formatCategoryLabel(b.category) : null;
+      const catInfo = catLabel ? ` | 📂 ${catLabel}` : '';
+      text += `• *${sup}* _(${typeStr})_\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}${catInfo}\n`;
     }
     text += `\n`;
   }
@@ -1261,7 +1291,13 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
   }
 
   text += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você manter seu fluxo em dia!\n\n`;
-  text += `💡 _Dica: Você pode filtrar outros períodos enviando: *contas semana*, *contas 15 dias*, *contas mês* ou *todas as contas*._`;
+  text += `💡 *Ações Rápidas (Texto ou Voz):*\n`;
+  text += `• *Copiar Código:* Digite *"pagar [nome]"* para receber a linha digitável/Pix;\n`;
+  text += `• *Alterar Valor:* *"Mudar valor da [nome] para [valor]"*;\n`;
+  text += `• *Alterar Vencimento:* *"Mudar vencimento da [nome] para dia [dia]"*;\n`;
+  text += `• *Excluir:* *"Excluir conta da [nome]"*;\n`;
+  text += `• *Outros Períodos:* Envie *"contas semana"*, *"contas mês"* ou *"todas as contas"*.\n`;
+  text += `_(Você também pode enviar qualquer um desses comandos por áudio!)_`;
 
   return text;
 }
