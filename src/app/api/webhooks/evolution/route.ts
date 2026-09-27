@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
-import { sendEvolutionText, sendEvolutionPoll, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
+import { sendEvolutionText, sendEvolutionPoll, sendEvolutionList, sendActionSequenceMenu, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
 import {
   extractDocumentWithGemini,
   processVoiceCommandWithGemini,
@@ -663,15 +663,20 @@ async function handleDeleteBill(
   const dueFmt = dueDate ? (dueDate.includes('-') ? dueDate.split('-').reverse().join('/') : dueDate) : 'A definir';
   const amtFmt = amount > 0 ? amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
 
-  await sendEvolutionPoll({
-    phone,
-    question: `🗑️ *Confirmação de Exclusão de Lançamento*\n\n• Fornecedor: *${supplier}*\n• Valor: *${amtFmt}*\n• Vencimento: *${dueFmt}*\n\nDeseja realmente excluir este lançamento?`,
-    options: ['Sim, confirmar exclusão', 'Não, cancelar'],
-  });
-
   await sendEvolutionText({
     phone,
-    text: `⚠️ *Confirmação de Exclusão de Conta:*\n• *Conta:* ${supplier} (${amtFmt})\n\n👉 *Toque na opção acima ou responda com SIM para confirmar ou NÃO para cancelar.*`,
+    text: `🗑️ *Confirmação de Exclusão de Lançamento*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${supplier}
+• *Valor:* ${amtFmt}
+• *Vencimento:* ${dueFmt}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Deseja realmente excluir este lançamento?
+
+1️⃣ *Sim, confirmar exclusão*
+2️⃣ *Não, cancelar*
+
+👉 _Responda com *1* (ou *Sim*) para confirmar, ou *2* (ou *Não*) para cancelar._`,
   });
 }
 
@@ -759,14 +764,31 @@ function parseDateFromSpokenText(str: string): string | null {
     }
   }
 
-  // Se for palavra simples de dia ("quinze", "dez", etc.)
+  // Se for palavra simples de dia ou número (ex: "quinze", "dez", "10", "15", "5")
+  let targetDayNum: number | null = null;
   if (wordToDay[clean]) {
-    return `${curYear}-${curMonth}-${wordToDay[clean]}`;
+    targetDayNum = parseInt(wordToDay[clean], 10);
+  } else if (/^\d{1,2}$/.test(clean)) {
+    targetDayNum = parseInt(clean, 10);
   }
 
-  // Apenas número do dia: "10", "15", "5"
-  if (/^\d{1,2}$/.test(clean)) {
-    return `${curYear}-${curMonth}-${clean.padStart(2, '0')}`;
+  if (targetDayNum !== null && targetDayNum >= 1 && targetDayNum <= 31) {
+    const todayDay = now.getDate();
+    let targetYear = curYear;
+    let targetMonth = now.getMonth() + 1; // 1 a 12
+
+    // Se o dia informado já passou no mês corrente (ex: hoje é dia 27 e pediu dia 10),
+    // o usuário deseja agendar para o PRÓXIMO MÊS em vez de gerar fatura vencida no passado!
+    if (targetDayNum < todayDay) {
+      targetMonth += 1;
+      if (targetMonth > 12) {
+        targetMonth = 1;
+        targetYear += 1;
+      }
+    }
+    const dayStr = String(targetDayNum).padStart(2, '0');
+    const monthStr = String(targetMonth).padStart(2, '0');
+    return `${targetYear}-${monthStr}-${dayStr}`;
   }
 
   // Formato dd/mm
@@ -837,16 +859,7 @@ async function handleDueDateChange(
 💡 O lembrete da véspera foi reprogramado automaticamente (às 10h)!`,
       });
 
-      await sendEvolutionPoll({
-        phone,
-        question: `⚡ *O que deseja fazer a seguir?*`,
-        options: [
-          '📅 Ver Minhas Contas',
-          '📋 Solicitar Código para Pagar',
-          '✏️ Alterar Valor de uma Conta',
-          '💳 Conhecer Planos Oficiais',
-        ],
-      });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
       return;
     }
   }
@@ -864,16 +877,7 @@ async function handleDueDateChange(
 💡 O lembrete da véspera foi reprogramado automaticamente (às 10h)!`,
     });
 
-    await sendEvolutionPoll({
-      phone,
-      question: `⚡ *O que deseja fazer a seguir?*`,
-      options: [
-        '📅 Ver Minhas Contas',
-        '📋 Solicitar Código para Pagar',
-        '✏️ Alterar Valor de uma Conta',
-        '💳 Conhecer Planos Oficiais',
-      ],
-    });
+    await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
     return;
   }
 
@@ -922,16 +926,7 @@ async function handleGetBarcodeOrPix(
 ${BANK_SAFETY_NOTICE}`,
         });
 
-        await sendEvolutionPoll({
-          phone,
-          question: `⚡ *O que deseja fazer com a conta de ${matched.counterparty_name}?*`,
-          options: [
-            '📅 Ver Minhas Contas',
-            '✏️ Alterar Valor da Conta',
-            '🗓️ Alterar Vencimento',
-            '💳 Conhecer Planos Oficiais',
-          ],
-        });
+        await sendActionSequenceMenu(phone, `O que deseja fazer com a conta de ${matched.counterparty_name}?`);
         return;
       } else {
         await sendEvolutionText({
@@ -967,16 +962,7 @@ ${BANK_SAFETY_NOTICE}`,
 ${BANK_SAFETY_NOTICE}`,
       });
 
-      await sendEvolutionPoll({
-        phone,
-        question: `⚡ *O que deseja fazer com a conta de ${matchedTrial.supplier_name}?*`,
-        options: [
-          '📅 Ver Minhas Contas',
-          '✏️ Alterar Valor da Conta',
-          '🗓️ Alterar Vencimento',
-          '💳 Conhecer Planos Oficiais',
-        ],
-      });
+      await sendActionSequenceMenu(phone, `O que deseja fazer com a conta de ${matchedTrial.supplier_name}?`);
       return;
     } else {
       await sendEvolutionText({
@@ -1006,32 +992,28 @@ async function dispatchUserActionCommand(params: {
   if (!text) return false;
   const clean = text.toLowerCase().trim();
 
-  // A) Interceptação de botões interativos de sequência / Enquetes
+  // A) Interceptação de botões interativos de sequência / Menu Numerado
+  // 1. Ver Minhas Contas
   if (
-    clean.includes('ver minhas contas') ||
-    clean.includes('ver todas as contas') ||
-    clean === '📅 ver minhas contas'
+    clean === '1' || clean === '1️⃣' || clean.includes('opcao 1') || clean.includes('opção 1') ||
+    clean.includes('ver minhas contas') || clean.includes('ver_minhas_contas') ||
+    clean.includes('ver todas as contas') || clean === '📅 ver minhas contas' ||
+    isWeeklyBillsQuery(clean) || clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
+    clean.includes('listar contas') || clean.includes('mostrar contas') || clean.includes('quais contas') ||
+    clean.includes('o que tenho a pagar') || clean.includes('o que tenho que pagar') || clean.includes('contas a pagar')
   ) {
-    const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, { periodDays: 'all', periodLabel: 'Todas as Contas' });
+    const periodOption = extractBillsQueryPeriod(clean);
+    const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
     await sendEvolutionText({ phone, text: billsMsg });
-    await sendEvolutionPoll({
-      phone,
-      question: `⚡ *O que deseja fazer com as suas contas?*`,
-      options: [
-        '📋 Solicitar Código para Pagar',
-        '✏️ Alterar Valor de uma Conta',
-        '🗓️ Alterar Vencimento',
-        '💳 Conhecer Planos Oficiais',
-      ],
-    });
+    await sendActionSequenceMenu(phone, 'O que deseja fazer com as suas contas?');
     return true;
   }
 
+  // 2. Solicitar Código para Pagar / Antecipar
   if (
-    clean.includes('solicitar código') ||
-    clean.includes('solicitar codigo') ||
-    clean.includes('código para pagar') ||
-    clean.includes('codigo para pagar')
+    clean === '2' || clean === '2️⃣' || clean.includes('opcao 2') || clean.includes('opção 2') ||
+    clean.includes('solicitar código') || clean.includes('solicitar codigo') || clean.includes('solicitar_codigo') ||
+    clean.includes('código para pagar') || clean.includes('codigo para pagar')
   ) {
     await sendEvolutionText({
       phone,
@@ -1044,11 +1026,12 @@ Exemplo: *"Pagar Sabesp"* ou *"Código da Vivo"*`,
     return true;
   }
 
+  // 3. Alterar Valor de uma Conta
   if (
-    clean.includes('alterar valor da conta') ||
-    clean.includes('alterar valor de uma conta') ||
-    clean === '✏️ alterar valor da conta' ||
-    clean === 'alterar valor'
+    clean === '3' || clean === '3️⃣' || clean.includes('opcao 3') || clean.includes('opção 3') ||
+    clean.includes('alterar valor da conta') || clean.includes('alterar valor de uma conta') ||
+    clean.includes('alterar valor') || clean.includes('alterar_valor') ||
+    clean.includes('mudar valor') || clean.includes('corrigir valor')
   ) {
     await sendEvolutionText({
       phone,
@@ -1061,10 +1044,11 @@ Exemplo: *"Mudar valor da Sabesp para 81,24"*`,
     return true;
   }
 
+  // 4. Alterar Vencimento
   if (
-    clean.includes('alterar vencimento') ||
-    clean === '🗓️ alterar vencimento' ||
-    clean === 'mudar vencimento'
+    clean === '4' || clean === '4️⃣' || clean.includes('opcao 4') || clean.includes('opção 4') ||
+    clean.includes('alterar vencimento') || clean.includes('alterar_vencimento') ||
+    clean.includes('mudar vencimento') || clean.includes('prorrogar') || clean.includes('adiar')
   ) {
     await sendEvolutionText({
       phone,
@@ -1077,10 +1061,15 @@ Exemplo: *"Mudar vencimento da Sabesp para dia 15"* ou *"para 15/10"*`,
     return true;
   }
 
+  // 5. Conhecer Planos Oficiais / Consulta de Planos
   if (
-    clean.includes('conhecer planos oficiais') ||
-    clean.includes('conhecer planos') ||
-    clean === '💳 conhecer planos oficiais'
+    clean === '5' || clean === '5️⃣' || clean.includes('opcao 5') || clean.includes('opção 5') ||
+    clean.includes('conhecer planos oficiais') || clean.includes('conhecer planos') ||
+    clean.includes('conhecer_planos') || clean.includes('planos oficiais') ||
+    clean === 'planos' || clean === 'plano' || clean === 'assinar' ||
+    clean === 'preços' || clean === 'precos' || clean === 'valores' ||
+    clean === 'quanto custa' || clean.includes('ver planos') ||
+    clean.includes('quais planos') || clean.includes('quero assinar')
   ) {
     await sendEvolutionText({ phone, text: getTrialConversionMenu() });
     return true;
@@ -1098,43 +1087,6 @@ Envie um texto ou áudio dizendo:
 *"Excluir conta da [nome da conta]"*
 
 Exemplo: *"Excluir conta da Sabesp"*`,
-    });
-    return true;
-  }
-
-  // B) Consulta de planos / assinatura
-  if (
-    clean === 'planos' || clean === 'plano' || clean === 'assinar' ||
-    clean === 'preços' || clean === 'precos' || clean === 'valores' ||
-    clean === 'quanto custa' || clean.includes('ver planos') ||
-    clean.includes('quais planos') || clean.includes('quero assinar')
-  ) {
-    await sendEvolutionText({ phone, text: getTrialConversionMenu() });
-    return true;
-  }
-
-  // C) Consulta de Contas / Agenda Financeira
-  if (
-    isWeeklyBillsQuery(clean) ||
-    clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
-    clean.includes('listar contas') || clean.includes('mostrar contas') ||
-    clean.includes('quais contas') || clean.includes('o que tenho a pagar') ||
-    clean.includes('o que tenho que pagar') || clean.includes('contas a pagar')
-  ) {
-    const periodOption = extractBillsQueryPeriod(clean);
-    const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
-    await sendEvolutionText({ phone, text: billsMsg });
-
-    // Oferece ações de sequência nativas via Enquete
-    await sendEvolutionPoll({
-      phone,
-      question: `⚡ *O que deseja fazer com as suas contas?*`,
-      options: [
-        '📋 Solicitar Código para Pagar',
-        '✏️ Alterar Valor de uma Conta',
-        '🗓️ Alterar Vencimento',
-        '💳 Conhecer Planos Oficiais',
-      ],
     });
     return true;
   }
@@ -1215,9 +1167,9 @@ function unwrapMessage(msg: any): any {
   return msg;
 }
 
-function extractTextFromMessage(msg: any): string {
+function extractTextFromMessage(msg: any, fullData?: any): string {
   const unwrapped = unwrapMessage(msg);
-  return (
+  const directText = (
     unwrapped?.conversation ||
     unwrapped?.extendedTextMessage?.text ||
     unwrapped?.buttonsResponseMessage?.selectedDisplayText ||
@@ -1227,11 +1179,24 @@ function extractTextFromMessage(msg: any): string {
     unwrapped?.listResponseMessage?.title ||
     unwrapped?.listResponseMessage?.singleSelectReply?.selectedRowId ||
     unwrapped?.pollUpdateMessage?.vote?.selectedOptions?.[0]?.name ||
+    unwrapped?.pollResponse?.selectedOptions?.[0] ||
     unwrapped?.imageMessage?.caption ||
     unwrapped?.videoMessage?.caption ||
     unwrapped?.documentMessage?.caption ||
     ''
   );
+
+  if (directText && typeof directText === 'string' && directText.trim().length > 0) {
+    return directText.trim();
+  }
+
+  if (fullData) {
+    if (fullData.body && typeof fullData.body === 'string') return fullData.body.trim();
+    if (fullData.selectedRowId) return String(fullData.selectedRowId).trim();
+    if (fullData.selectedButtonId) return String(fullData.selectedButtonId).trim();
+  }
+
+  return '';
 }
 
 export async function POST(req: NextRequest) {
@@ -1239,7 +1204,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as EvolutionWebhookBody;
 
     const message = unwrapMessage(body.data?.message);
-    const rawText = extractTextFromMessage(body.data?.message);
+    const rawText = extractTextFromMessage(body.data?.message, body.data);
     const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
     const isAudio =
       body.data?.messageType === 'audioMessage' ||
@@ -1728,21 +1693,17 @@ Seu perfil foi limpo para o estado inicial! 🚀`,
       expires_at: addMinutes(new Date(), 10).toISOString(),
     });
 
-    await sendEvolutionPoll({
-      phone,
-      question: `⚠️ *Confirmação de Segurança — Zerar Lançamentos*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nVocê solicitou *apagar todos os lançamentos e histórico*.\n\n⚠️ Esta ação é irreversível e excluirá permanentemente suas contas cadastradas.\n\nDeseja realmente confirmar?`,
-      options: ['Sim, apagar tudo', 'Não, cancelar'],
-    });
-
     await sendEvolutionText({
       phone,
-      text: `⚠️ *Confirmação de Segurança Requerida*
+      text: `⚠️ *Confirmação de Segurança — Zerar Lançamentos*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você solicitou apagar todos os seus lançamentos e zerar o histórico de testes.
+Você solicitou *apagar todos os lançamentos e histórico*.
+Esta ação é irreversível e excluirá permanentemente suas contas cadastradas.
 
-⚠️ Esta ação é irreversível e excluirá todas as contas e relatórios.
+1️⃣ *Sim, confirmar e apagar tudo*
+2️⃣ *Não, cancelar*
 
-👉 *Responda com SIM para confirmar ou NÃO para cancelar.*`,
+👉 _Responda com *1* (ou *Sim*) para confirmar, ou *2* (ou *Não*) para cancelar._`,
     });
     return;
   }
@@ -2377,17 +2338,8 @@ ${BANK_SAFETY_NOTICE}`,
         });
       }
 
-      // 4. Oferece botões de ações de sequência nativos via Enquete do WhatsApp
-      await sendEvolutionPoll({
-        phone,
-        question: `⚡ *O que deseja fazer a seguir?*`,
-        options: [
-          '📅 Ver Minhas Contas',
-          '✏️ Alterar Valor da Conta',
-          '🗓️ Alterar Vencimento',
-          '💳 Conhecer Planos Oficiais',
-        ],
-      });
+      // 4. Oferece menu de ações de sequência profissional (sem "Mostrar Votos")
+      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
 
       // 5. Documento registrado na degustação
       return;
@@ -2638,7 +2590,17 @@ Como posso te ajudar agora?`,
       }
     }
 
-    // Se ainda estiver no limite de tolerância, apresenta a apresentação transparente e convite elegante para a degustação
+    // Se ainda estiver no limite de tolerância, verifica se o usuário já possui lançamentos na degustação
+    const trialStatus = await checkTrialStatus(cleanPhone);
+    if (trialStatus.docsCount > 0) {
+      await sendEvolutionText({
+        phone,
+        text: `💡 Não compreendi exatamente o seu comando.\n\n👉 Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas!`,
+      });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+      return;
+    }
+
     const welcomeMsg = await getHowItWorksMessage(cleanPhone);
     await sendEvolutionText({
       phone,

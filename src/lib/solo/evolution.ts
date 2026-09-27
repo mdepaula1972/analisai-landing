@@ -298,7 +298,121 @@ export async function sendEvolutionPoll({
     console.warn('[Evolution API] Falha ao enviar enquete nativa, aplicando fallback de texto:', pollErr);
   }
 
-  // Fallback garantido: Envia como texto formatado com instruções claras
+// Fallback garantido: Envia como texto formatado com instruções claras
   const fallbackText = `${question}\n\n${options.map((opt) => `👉 ${opt}`).join('\n')}\n\n_(Você também pode responder digitando *Sim* ou *Não*)_`;
   return sendEvolutionText({ phone, text: fallbackText });
 }
+
+export interface SendEvolutionListParams {
+  phone: string;
+  title: string;
+  description: string;
+  buttonText?: string;
+  footerText?: string;
+  sections: Array<{
+    title: string;
+    rows: Array<{
+      title: string;
+      description?: string;
+      rowId: string;
+    }>;
+  }>;
+}
+
+/**
+ * Envia uma Lista Interativa nativa do WhatsApp (botão "Prossiga" / "Selecionar Ação")
+ * com fallback transparente para menu numerado elegante se a API ou aparelho não suportar.
+ */
+export async function sendEvolutionList({
+  phone,
+  title,
+  description,
+  buttonText = 'Prossiga',
+  footerText = 'AnalisAí Financeiro',
+  sections,
+}: SendEvolutionListParams) {
+  const formattedPhone = formatWhatsAppNumber(phone);
+  const { apiUrl, apiKey, instance } = await getEvolutionConfig();
+
+  try {
+    const res = await fetch(`${apiUrl}/message/sendList/${instance}`, {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        number: formattedPhone,
+        title,
+        description,
+        buttonText,
+        footerText,
+        sections,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, data };
+    }
+  } catch (err) {
+    console.warn('[Evolution API] Falha ao enviar lista interativa, aplicando fallback de menu numerado:', err);
+  }
+
+  // Fallback garantido sem "Mostrar Votos": Envia como menu numerado limpo e amigável
+  const allRows = sections.flatMap((s) => s.rows || []);
+  const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣'];
+  let fallbackText = `⚡ *${title}*\n${description}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  allRows.forEach((row, idx) => {
+    const emoji = numberEmojis[idx] || `${idx + 1}️⃣`;
+    fallbackText += `${emoji} *${row.title}*\n`;
+  });
+  fallbackText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👉 _Responda com o número (ex: *1*) ou envie por áudio/texto!_`;
+
+  return sendEvolutionText({ phone, text: fallbackText });
+}
+
+/**
+ * Menu de Ações de Sequência padronizado (substitui enquetes com "Mostrar Votos")
+ */
+export async function sendActionSequenceMenu(phone: string, contextTitle: string = 'O que deseja fazer a seguir?') {
+  return sendEvolutionList({
+    phone,
+    title: contextTitle,
+    description: 'Selecione uma das opções rápidas abaixo:',
+    buttonText: 'Prossiga',
+    sections: [
+      {
+        title: 'Ações Disponíveis',
+        rows: [
+          {
+            title: 'Ver Minhas Contas',
+            description: 'Consultar todos os compromissos agendados',
+            rowId: 'ver_minhas_contas',
+          },
+          {
+            title: 'Solicitar Código para Pagar',
+            description: 'Copiar código de barras ou Pix para pagamento',
+            rowId: 'solicitar_codigo',
+          },
+          {
+            title: 'Alterar Valor de uma Conta',
+            description: 'Atualizar ou corrigir o valor de um lançamento',
+            rowId: 'alterar_valor',
+          },
+          {
+            title: 'Alterar Vencimento',
+            description: 'Modificar a data de vencimento da fatura',
+            rowId: 'alterar_vencimento',
+          },
+          {
+            title: 'Conhecer Planos Oficiais',
+            description: 'Ver recursos avançados e valores dos planos',
+            rowId: 'conhecer_planos',
+          },
+        ],
+      },
+    ],
+  });
+}
+
