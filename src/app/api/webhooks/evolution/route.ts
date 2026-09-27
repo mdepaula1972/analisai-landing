@@ -5,6 +5,7 @@ import {
   extractDocumentWithGemini,
   processVoiceCommandWithGemini,
   parseConversationalFinancialEntry,
+  parseConversationalCorrections,
 } from '@/lib/solo/gemini';
 import { recordAuditLog } from '@/lib/solo/audit';
 import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand, markTeamMemberActivated } from '@/lib/solo/team';
@@ -887,6 +888,137 @@ async function handleDueDateChange(
   });
 }
 
+function levenshteinDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function findBestBillMatch(bills: any[], query: string): any | null {
+  if (!bills || bills.length === 0 || !query) return null;
+  const cleanQ = query.toLowerCase().trim();
+  const stopWords = ['a', 'o', 'da', 'de', 'do', 'das', 'dos', 'com', 'conta', 'fornecedor', 'para', 'em', 'onde', 'está', 'esta', 'eh', 'é'];
+  const queryTokens = cleanQ.split(/\s+/).filter((t: string) => t.length >= 2 && !stopWords.includes(t));
+
+  // 1. Match exato
+  const exact = bills.find((b: any) => {
+    const name = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
+    return name === cleanQ;
+  });
+  if (exact) return exact;
+
+  // 2. Substring direta (name inclui query ou query inclui name)
+  const substring = bills.find((b: any) => {
+    const name = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
+    return name.includes(cleanQ) || cleanQ.includes(name);
+  });
+  if (substring) return substring;
+
+  // 3. Match por interseção de tokens significativos
+  let bestTokenMatch: any = null;
+  let maxTokenOverlap = 0;
+  for (const b of bills) {
+    const name = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
+    const nameTokens = name.split(/\s+/).filter((t: string) => t.length >= 2 && !stopWords.includes(t));
+    let overlap = 0;
+    for (const qTok of queryTokens) {
+      if (nameTokens.some((nTok: string) => nTok.includes(qTok) || qTok.includes(nTok))) {
+        overlap++;
+      }
+    }
+    if (overlap > maxTokenOverlap) {
+      maxTokenOverlap = overlap;
+      bestTokenMatch = b;
+    }
+  }
+  if (bestTokenMatch && maxTokenOverlap > 0) return bestTokenMatch;
+
+  // 4. Distância de Levenshtein básica para variações fonéticas (ex: Persi vs Perci, Faco vs Facundo)
+  let bestFuzzyMatch: any = null;
+  let minFuzzyDist = 999;
+  for (const b of bills) {
+    const name = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
+    const bTokens = name.split(/\s+/).filter(Boolean);
+    for (const bTok of bTokens) {
+      for (const qTok of queryTokens) {
+        if (Math.abs(bTok.length - qTok.length) <= 3) {
+          const dist = levenshteinDistance(bTok, qTok);
+          if (dist <= 2 && dist < minFuzzyDist) {
+            minFuzzyDist = dist;
+            bestFuzzyMatch = b;
+          }
+        }
+      }
+    }
+  }
+  if (bestFuzzyMatch) return bestFuzzyMatch;
+
+  return null;
+}
+
+async function handleSupplierRename(
+  client: any,
+  cleanPhone: string,
+  currentNameQuery: string,
+  newName: string
+): Promise<{ success: boolean; oldName: string; newName: string }> {
+  const supabase = createServiceRoleClient();
+  const cleanQuery = currentNameQuery.toLowerCase().trim();
+  const cleanNewName = newName.trim();
+
+  // 1. Cliente cadastrado
+  if (client?.id) {
+    const { data: bills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .in('status', ['open', 'postponed']);
+
+    const matched = findBestBillMatch(bills || [], cleanQuery);
+    if (matched) {
+      await supabase
+        .from('payables_receivables')
+        .update({ counterparty_name: cleanNewName })
+        .eq('id', matched.id);
+      return { success: true, oldName: matched.counterparty_name, newName: cleanNewName };
+    }
+  }
+
+  // 2. Lead em degustação
+  const trialBills = await getTrialBills(cleanPhone);
+  const matchedTrial = findBestBillMatch(trialBills, cleanQuery);
+  if (matchedTrial) {
+    const trialRes = await updateTrialBill(cleanPhone, matchedTrial.id || matchedTrial.supplier_name, { supplier_name: cleanNewName });
+    if (trialRes.updated) {
+      return { success: true, oldName: matchedTrial.supplier_name, newName: cleanNewName };
+    }
+  }
+
+  // Tentativa direta com cleanQuery caso não tenha dado match na lista
+  const directRes = await updateTrialBill(cleanPhone, cleanQuery, { supplier_name: cleanNewName });
+  if (directRes.updated && directRes.oldBill) {
+    return { success: true, oldName: directRes.oldBill.supplier_name, newName: cleanNewName };
+  }
+
+  return { success: false, oldName: currentNameQuery, newName: cleanNewName };
+}
+
 async function handleGetBarcodeOrPix(
   client: any,
   phone: string,
@@ -991,11 +1123,16 @@ async function dispatchUserActionCommand(params: {
   const { text, phone, cleanPhone, client } = params;
   if (!text) return false;
   const clean = text.toLowerCase().trim();
+  const normalizedClean = clean.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
 
   // A) Interceptação de botões interativos de sequência / Menu Numerado
   // 1. Ver Minhas Contas
   if (
-    clean === '1' || clean === '1️⃣' || clean.includes('opcao 1') || clean.includes('opção 1') ||
+    clean === '1' || normalizedClean === '1' || clean === '1️⃣' ||
+    normalizedClean === 'um' || normalizedClean === 'hum' || normalizedClean === 'primeiro' ||
+    clean.startsWith('opcao 1') || clean.startsWith('opção 1') ||
+    clean.startsWith('opcao um') || clean.startsWith('opção um') ||
+    clean === 'primeira opcao' || clean === 'primeira opção' ||
     clean.includes('ver minhas contas') || clean.includes('ver_minhas_contas') ||
     clean.includes('ver todas as contas') || clean === '📅 ver minhas contas' ||
     isWeeklyBillsQuery(clean) || clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
@@ -1011,7 +1148,11 @@ async function dispatchUserActionCommand(params: {
 
   // 2. Solicitar Código para Pagar / Antecipar
   if (
-    clean === '2' || clean === '2️⃣' || clean.includes('opcao 2') || clean.includes('opção 2') ||
+    clean === '2' || normalizedClean === '2' || clean === '2️⃣' ||
+    normalizedClean === 'dois' || normalizedClean === 'segundo' ||
+    clean.startsWith('opcao 2') || clean.startsWith('opção 2') ||
+    clean.startsWith('opcao dois') || clean.startsWith('opção dois') ||
+    clean === 'segunda opcao' || clean === 'segunda opção' ||
     clean.includes('solicitar código') || clean.includes('solicitar codigo') || clean.includes('solicitar_codigo') ||
     clean.includes('código para pagar') || clean.includes('codigo para pagar')
   ) {
@@ -1028,7 +1169,12 @@ Exemplo: *"Pagar Sabesp"* ou *"Código da Vivo"*`,
 
   // 3. Alterar Valor de uma Conta
   if (
-    clean === '3' || clean === '3️⃣' || clean.includes('opcao 3') || clean.includes('opção 3') ||
+    clean === '3' || normalizedClean === '3' || clean === '3️⃣' ||
+    normalizedClean === 'tres' || normalizedClean === 'três' || normalizedClean === 'terceiro' ||
+    clean.startsWith('opcao 3') || clean.startsWith('opção 3') ||
+    clean.startsWith('opcao tres') || clean.startsWith('opção tres') ||
+    clean.startsWith('opcao três') || clean.startsWith('opção três') ||
+    clean === 'terceira opcao' || clean === 'terceira opção' ||
     clean.includes('alterar valor da conta') || clean.includes('alterar valor de uma conta') ||
     clean.includes('alterar valor') || clean.includes('alterar_valor') ||
     clean.includes('mudar valor') || clean.includes('corrigir valor')
@@ -1046,7 +1192,11 @@ Exemplo: *"Mudar valor da Sabesp para 81,24"*`,
 
   // 4. Alterar Vencimento
   if (
-    clean === '4' || clean === '4️⃣' || clean.includes('opcao 4') || clean.includes('opção 4') ||
+    clean === '4' || normalizedClean === '4' || clean === '4️⃣' ||
+    normalizedClean === 'quatro' || normalizedClean === 'quarto' ||
+    clean.startsWith('opcao 4') || clean.startsWith('opção 4') ||
+    clean.startsWith('opcao quatro') || clean.startsWith('opção quatro') ||
+    clean === 'quarta opcao' || clean === 'quarta opção' ||
     clean.includes('alterar vencimento') || clean.includes('alterar_vencimento') ||
     clean.includes('mudar vencimento') || clean.includes('prorrogar') || clean.includes('adiar')
   ) {
@@ -1063,7 +1213,11 @@ Exemplo: *"Mudar vencimento da Sabesp para dia 15"* ou *"para 15/10"*`,
 
   // 5. Conhecer Planos Oficiais / Consulta de Planos
   if (
-    clean === '5' || clean === '5️⃣' || clean.includes('opcao 5') || clean.includes('opção 5') ||
+    clean === '5' || normalizedClean === '5' || clean === '5️⃣' ||
+    normalizedClean === 'cinco' || normalizedClean === 'quinto' ||
+    clean.startsWith('opcao 5') || clean.startsWith('opção 5') ||
+    clean.startsWith('opcao cinco') || clean.startsWith('opção cinco') ||
+    clean === 'quinta opcao' || clean === 'quinta opção' ||
     clean.includes('conhecer planos oficiais') || clean.includes('conhecer planos') ||
     clean.includes('conhecer_planos') || clean.includes('planos oficiais') ||
     clean === 'planos' || clean === 'plano' || clean === 'assinar' ||
@@ -1073,6 +1227,101 @@ Exemplo: *"Mudar vencimento da Sabesp para dia 15"* ou *"para 15/10"*`,
   ) {
     await sendEvolutionText({ phone, text: getTrialConversionMenu() });
     return true;
+  }
+
+  // B) Interceptação Inteligente de Correção Conversacional de Fornecedores, Valores e Vencimentos (Gemini Flash)
+  const isCorrectionIntent =
+    clean.includes('corrija') ||
+    clean.includes('corrigir') ||
+    clean.includes('correção') ||
+    clean.includes('correcao') ||
+    clean.includes('onde esta') ||
+    clean.includes('onde está') ||
+    clean.includes('onde ta') ||
+    clean.includes('onde tá') ||
+    clean.includes('mudar nome') ||
+    clean.includes('trocar nome') ||
+    clean.includes('alterar nome') ||
+    clean.includes('renomear') ||
+    clean.includes('com s é') ||
+    clean.includes('com c é') ||
+    clean.includes('com z é') ||
+    clean.includes('fornecedores') ||
+    (clean.includes('fornecedor') && (clean.includes('nome') || clean.includes('errado') || clean.includes('certo')));
+
+  if (isCorrectionIntent) {
+    try {
+      const corrections = await parseConversationalCorrections(text);
+      if (
+        corrections.has_corrections &&
+        (corrections.renames.length > 0 || corrections.amount_changes.length > 0 || corrections.due_date_changes.length > 0)
+      ) {
+        const resultLines: string[] = [];
+
+        for (const rename of corrections.renames) {
+          if (!rename.current_name_query || !rename.new_name) continue;
+          const res = await handleSupplierRename(client, cleanPhone, rename.current_name_query, rename.new_name);
+          if (res.success) {
+            resultLines.push(`• *${res.oldName}* ➔ corrigido para *${res.newName}*`);
+          } else {
+            resultLines.push(`• Não localizei "*${rename.current_name_query}*" para alterar para *${rename.new_name}*`);
+          }
+        }
+
+        for (const amt of corrections.amount_changes) {
+          if (amt.supplier_query && amt.new_amount > 0) {
+            await handleAmountChange(client, phone, cleanPhone, amt.supplier_query, amt.new_amount);
+          }
+        }
+
+        for (const dDate of corrections.due_date_changes) {
+          if (dDate.supplier_query && dDate.new_due_date_raw) {
+            await handleDueDateChange(client, phone, cleanPhone, dDate.supplier_query, dDate.new_due_date_raw);
+          }
+        }
+
+        if (resultLines.length > 0) {
+          await sendEvolutionText({
+            phone,
+            text: `✅ *Dados dos Fornecedores Corrigidos com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${resultLines.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Seus relatórios e lembretes futuros já foram atualizados com os novos nomes!`,
+          });
+          await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+          return true;
+        }
+      }
+    } catch (corrErr) {
+      console.error('[Corrections Error]:', corrErr);
+    }
+  }
+
+  // C) Comando explícito de alteração de nome de fornecedor (Regex direto)
+  const renameMatch =
+    clean.match(/(?:mudar|alterar|trocar|corrigir|renomear)\s+(?:o\s+)?nome\s+(?:d[ao]\s+)?([a-zA-Z0-9\s]+?)\s+para\s+(.+)/i) ||
+    clean.match(/onde\s+(?:está|esta|tá|ta)\s+([a-zA-Z0-9\s]+?)[,;\s]+(?:é|e|coloca|coloque|mudar para|alterar para)\s+(.+)/i);
+
+  if (renameMatch) {
+    const rawSup = renameMatch[1].replace(/^(conta\s+d[ao]|fornecedor\s+d[ao]|conta)\s+/i, '').trim();
+    const newName = renameMatch[2].replace(/[?.!]+$/, '').trim();
+    if (rawSup.length >= 2 && newName.length >= 2) {
+      const res = await handleSupplierRename(client, cleanPhone, rawSup, newName);
+      if (res.success) {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Fornecedor Atualizado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• De: *${res.oldName}*
+• Para: *${res.newName}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Seus lembretes e relatórios futuros já foram atualizados!`,
+        });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+        return true;
+      }
+    }
   }
 
   if (

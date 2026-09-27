@@ -658,3 +658,141 @@ Data de referência: 2026-09-19.`,
     textResponse: transcribedText,
   };
 }
+
+export interface SupplierRenameAction {
+  current_name_query: string;
+  new_name: string;
+}
+
+export interface AmountChangeAction {
+  supplier_query: string;
+  new_amount: number;
+}
+
+export interface DueDateChangeAction {
+  supplier_query: string;
+  new_due_date_raw: string;
+}
+
+export interface ConversationalCorrectionsResult {
+  has_corrections: boolean;
+  renames: SupplierRenameAction[];
+  amount_changes: AmountChangeAction[];
+  due_date_changes: DueDateChangeAction[];
+}
+
+/**
+ * Interpreta pedidos em linguagem natural para corrigir ou editar dados de contas já cadastradas.
+ * Identifica renomeações de fornecedores/favorecidos, alterações de valor e de vencimento.
+ * Exemplo: "onde está Contalivre da contabilidade é Contabilivre, onde está Julia Facundo é Julia Faco Guion de Paula"
+ */
+export async function parseConversationalCorrections(
+  userText: string
+): Promise<ConversationalCorrectionsResult> {
+  const genAI = getGeminiClient();
+  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: ({
+            type: SchemaType.OBJECT,
+            properties: {
+              has_corrections: {
+                type: SchemaType.BOOLEAN,
+                description: 'True se a mensagem solicita correção, alteração ou edição de nomes de fornecedores, valores ou datas de contas existentes.',
+              },
+              renames: {
+                type: SchemaType.ARRAY,
+                description: 'Lista de correções de nome de fornecedor/favorecido (ex: de X para Y, onde está X é Y, mudar nome de X para Y).',
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    current_name_query: {
+                      type: SchemaType.STRING,
+                      description: 'Nome atual ou trecho citado para busca (ex: "Contalivre", "Julia Facundo", "Persi")',
+                    },
+                    new_name: {
+                      type: SchemaType.STRING,
+                      description: 'Novo nome correto desejado (ex: "Contabilivre", "Julia Faco Guion de Paula", "Perci")',
+                    },
+                  },
+                  required: ['current_name_query', 'new_name'],
+                },
+              },
+              amount_changes: {
+                type: SchemaType.ARRAY,
+                description: 'Lista de alterações de valor solicitadas.',
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    supplier_query: {
+                      type: SchemaType.STRING,
+                      description: 'Nome da conta ou fornecedor',
+                    },
+                    new_amount: {
+                      type: SchemaType.NUMBER,
+                      description: 'Novo valor numérico em reais',
+                    },
+                  },
+                  required: ['supplier_query', 'new_amount'],
+                },
+              },
+              due_date_changes: {
+                type: SchemaType.ARRAY,
+                description: 'Lista de alterações de data de vencimento solicitadas.',
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    supplier_query: {
+                      type: SchemaType.STRING,
+                      description: 'Nome da conta ou fornecedor',
+                    },
+                    new_due_date_raw: {
+                      type: SchemaType.STRING,
+                      description: 'Nova data informada (ex: "10", "15/10", "dia 20")',
+                    },
+                  },
+                  required: ['supplier_query', 'new_due_date_raw'],
+                },
+              },
+            },
+            required: ['has_corrections', 'renames', 'amount_changes', 'due_date_changes'],
+          } as any),
+        },
+        systemInstruction: `Você é o analisador de correções e edições financeiras do assistente AnalisAí.
+Sua missão é extrair exatamente quais contas o usuário deseja editar ou corrigir.
+Preste muita atenção em expressões brasileiras como:
+- "onde está X é Y" / "onde tá X coloca Y" -> renomear X para Y.
+- "Persi com S é Persi com C" -> current_name_query: "Persi", new_name: "Perci".
+- "Contalivre da contabilidade é Contabilivre" -> current_name_query: "Contalivre", new_name: "Contabilivre".
+- "mudar valor de X para R$ Y" -> amount_change.
+- "mudar vencimento de X para dia Y" -> due_date_change.
+Se a mensagem for apenas um novo lançamento ou bate-papo, retorne has_corrections: false com arrays vazios.`,
+      });
+
+      const res = await model.generateContent(`Mensagem do usuário: "${userText}"`);
+      const txt = res.response.text();
+      const parsed = JSON.parse(txt);
+
+      return {
+        has_corrections: Boolean(parsed.has_corrections),
+        renames: Array.isArray(parsed.renames) ? parsed.renames : [],
+        amount_changes: Array.isArray(parsed.amount_changes) ? parsed.amount_changes : [],
+        due_date_changes: Array.isArray(parsed.due_date_changes) ? parsed.due_date_changes : [],
+      };
+    } catch (err) {
+      console.warn(`[parseConversationalCorrections] Erro no modelo ${modelName}:`, err);
+    }
+  }
+
+  return {
+    has_corrections: false,
+    renames: [],
+    amount_changes: [],
+    due_date_changes: [],
+  };
+}
