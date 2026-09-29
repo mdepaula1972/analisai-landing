@@ -78,10 +78,12 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!estourar lancamento* → Simula estouro da cota mensal (oferece Pacote Extra +20 por R$ 14,90 ou upgrade)
 • *!estourar analise* → Simula estouro do consultor de caixa (oferece R$ 49 avulso ou upgrade)
 
-👥 *4. GESTÃO DE USUÁRIOS QA (AMIGOS E FAMILIARES)*
-• *!qa add 13978122222 João Amigo* (aceita com ou sem máscara: '(13) 97812-2222' ou '5513...') → Acesso livre QA
+👥 *4. GESTÃO DE USUÁRIOS QA & CONVITES (AMIGOS E FAMILIARES)*
+• *!convidar +55 14 99894-7271 Luizão* → Libera acesso QA livre e envia convite VIP no WhatsApp dele na hora!
+• *!qa add 13978122222 João Amigo* (aceita com ou sem máscara) → Acesso livre QA silencioso
 • *!qa list* → Lista todos os contatos que você já liberou como QA
 • *!qa remove 13978122222* → Remove do modo QA
+• *!equipe add <tel> <nome>* → Cadastra operador na sua empresa com Modo Onisciência
 • *!feedbacks* → Vê todas as sugestões e críticas enviadas pelos testadores
 
 📊 *5. PRODUTOS AVULSOS E AUDITORIA*
@@ -123,6 +125,8 @@ Comandos disponíveis para você testar todas as opções:
 
 • *!status* → Exibe seu plano atual, limites consumidos e status
 • *!reset* → Zera todos os contadores do seu ciclo para testar do início
+• *!convidar <tel> <nome>* → Libera acesso QA livre e envia convite VIP no WhatsApp!
+• *!equipe add <tel> <nome>* → Cadastra operador na equipe da sua empresa (Modo Onisciência)
 • *!projeto <nome> <ideia>* → Cria novo SaaS/App do zero (GitHub + Vercel + DB)
 • *!ideia <texto>* → Envia nova ideia pelo WhatsApp para o backlog da IA
 • *!bug <descrição>* → Relata falha no teste para a IA resolver (direto do bar/rua)
@@ -771,6 +775,133 @@ _(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
     return {
       handled: true,
       message: `🧪 *Uso dos Comandos de QA:*\n• \`!qa add <telefone/cpf> [descrição]\`\n  ↳ _Exemplos aceitos:_\n    • \`!qa add 13978122222 João Amigo\`\n    • \`!qa add (13) 97812-2222 João Amigo\`\n    • \`!qa add +55 13 97812-2222 João Amigo\`\n• \`!qa remove <telefone/cpf>\`\n• \`!qa list\``,
+    };
+  }
+
+  // ── !convidar / !convite ─────────────────────────────────────────────────────
+  if (action === 'convidar' || action === 'convite') {
+    const rawAfter = commandText.replace(/^[!/](convidar|convite)\s+/i, '').trim();
+    let rawTarget = '';
+    let name = '';
+
+    const match = rawAfter.match(/^([+0-9()\s.\/-]+?)(?:\s+([a-zA-ZÀ-ÿ].*))?$/);
+    if (match) {
+      rawTarget = match[1].trim();
+      name = match[2] ? match[2].trim() : '';
+    } else {
+      const p = rawAfter.split(/\s+/);
+      rawTarget = p[0] || '';
+      name = p.slice(1).join(' ');
+    }
+
+    if (!rawTarget) {
+      return {
+        handled: true,
+        message: `✉️ *Como usar o comando !convidar:*
+• \`!convidar <telefone> <nome>\`
+  ↳ _Exemplo:_ \`!convidar +55 14 99894-7271 Luizão\`
+
+💡 *O que este comando faz automaticamente:*
+1. Libera o contato na **Whitelist de QA** (acesso ilimitado e sem barreiras para testar o AnalisAí);
+2. Dispara uma mensagem oficial no WhatsApp dele apresentando o robô e convidando-o para testar!`,
+      };
+    }
+
+    const { addQaWhitelist, formatIdentifierDisplay } = await import('@/lib/solo/qa-whitelist');
+    const { sendEvolutionText } = await import('@/lib/solo/evolution');
+
+    const cleanDigits = rawTarget.replace(/\D/g, '');
+    const cleanPhoneWith55 = cleanDigits.length <= 11 && !cleanDigits.startsWith('55') ? `55${cleanDigits}` : cleanDigits;
+
+    // 1. Cadastra na QA Whitelist para que ele tenha acesso 100% livre
+    await addQaWhitelist(cleanDigits, name || 'Convidado VIP', client.name);
+
+    // 2. Dispara mensagem oficial no WhatsApp do convidado
+    const guestFirstName = name ? name.split(' ')[0] : 'Parceiro';
+    let inviteSent = false;
+    try {
+      await sendEvolutionText({
+        phone: cleanPhoneWith55,
+        text: `👋 Olá, ${guestFirstName}! Que bom ter você por aqui!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O *${client.name}* liberou o seu acesso VIP no **AnalisAí**, o assistente financeiro inteligente no WhatsApp!
+
+Você agora tem **acesso livre e sem custos** para testar tudo na prática:
+• 📸 *Boleto/Nota:* Envie a foto ou PDF de uma conta para agendar em segundos;
+• 🎙️ *Áudios e Textos:* Mande um áudio dizendo suas contas (ex: *"Pagar luz R$ 180 dia 15"*);
+• ⏰ *Lembretes na Véspera:* Te aviso com antecedência para evitar multas e juros;
+• 📊 *Livro Caixa e DRE:* Peça seu relatório em PDF com gráficos a qualquer hora digitando *"relatório"*.
+
+👉 *Para começar agora mesmo:*
+Salve este contato na sua agenda e envie uma foto de boleto ou um áudio por aqui! 🚀`,
+      });
+      inviteSent = true;
+    } catch (sendErr) {
+      console.error('[Convidar Send Error]:', sendErr);
+    }
+
+    const formattedTarget = formatIdentifierDisplay(cleanDigits);
+
+    return {
+      handled: true,
+      message: `🎉 *Convite Concluído com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 *Convidado:* ${name || 'Convidado VIP'}
+📱 *WhatsApp:* ${formattedTarget}
+⚡ *Status QA:* **Acesso Livre & Irrestrito Liberado!**
+📲 *Mensagem no WhatsApp:* ${inviteSent ? '✅ Enviada com sucesso para ele!' : '⚠️ Não foi possível entregar automaticamente (verifique o número)'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${name || 'Ele'} agora pode enviar fotos de boletos, áudios e pedir relatórios sem nenhuma trava de cobrança ou limite!
+
+💡 *Dica de Equipe:* Se o objetivo for cadastrá-lo como operador da sua empresa (para lançar notas em nome da sua empresa e te notificar a cada ação), envie:
+👉 *!equipe add ${cleanPhoneWith55} ${name || 'Operador'}*`,
+    };
+  }
+
+  // ── !equipe / !time ─────────────────────────────────────────────────────────
+  if (action === 'equipe' || action === 'time') {
+    const subAction = arg1;
+    const { addTeamMember, listTeamMembers, removeTeamMember } = await import('@/lib/solo/team');
+
+    if (subAction === 'add') {
+      const rawAfter = commandText.replace(/^[!/](equipe|time)\s+add\s+/i, '').trim();
+      const match = rawAfter.match(/^([+0-9()\s.\/-]+?)(?:\s+([a-zA-ZÀ-ÿ].*))?$/);
+      const rawTarget = match ? match[1].trim() : rawAfter.split(/\s+/)[0];
+      const memberName = match && match[2] ? match[2].trim() : (rawAfter.split(/\s+/).slice(1).join(' ') || 'Operador');
+
+      if (rawTarget) {
+        const res = await addTeamMember(clientId, rawTarget, memberName);
+        return { handled: true, message: res.message };
+      }
+    } else if (subAction === 'remove') {
+      const rawTarget = commandText.replace(/^[!/](equipe|time)\s+remove\s+/i, '').trim();
+      if (rawTarget) {
+        const res = await removeTeamMember(clientId, rawTarget);
+        return { handled: true, message: res.message };
+      }
+    } else if (subAction === 'list' || !subAction) {
+      const members = await listTeamMembers(clientId);
+      if (members.length === 0) {
+        return {
+          handled: true,
+          message: `👥 *Sua Equipe:*\nVocê ainda não possui operadores adicionais cadastrados.\n\nPara cadastrar alguém, envie:\n👉 \`!equipe add <telefone> <nome>\` (ex: \`!equipe add 14998947271 Luizão\`)`,
+        };
+      }
+      const listStr = members.map((m, i) => {
+        const statusAtiv = m.activated_at ? '✅ Ativa' : '⏳ Aguardando 1º Oi';
+        const onisc = m.notify_owner_on_action !== false ? '🔔 Avisos Ativos' : '🔕 Silenciada';
+        return `${i + 1}. *${m.member_name}* (${m.whatsapp_number}) — ${statusAtiv} | ${onisc}`;
+      }).join('\n');
+
+      return {
+        handled: true,
+        message: `👥 *Membros da Sua Equipe Autorizados:*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${listStr}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n💡 *Comandos rápidos:*\n• \`!equipe add <telefone> <nome>\`\n• \`!equipe remove <telefone>\``,
+      };
+    }
+
+    return {
+      handled: true,
+      message: `👥 *Uso dos Comandos de Equipe:*\n• \`!equipe add <telefone> <nome>\`\n• \`!equipe remove <telefone>\`\n• \`!equipe list\``,
     };
   }
 

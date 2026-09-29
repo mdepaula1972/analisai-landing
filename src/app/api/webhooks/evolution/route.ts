@@ -2094,6 +2094,15 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     }
   }
 
+  // ── Interceptação 0.2: Gestão de Membros de Equipe (Linguagem Natural ou Comandos) ────
+  if (client?.id) {
+    const teamResponse = await handleNaturalLanguageTeamCommand(client.id, rawText);
+    if (teamResponse.handled && teamResponse.message) {
+      await sendEvolutionText({ phone, text: teamResponse.message });
+      return;
+    }
+  }
+
   // ── Interceptação 1: Comandos do Analisador Oficial, Indicação & Parcerias ────
   const isAnalisadorCommand =
     cleanText === '!analisador' || cleanText === 'analisador' || cleanText === '/analisador' ||
