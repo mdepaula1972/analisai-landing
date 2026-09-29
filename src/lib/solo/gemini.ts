@@ -3,7 +3,7 @@ import { ExtractedDocumentData } from '@/types/solo';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
 
-function getGeminiClient() {
+export function getGeminiClient() {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY não configurada no ambiente.');
   }

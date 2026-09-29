@@ -7,6 +7,7 @@ import {
   parseConversationalFinancialEntry,
   parseConversationalCorrections,
 } from '@/lib/solo/gemini';
+import { routeConversationalIntent, UserConversationalContext } from '@/lib/solo/conversational-router';
 import { recordAuditLog } from '@/lib/solo/audit';
 import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand, markTeamMemberActivated } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
@@ -1407,6 +1408,264 @@ Exemplo: *"Excluir conta da Sabesp"*`,
 
 const dispatchTrialUserCommand = dispatchUserActionCommand;
 
+async function handleConversationalNaturalLanguageRouter(params: {
+  text: string;
+  phone: string;
+  cleanPhone: string;
+  client: any;
+  body: any;
+  isAdminPhone: boolean;
+  isOperator: boolean;
+}): Promise<boolean> {
+  const { text, phone, cleanPhone, client, body, isAdminPhone, isOperator } = params;
+  if (!text || text.trim().length === 0) return false;
+
+  const supabase = createServiceRoleClient();
+  const trialStatus = await checkTrialStatus(cleanPhone);
+  const isAdmin = Boolean(client?.is_admin || isAdminPhone);
+
+  const context: UserConversationalContext = {
+    userId: client?.id || cleanPhone,
+    userName: client?.name || body?.data?.pushName || 'Usuário',
+    phone: cleanPhone,
+    isAdmin,
+    userType: client ? (isOperator ? 'operator' : 'subscriber') : 'trial',
+    plan: client?.plan || (client?.id ? 'solo' : 'trial'),
+    companyName: client?.company_name || undefined,
+    hasOpenBills: trialStatus.docsCount > 0,
+  };
+
+  try {
+    const decision = await routeConversationalIntent(text, context);
+    console.log(`[Conversational Router] Intent: ${decision.intent}, Confidence: ${decision.confidence}, Applicable: ${decision.is_applicable}`);
+
+    // Se a IA determinou que não é aplicável ao perfil do usuário
+    if (!decision.is_applicable) {
+      const msg = decision.inapplicable_message || 'Essa funcionalidade não está habilitada para o seu perfil no momento.';
+      await sendEvolutionText({ phone, text: msg });
+      return true;
+    }
+
+    // 1. Convidar alguém / Liberar acesso VIP QA / Indicar parceiro
+    if (decision.intent === 'INVITE_GUEST') {
+      const rawTarget = decision.invite_params?.phone;
+      const guestName = decision.invite_params?.name || 'Convidado VIP';
+
+      if (rawTarget) {
+        const cleanDigits = rawTarget.replace(/\D/g, '');
+        const cleanPhoneWith55 = cleanDigits.length <= 11 && !cleanDigits.startsWith('55') ? `55${cleanDigits}` : cleanDigits;
+
+        if (isAdmin) {
+          const { addQaWhitelist, formatIdentifierDisplay } = await import('@/lib/solo/qa-whitelist');
+          await addQaWhitelist(cleanDigits, guestName, client?.name || 'Administrador');
+
+          let inviteSent = false;
+          try {
+            await sendEvolutionText({
+              phone: cleanPhoneWith55,
+              text: `👋 Olá, ${guestName.split(' ')[0]}! Que bom ter você por aqui!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O *${client?.name || 'Administrador'}* liberou o seu acesso VIP no **AnalisAí**, o assistente financeiro inteligente no WhatsApp!
+
+Você agora tem **acesso livre e sem custos** para testar tudo na prática:
+• 📸 *Boleto/Nota:* Envie a foto ou PDF de uma conta para agendar em segundos;
+• 🎙️ *Áudios e Textos:* Mande um áudio dizendo suas contas (ex: *"Pagar luz R$ 180 dia 15"*);
+• ⏰ *Lembretes na Véspera:* Te aviso com antecedência para evitar multas e juros;
+• 📊 *Livro Caixa e DRE:* Peça seu relatório em PDF com gráficos a qualquer hora digitando *"relatório"*.
+
+👉 *Para começar agora mesmo:*
+Salve este contato na sua agenda e envie uma foto de boleto ou um áudio por aqui! 🚀`,
+            });
+            inviteSent = true;
+          } catch (e) {
+            console.error('[Conversational Router Invite Error]:', e);
+          }
+
+          const formattedTarget = formatIdentifierDisplay(cleanDigits);
+          await sendEvolutionText({
+            phone,
+            text: `🎉 *Convite VIP Concluído com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 *Convidado:* ${guestName}
+📱 *WhatsApp:* ${formattedTarget}
+⚡ *Status QA:* **Acesso Livre & Irrestrito Liberado!**
+📲 *Mensagem no WhatsApp:* ${inviteSent ? '✅ Enviada com sucesso para ele!' : '⚠️ Enviada (verifique o número)'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${guestName} agora pode testar comandos por voz, fotos de boletos e relatórios sem nenhuma restrição!
+
+💡 *Dica de Equipe:* Para cadastrá-lo como operador da sua empresa, basta dizer: *"Adiciona o ${guestName} na minha equipe"*.`,
+          });
+          return true;
+        } else {
+          const shareMsg = await getReferralShareMessage(client?.id || cleanPhone, client?.name);
+          await sendEvolutionText({
+            phone,
+            text: `🎁 *Que ótimo que você quer convidar o ${guestName}!*
+Aqui está o seu link de convite exclusivo para compartilhar com ele:\n\n${shareMsg}`,
+          });
+          return true;
+        }
+      }
+    }
+
+    // 2. Gestão de Equipe (Linguagem Natural)
+    if (decision.intent === 'TEAM_MANAGEMENT' && client?.id) {
+      const teamRes = await handleNaturalLanguageTeamCommand(client.id, text);
+      if (teamRes.handled && teamRes.message) {
+        await sendEvolutionText({ phone, text: teamRes.message });
+        return true;
+      }
+      if (decision.team_params?.action === 'add' && decision.team_params.phone) {
+        const { addTeamMember } = await import('@/lib/solo/team');
+        const res = await addTeamMember(client.id, decision.team_params.phone, decision.team_params.name || 'Operador');
+        await sendEvolutionText({ phone, text: res.message });
+        return true;
+      }
+    }
+
+    // 3. Consulta de Contas / Agenda de Pagamentos
+    if (decision.intent === 'QUERY_BILLS') {
+      const period = decision.bills_query_params?.period || 'week';
+      const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, period);
+      await sendEvolutionText({ phone, text: billsMsg });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer com as suas contas?');
+      return true;
+    }
+
+    // 4. Solicitação de Código de Barras / Pix para pagar
+    if (decision.intent === 'GET_PAYMENT_CODE' && decision.payment_code_params?.supplier_query) {
+      await handleGetBarcodeOrPix(client, phone, cleanPhone, decision.payment_code_params.supplier_query);
+      return true;
+    }
+
+    // 5. Edição / Correção de Contas (Renomeações, Valores, Vencimentos)
+    if (decision.intent === 'EDIT_BILL' && decision.edit_params) {
+      const { renames, amount_changes, due_date_changes } = decision.edit_params;
+      const resultLines: string[] = [];
+
+      if (Array.isArray(renames)) {
+        for (const ren of renames) {
+          if (!ren.current_name_query || !ren.new_name) continue;
+          const res = await handleSupplierRename(client, cleanPhone, ren.current_name_query, ren.new_name);
+          if (res.success) {
+            resultLines.push(`• *${res.oldName}* ➔ corrigido para *${res.newName}*`);
+          } else {
+            resultLines.push(`• Não localizei "*${ren.current_name_query}*" para alterar para *${ren.new_name}*`);
+          }
+        }
+      }
+
+      if (Array.isArray(amount_changes)) {
+        for (const amt of amount_changes) {
+          if (amt.supplier_query && amt.new_amount > 0) {
+            await handleAmountChange(client, phone, cleanPhone, amt.supplier_query, amt.new_amount);
+          }
+        }
+      }
+
+      if (Array.isArray(due_date_changes)) {
+        for (const dDate of due_date_changes) {
+          if (dDate.supplier_query && dDate.new_due_date_raw) {
+            await handleDueDateChange(client, phone, cleanPhone, dDate.supplier_query, dDate.new_due_date_raw);
+          }
+        }
+      }
+
+      if (resultLines.length > 0) {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Dados Atualizados com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${resultLines.join('\n')}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Seus relatórios e lembretes futuros já foram atualizados com os novos dados!`,
+        });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+        return true;
+      }
+    }
+
+    // 6. Exclusão de Conta
+    if (decision.intent === 'DELETE_BILL' && decision.delete_params?.supplier_query) {
+      await handleDeleteBill(client, phone, cleanPhone, decision.delete_params.supplier_query);
+      return true;
+    }
+
+    // 7. Lançamento Financeiro Identificado
+    if (decision.intent === 'RECORD_FINANCIAL_ENTRY' && Array.isArray(decision.financial_entries) && decision.financial_entries.length > 0) {
+      const validEntries = decision.financial_entries.filter((e) => (e.amount && e.amount > 0) || e.is_provision);
+      if (validEntries.length > 0) {
+        if (!client) {
+          // Degustação (trial)
+          await recordMultipleTrialUsage(cleanPhone, validEntries);
+          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - validEntries.length);
+          const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, remainingAfter);
+          await sendEvolutionText({ phone, text: confirmationText });
+          return true;
+        } else {
+          // Cliente cadastrado
+          for (const ent of validEntries) {
+            const isIncome = ent.entry_type === 'receivable';
+            const entity = ent.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+            const targetDue = ent.due_date || new Date().toISOString().split('T')[0];
+
+            await supabase.from('payables_receivables').insert({
+              client_id: client.id,
+              counterparty_name: entity,
+              type: isIncome ? 'receivable' : 'payable',
+              amount: ent.amount ? Math.abs(ent.amount) : 0,
+              original_due_date: targetDue,
+              current_due_date: targetDue,
+              status: 'open',
+            });
+          }
+
+          const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, 99);
+          await sendEvolutionText({ phone, text: confirmationText });
+          return true;
+        }
+      }
+    }
+
+    // 8. Relatório em PDF (Livro Caixa / DRE)
+    if (decision.intent === 'REQUEST_PDF_REPORT') {
+      if (client?.id) {
+        await sendCashLedgerPdfToWhatsApp(client.id, phone);
+        return true;
+      } else {
+        await sendTrialPdfToWhatsApp(cleanPhone, phone);
+        return true;
+      }
+    }
+
+    // 9. Consulta de Preços / Planos
+    if (decision.intent === 'VIEW_PLANS_PRICING') {
+      await sendEvolutionText({ phone, text: getTrialConversionMenu() });
+      return true;
+    }
+
+    // 10. Simulação de Teste Admin em Linguagem Natural
+    if (decision.intent === 'ADMIN_SIMULATION' && isAdmin && decision.simulation_params?.action) {
+      const cmd = `!${decision.simulation_params.action} ${decision.simulation_params.target_plan || ''}`.trim();
+      const adminRes = await handleAdminCommands(client?.id || cleanPhone, cmd);
+      if (adminRes.handled && adminRes.message) {
+        await sendEvolutionText({ phone, text: adminRes.message });
+        return true;
+      }
+    }
+
+    // 11. Conversação Geral / Dúvida com resposta direta da IA
+    if (decision.conversational_reply && decision.confidence >= 0.8) {
+      await sendEvolutionText({ phone, text: decision.conversational_reply });
+      return true;
+    }
+  } catch (routerErr) {
+    console.error('[handleConversationalNaturalLanguageRouter Error]:', routerErr);
+  }
+
+  return false;
+}
+
 function unwrapMessage(msg: any): any {
   if (!msg) return {};
   if (msg.ephemeralMessage?.message) return unwrapMessage(msg.ephemeralMessage.message);
@@ -2362,6 +2621,20 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
+  // ── Interceptação Inteligente do Cérebro de Linguagem Natural ──
+  const handledNaturalLang = await handleConversationalNaturalLanguageRouter({
+    text: rawText || cleanText,
+    phone,
+    cleanPhone,
+    client,
+    body,
+    isAdminPhone,
+    isOperator,
+  });
+  if (handledNaturalLang) {
+    return;
+  }
+
   // ── Interceptação 2: Lead vindo de Link de Indicação de Amigo ou Analisador ───
   const referralMatch = rawText.match(/(?:indica[çc][ãa]o do (?:cliente|analisador|parceiro)|indicado por)\s*(\d{10,14})/i);
   if (referralMatch && referralMatch[1]) {
@@ -2614,6 +2887,19 @@ ${BANK_SAFETY_NOTICE}`,
       return;
     }
 
+    const handledTrialNaturalLang = await handleConversationalNaturalLanguageRouter({
+      text: rawText || cleanText,
+      phone,
+      cleanPhone,
+      client,
+      body,
+      isAdminPhone,
+      isOperator,
+    });
+    if (handledTrialNaturalLang) {
+      return;
+    }
+
     // 1.4 Se o usuário enviou texto, verifica se é um lançamento financeiro para a degustação
     if (rawText && rawText.trim().length >= 4) {
       try {
@@ -2747,6 +3033,19 @@ ${BANK_SAFETY_NOTICE}`,
           client,
         });
         if (handledAudioCommand) {
+          return;
+        }
+
+        const handledAudioNaturalLang = await handleConversationalNaturalLanguageRouter({
+          text: cleanTranscribed,
+          phone,
+          cleanPhone,
+          client,
+          body,
+          isAdminPhone,
+          isOperator,
+        });
+        if (handledAudioNaturalLang) {
           return;
         }
 
@@ -3364,6 +3663,19 @@ Deseja migrar para o Solo agora?
           client,
         });
         if (handledSubscriberVoice) {
+          return;
+        }
+
+        const handledSubVoiceRouter = await handleConversationalNaturalLanguageRouter({
+          text: audioResult.textResponse.trim(),
+          phone,
+          cleanPhone,
+          client,
+          body,
+          isAdminPhone,
+          isOperator,
+        });
+        if (handledSubVoiceRouter) {
           return;
         }
       }
