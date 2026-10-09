@@ -197,7 +197,7 @@ Essa prática pode sofrer **tributação punitiva de até 35% de IRRF na fonte**
 2. Se for ajuda a parentes/amigos, faça o acerto diretamente pela sua conta bancária **Pessoa Física (CPF)** após receber seu pró-labore!`,
       };
     } else if (isCpf) {
-      // É CPF do próprio titular/empresário (Blindagem Patrimonial via Dividendos / Pró-labore)
+      // É CPF (Pessoa Física) — Pode ser Sócio, Funcionário ou Terceiro Aleatório
       const payerDisplay = payerName
         ? `${payerName} (CPF ${doc.payer_tax_id || cleanPayerTaxId})`
         : doc.payer_tax_id
@@ -206,19 +206,23 @@ Essa prática pode sofrer **tributação punitiva de até 35% de IRRF na fonte**
 
       return {
         isPersonalExpense: true,
-        adviceMessage: `🛡️ *Alerta de Blindagem Patrimonial — Conta no CPF (Pessoa Física)*
+        adviceMessage: `🛡️ *Consultoria Contábil & Patrimonial — Conta no CPF (Pessoa Física)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no **CPF de Pessoa Física**:
-👤 *Titular:* ${payerDisplay}
+Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no CPF de *${payerDisplay}*.
 
-💡 *Orientação dos nossos Especialistas Contábeis:*
-Se esta despesa pessoal for paga com o caixa da sua empresa (PJ), a regra de ouro contábil é escriturá-la como **Distribuição de Lucros / Dividendos** (ou Pró-Labore), e **nunca como despesa operacional da empresa**.
+💡 *Se a sua Empresa (PJ) for pagar esta conta diretamente, veja a correta classificação contábil:*
 
-👉 *Procedimento Seguro e Recomendado:*
-1️⃣ Transfira o valor exato da conta bancária da sua PJ para a sua conta de Pessoa Física como **Distribuição de Lucros/Dividendos**;
-2️⃣ Em seguida, realize o pagamento pelo app da sua conta de **Pessoa Física**!
+1️⃣ *Conta do Sócio / Titular:*
+• O ideal é transferir da PJ para sua conta PF como **Distribuição de Lucros / Dividendos** (ou Pró-Labore) e pagar na PF;
+• Se pagar direto pelo banco da PJ, escriture como **Distribuição de Dividendos / Retirada do Sócio** (nunca como despesa da empresa!).
 
-_(Assim você evita a confusão patrimonial perante a Receita Federal e não distorce a apuração do lucro real da sua empresa!)_`,
+2️⃣ *Conta de Funcionário / Colaborador:*
+• Prática comum em PMEs (adiantamento emergencial, faculdade/curso, auxílio médico);
+• Categorize como **Adiantamento Salarial / Vale** (a descontar no próximo holerite), **Bônus / Premiação** ou **Ajuda de Custo / Benefício** para blindar sua empresa contra riscos e passivos trabalhistas!
+
+3️⃣ *Conta de Terceiro Aleatório / Amigo / Parente:*
+• Jamais lance como despesa operacional (evita autuação fiscal de até 35% de IRRF por pagamento sem causa);
+• Classifique como **Distribuição de Lucros / Dividendos do Sócio** — o sócio assume o pagamento abatendo da sua retirada de lucro!`,
       };
     }
   }
@@ -301,7 +305,7 @@ export function analyzePatrimonialExpense(doc: {
   const isCpfPayer = doc.payer_tax_type === 'cpf' || cleanPayerTaxId.length === 11;
   const isCnpjPayer = doc.payer_tax_type === 'cnpj' || cleanPayerTaxId.length === 14;
 
-  // 1. Alerta de Conta no CPF (Pessoa Física) — Orientação de Dividendos / Pró-labore
+  // 1. Alerta de Conta no CPF (Pessoa Física) — Orientação de Sócios, Funcionários ou Terceiros
   if (isCpfPayer) {
     const payerDisplay = doc.payer_name
       ? `${doc.payer_name} (CPF ${doc.payer_tax_id})`
@@ -311,19 +315,23 @@ export function analyzePatrimonialExpense(doc: {
 
     return {
       isPersonalExpense: true,
-      adviceMessage: `🛡️ *Alerta de Blindagem Patrimonial — Conta no CPF (Pessoa Física)*
+      adviceMessage: `🛡️ *Consultoria Contábil & Patrimonial — Conta no CPF (Pessoa Física)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no **CPF de Pessoa Física**:
-👤 *Titular:* ${payerDisplay}
+Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no CPF de *${payerDisplay}*.
 
-💡 *Orientação dos nossos Especialistas Contábeis:*
-Se esta despesa pessoal for paga com o caixa da sua empresa (PJ), a regra de ouro contábil é escriturá-la como **Distribuição de Lucros / Dividendos** (ou Pró-Labore), e **nunca como despesa operacional da empresa**.
+💡 *Se a sua Empresa (PJ) for pagar esta conta diretamente, veja a correta classificação contábil:*
 
-👉 *Procedimento Seguro e Recomendado:*
-1️⃣ Transfira o valor exato da conta bancária da sua PJ para a sua conta de Pessoa Física como **Distribuição de Lucros/Dividendos**;
-2️⃣ Em seguida, realize o pagamento pelo app da sua conta de **Pessoa Física**!
+1️⃣ *Conta do Sócio / Titular:*
+• O ideal é transferir da PJ para sua conta PF como **Distribuição de Lucros / Dividendos** (ou Pró-Labore) e pagar na PF;
+• Se pagar direto pelo banco da PJ, escriture como **Distribuição de Dividendos / Retirada do Sócio** (nunca como despesa da empresa!).
 
-_(Assim você evita a confusão patrimonial perante a Receita Federal e não distorce a apuração do lucro real da sua empresa!)_`,
+2️⃣ *Conta de Funcionário / Colaborador:*
+• Prática comum em PMEs (adiantamento emergencial, faculdade/curso, auxílio médico);
+• Categorize como **Adiantamento Salarial / Vale** (a descontar no próximo holerite), **Bônus / Premiação** ou **Ajuda de Custo / Benefício** para blindar sua empresa contra riscos e passivos trabalhistas!
+
+3️⃣ *Conta de Terceiro Aleatório / Amigo / Parente:*
+• Jamais lance como despesa operacional (evita autuação fiscal de até 35% de IRRF por pagamento sem causa);
+• Classifique como **Distribuição de Lucros / Dividendos do Sócio** — o sócio assume o pagamento abatendo da sua retirada de lucro!`,
     };
   }
 

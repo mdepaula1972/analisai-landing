@@ -1426,27 +1426,126 @@ async function dispatchUserActionCommand(params: {
   const handledInstallmentConfirm = await handlePendingInstallmentConfirmation(client, phone, cleanPhone, text);
   if (handledInstallmentConfirm) return true;
 
-  // Intercepta resposta sobre Titularidade de Documento / Empresa vs CPF vs Sócio vs Outro CNPJ
+  // Intercepta resposta sobre Titularidade de Documento / Empresa vs CPF vs Sócio vs Funcionário vs Terceiro vs Outro CNPJ
   const cleanTitular = clean.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
-  const isEmpresaAns = cleanTitular === 'minha empresa' || cleanTitular === 'empresa' || cleanTitular === 'empresa principal' || cleanTitular === 'minha' || cleanTitular.startsWith('empresa');
-  const isCpfAns = cleanTitular === 'meu cpf' || cleanTitular === 'cpf' || cleanTitular === 'pessoal' || cleanTitular === 'minha pessoal' || cleanTitular.startsWith('meu cpf');
-  const isSocioAns = cleanTitular === 'socio' || cleanTitular === 'sócio' || cleanTitular === 'de um socio' || cleanTitular === 'de um sócio' || cleanTitular.includes('socio') || cleanTitular.includes('sócio');
-  const isOutroCnpjAns = cleanTitular === 'outro cnpj' || cleanTitular === 'outra empresa' || cleanTitular === 'filial' || cleanTitular.includes('outro cnpj') || cleanTitular.includes('filial');
+  const isFuncionarioAns =
+    cleanTitular === 'funcionario' || cleanTitular === 'funcionário' ||
+    cleanTitular === 'colaborador' || cleanTitular === 'colaboradores' ||
+    cleanTitular === 'equipe' || cleanTitular === 'adiantamento' ||
+    cleanTitular === 'bonus' || cleanTitular === 'bônus' ||
+    cleanTitular === 'beneficio' || cleanTitular === 'benefício' ||
+    cleanTitular === 'vale' || cleanTitular.includes('funcionario') ||
+    cleanTitular.includes('funcionário') || cleanTitular.includes('colaborador') ||
+    cleanTitular.includes('adiantamento');
 
-  if (isEmpresaAns || isCpfAns || isSocioAns || isOutroCnpjAns) {
+  const isTerceiroAns =
+    cleanTitular === 'terceiro' || cleanTitular === 'terceiros' ||
+    cleanTitular === 'aleatorio' || cleanTitular === 'aleatório' ||
+    cleanTitular === 'amigo' || cleanTitular === 'parente' ||
+    cleanTitular === 'outro' || cleanTitular === 'outra pessoa' ||
+    cleanTitular.includes('terceiro') || cleanTitular.includes('aleatorio') ||
+    cleanTitular.includes('aleatório');
+
+  const isEmpresaAns =
+    cleanTitular === 'minha empresa' || cleanTitular === 'empresa' ||
+    cleanTitular === 'empresa principal' || cleanTitular === 'minha' ||
+    cleanTitular.startsWith('empresa');
+
+  const isCpfSocioAns =
+    cleanTitular === 'meu cpf' || cleanTitular === 'cpf' ||
+    cleanTitular === 'pessoal' || cleanTitular === 'minha pessoal' ||
+    cleanTitular.startsWith('meu cpf') || cleanTitular === 'socio' ||
+    cleanTitular === 'sócio' || cleanTitular === 'de um socio' ||
+    cleanTitular === 'de um sócio' || cleanTitular.includes('socio') ||
+    cleanTitular.includes('sócio');
+
+  const isOutroCnpjAns =
+    cleanTitular === 'outro cnpj' || cleanTitular === 'outra empresa' ||
+    cleanTitular === 'filial' || cleanTitular.includes('outro cnpj') ||
+    cleanTitular.includes('filial');
+
+  if (isFuncionarioAns || isTerceiroAns || isEmpresaAns || isCpfSocioAns || isOutroCnpjAns) {
     let confirmTxt = '';
-    if (isEmpresaAns) {
+    let targetCategory = 'despesas_gerais';
+    let targetNotes = '';
+
+    if (isFuncionarioAns) {
+      targetCategory = 'pessoal_folha_adiantamento';
+      targetNotes = 'Pagamento de Funcionário (Adiantamento Salarial / Bônus / Benefício)';
+      confirmTxt = `💼 *Registrado como Pagamento de Funcionário / Colaborador!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Classificamos este lançamento no seu Livro Caixa. Como a empresa vai pagar diretamente, você pode categorizá-la no fechamento da folha como:
+• *Adiantamento Salarial / Vale* (com desconto no próximo holerite)
+• *Bônus / Premiação* (incentivo por metas)
+• *Ajuda de Custo / Benefício* (se previsto em acordo ou convenção)
+
+⚠️ *Dica Trabalhista do AnalisAí:* Mantenha o registro na folha/holerite para respaldar sua empresa contra riscos e passivos trabalhistas!`;
+    } else if (isTerceiroAns) {
+      targetCategory = 'distribuicao_lucros_dividendos';
+      targetNotes = 'Conta de Terceiro paga via Distribuição de Lucros/Dividendos do Sócio';
+      confirmTxt = `🛡️ *Registrado como Conta de Terceiro (Via Dividendos do Sócio)!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Como este pagamento é para alguém sem vínculo com a empresa, classificamos no Livro Caixa como **Distribuição de Lucros / Dividendos do Sócio** (ou Pró-Labore).
+
+💡 *Por que isso protege sua empresa:*
+Pagamentos a terceiros sem causa comprovada sofrem risco de tributação punitiva de até 35% de IRRF pela Receita Federal. Registrando como retirada de lucros/dividendos sua, sua empresa fica 100% blindada e auditável!`;
+    } else if (isEmpresaAns) {
+      targetCategory = 'despesa_operacional';
+      targetNotes = 'Despesa Operacional da Empresa (faturada em CPF/CNPJ)';
       confirmTxt = `✅ *Registrado como Empresa Principal!*
 Vinculei este lançamento como despesa operacional da sua pessoa jurídica. Seus relatórios de DRE e Livro Caixa foram organizados para o seu negócio!`;
-    } else if (isCpfAns) {
-      confirmTxt = `🛡️ *Registrado como Despesa Pessoal (CPF)!*
-Lançamos esta obrigação com a anotação para pagamento via **Distribuição de Lucros / Dividendos** (ou Pró-labore), mantendo seu patrimônio blindado contra confusão patrimonial!`;
     } else if (isOutroCnpjAns) {
+      targetCategory = 'despesa_filial_outro_cnpj';
+      targetNotes = 'Despesa de Filial ou Outro CNPJ do grupo';
       confirmTxt = `🏢 *Registrado como Filial / Outra Empresa!*
 Lançamos este documento com centro de custo individualizado para sua outra unidade ou empresa parceira, garantindo separação fiscal perfeita!`;
     } else {
-      confirmTxt = `👔 *Registrado como Conta de Sócio!*
-Marcamos esta despesa como adiantamento/pró-labore societário para manter a prestação de contas 100% transparente entre os sócios!`;
+      targetCategory = 'distribuicao_lucros_dividendos';
+      targetNotes = 'Despesa Particular de Sócio (Distribuição de Lucros / Dividendos)';
+      confirmTxt = `🛡️ *Registrado como Despesa de Sócio (Distribuição de Lucros / Dividendos)!*
+Lançamos esta obrigação particular com a anotação para pagamento via **Distribuição de Lucros / Dividendos** (ou Pró-labore), mantendo seu patrimônio blindado contra confusão patrimonial!`;
+    }
+
+    // Atualiza a última conta cadastrada no banco de dados para refletir essa escolha
+    const supabase = createServiceRoleClient();
+    if (client?.id) {
+      const { data: lastBill } = await supabase
+        .from('payables_receivables')
+        .select('id, notes')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastBill) {
+        await supabase
+          .from('payables_receivables')
+          .update({
+            category: targetCategory,
+            notes: targetNotes,
+          })
+          .eq('id', lastBill.id);
+      }
+    } else {
+      const { data: lead } = await supabase
+        .from('trial_leads')
+        .select('id, bills_list')
+        .eq('whatsapp_number', cleanPhone)
+        .maybeSingle();
+
+      if (lead && Array.isArray(lead.bills_list) && lead.bills_list.length > 0) {
+        const updatedBills = [...lead.bills_list];
+        const lastIdx = updatedBills.length - 1;
+        updatedBills[lastIdx] = {
+          ...updatedBills[lastIdx],
+          category: targetCategory,
+          notes: targetNotes,
+        };
+        await supabase
+          .from('trial_leads')
+          .update({ bills_list: updatedBills })
+          .eq('id', lead.id);
+      }
     }
 
     await sendEvolutionText({ phone, text: confirmTxt });
@@ -3318,16 +3417,27 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
         const payerTypeLabel = isCpfTit ? 'CPF' : 'CNPJ';
         const titQuestion = isCpfTit
           ? `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
-Identificamos o CPF *${extraction.payer_tax_id}* emitido para *${extraction.payer_name || 'Pessoa Física'}*.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos este documento emitido para o CPF *${extraction.payer_tax_id}* (${extraction.payer_name || 'Pessoa Física'}).
 
-Para organizarmos seus relatórios contábeis e fiscais corretamente:
-Este documento é seu **CPF Pessoal**, da sua **Empresa Principal** ou de um **Sócio**?
-👉 _Responda: *Meu CPF*, *Minha Empresa* ou *Sócio*_`
+Para organizarmos seus relatórios contábeis, folha e fiscal:
+A quem pertence esta conta?
+1️⃣ *Sócio / Meu CPF* — Despesa particular dos sócios
+2️⃣ *Funcionário* — Adiantamento, bônus ou benefício de colaborador
+3️⃣ *Terceiro* — Parente, amigo ou terceiro sem vínculo
+4️⃣ *Empresa* — Despesa operacional da PJ emitida em CPF
+
+👉 _Responda com o nome: *Sócio*, *Funcionário*, *Terceiro* ou *Empresa*_`
           : `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Identificamos o CNPJ *${extraction.payer_tax_id}* emitido para *${extraction.payer_name || 'Pessoa Jurídica'}*.
 
 Para organizarmos seus relatórios:
-Este documento pertence à sua **Empresa Principal**, a uma **Outra Empresa/Filial** ou a um **Sócio**?
+Este documento pertence à sua:
+1️⃣ *Minha Empresa* — Empresa principal
+2️⃣ *Filial / Outro CNPJ* — Outra empresa ou unidade do grupo
+3️⃣ *Sócio* — PJ particular de sócio
+
 👉 _Responda: *Minha Empresa*, *Outro CNPJ* ou *Sócio*_`;
 
         await sendEvolutionText({ phone, text: titQuestion });
@@ -4069,16 +4179,27 @@ _Lançamento auditado e integrado ao seu Livro Caixa no piloto automático._`,
         const payerTypeLabel = isCpfTit ? 'CPF' : 'CNPJ';
         const titQuestion = isCpfTit
           ? `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
-Identificamos o CPF *${extracted.payer_tax_id}* emitido para *${extracted.payer_name || 'Pessoa Física'}*.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos este documento emitido para o CPF *${extracted.payer_tax_id}* (${extracted.payer_name || 'Pessoa Física'}).
 
-Para organizarmos seus relatórios contábeis e fiscais corretamente:
-Este documento é seu **CPF Pessoal**, da sua **Empresa Principal** ou de um **Sócio**?
-👉 _Responda: *Meu CPF*, *Minha Empresa* ou *Sócio*_`
+Para organizarmos seus relatórios contábeis, folha e fiscal:
+A quem pertence esta conta?
+1️⃣ *Sócio / Meu CPF* — Despesa particular dos sócios
+2️⃣ *Funcionário* — Adiantamento, bônus ou benefício de colaborador
+3️⃣ *Terceiro* — Parente, amigo ou terceiro sem vínculo
+4️⃣ *Empresa* — Despesa operacional da PJ emitida em CPF
+
+👉 _Responda com o nome: *Sócio*, *Funcionário*, *Terceiro* ou *Empresa*_`
           : `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Identificamos o CNPJ *${extracted.payer_tax_id}* emitido para *${extracted.payer_name || 'Pessoa Jurídica'}*.
 
 Para organizarmos seus relatórios:
-Este documento pertence à sua **Empresa Principal**, a uma **Outra Empresa/Filial** ou a um **Sócio**?
+Este documento pertence à sua:
+1️⃣ *Minha Empresa* — Empresa principal
+2️⃣ *Filial / Outro CNPJ* — Outra empresa ou unidade do grupo
+3️⃣ *Sócio* — PJ particular de sócio
+
 👉 _Responda: *Minha Empresa*, *Outro CNPJ* ou *Sócio*_`;
 
         await sendEvolutionText({ phone, text: titQuestion });
