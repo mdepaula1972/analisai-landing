@@ -38,7 +38,7 @@ export async function getEvolutionConfig() {
     if (envUrl && !envUrl.includes('punk-photographers-windsor-love')) {
       cachedUrl = envUrl.trim().replace(/\/+$/, '');
     } else {
-      cachedUrl = 'https://firewire-turbo-telephony-delivery.trycloudflare.com';
+      cachedUrl = 'https://practitioner-mechanics-treat-hosts.trycloudflare.com';
     }
   }
 
