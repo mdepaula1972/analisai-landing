@@ -825,16 +825,17 @@ _(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
         phone: cleanPhoneWith55,
         text: `👋 Olá, ${guestFirstName}! Que bom ter você por aqui!
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *${client.name}* liberou o seu acesso VIP no **AnalisAí**, o assistente financeiro inteligente no WhatsApp!
+O *${client.name}* liberou o seu acesso VIP completo no **AnalisAí**, o seu assistente de inteligência financeira no WhatsApp!
 
-Você agora tem **acesso livre e sem custos** para testar tudo na prática:
-• 📸 *Boleto/Nota:* Envie a foto ou PDF de uma conta para agendar em segundos;
-• 🎙️ *Áudios e Textos:* Mande um áudio dizendo suas contas (ex: *"Pagar luz R$ 180 dia 15"*);
-• ⏰ *Lembretes na Véspera:* Te aviso com antecedência para evitar multas e juros;
-• 📊 *Livro Caixa e DRE:* Peça seu relatório em PDF com gráficos a qualquer hora digitando *"relatório"*.
+Aqui você não precisa decorar comandos nem preencher formulários complicados:
+• 📸 *Notas, Boletos e Comprovantes:* Basta enviar fotos ou PDFs que eu extraio valores, datas e CNPJs automaticamente;
+• 🎙️ *Áudios ou Mensagens:* Pode falar ou digitar do seu jeito (ex: *"Paguei 180 de combustível"* ou *"Anota receber 1.200 do cliente"*);
+• 💡 *Inteligência de Caixa e Relatórios:* Além de contas a pagar e receber, eu analiso seu fluxo de caixa, calculo juros e gero seu DRE em PDF.
 
-👉 *Para começar agora mesmo:*
-Salve este contato na sua agenda e envie uma foto de boleto ou um áudio por aqui! 🚀`,
+💬 *Você tem total liberdade para conversar:*
+Ficou com alguma dúvida ou quer saber o que mais posso fazer pela sua empresa? **Basta me perguntar por áudio ou texto** (ex: *"o que você pode fazer por mim?"* ou *"como vejo meu fluxo de caixa?"*) que eu te oriento passo a passo!
+
+👉 *Para começar:* Salve este contato na sua agenda e envie seu primeiro documento ou pergunta por aqui! 🚀`,
       });
       inviteSent = true;
     } catch (sendErr) {
