@@ -96,6 +96,24 @@ export async function extractDocumentWithGemini(
                 description: 'Número da apólice, proposta ou contrato se legível.',
                 nullable: true,
               },
+              payer_name: {
+                type: SchemaType.STRING,
+                description:
+                  'Nome do pagador, sacado, tomador de serviços ou locatário impresso no documento se identificável.',
+                nullable: true,
+              },
+              payer_tax_id: {
+                type: SchemaType.STRING,
+                description:
+                  'CPF ou CNPJ do pagador/sacado/tomador/locatário impresso no documento se identificável (números ou formatado).',
+                nullable: true,
+              },
+              payer_tax_type: {
+                type: SchemaType.STRING,
+                enum: ['cpf', 'cnpj'],
+                description: 'Indica se o pagador/sacado é Pessoa Física (cpf) ou Pessoa Jurídica (cnpj)',
+                nullable: true,
+              },
               confidence_score: {
                 type: SchemaType.NUMBER,
                 description: 'Nível de certeza da extração dos dados (0.0 a 1.0)',
@@ -147,21 +165,28 @@ Sua missão é ler documentos financeiros (fotos, PDFs, comprovantes, faturas, c
 
 DIRETRIZES DE EXTRAÇÃO:
 1. Priorize com extrema precisão a identificação de:
-   - Fornecedor / Favorecido (counterparty_name)
+   - Fornecedor / Favorecido (counterparty_name) e CNPJ/CPF do emissor (tax_id)
    - Valor Total (total_amount)
    - Data de Vencimento (due_date)
    - Código de barras bancário (barcode_or_pix) OU Chave Pix (pix_key e pix_key_type)
+   - Sacado / Pagador / Tomador / Locatário (payer_name, payer_tax_id e payer_tax_type)
 2. DISTINÇÃO CRÍTICA ENTRE CÓDIGO DE BARRAS E CHAVE PIX:
    - Linha digitável bancária SEMPRE possui 44, 47 ou 48 dígitos numéricos. Preencha em barcode_or_pix.
    - NUNCA coloque CNPJ (14 dígitos) ou CPF (11 dígitos) no campo barcode_or_pix! Se o documento trouxer "PIX (CNPJ) XX.XXX.XXX/XXXX-XX" ou chave Pix, coloque a chave em pix_key e marque pix_key_type = 'cnpj' (ou 'cpf', 'email', etc.), deixando barcode_or_pix = null.
-3. ALUGUEL E LOCAÇÃO (is_rent):
+3. IDENTIFICAÇÃO DO SACADO / PAGADOR / TOMADOR / LOCATÁRIO (PJ x PF):
+   - Todo boleto bancário tem campo "Sacado / Pagador" com Nome e CPF/CNPJ.
+   - Toda NFS-e/NF-e tem campo "Tomador de Serviços / Destinatário" com Nome e CPF/CNPJ.
+   - Recibos e contratos de locação trazem o "Locatário" (ex: MAR BRASIL SERVIÇOS LOCAÇÕES LTDA CNPJ 02.233.923/0001-19).
+   - Contas pessoais trazem o titular da conta com CPF de Pessoa Física (11 dígitos).
+   - Extraia SEMPRE payer_name, payer_tax_id e payer_tax_type ('cpf' ou 'cnpj') quando visível.
+4. ALUGUEL E LOCAÇÃO (is_rent):
    - Se for notificação de aluguel, locação de imóvel, condomínio ou taxa de administração predial (ex: O&M Administradora de Bens, imobiliárias, etc.), marque is_rent = true e category_suggestion = 'aluguel'.
    - Se o documento trouxer discriminação de aluguel, água, luz, condomínio, o total_amount deve ser o valor total líquido a pagar.
-4. SEGUROS E CARNÊS DE PAGAMENTO (is_insurance & installments):
+5. SEGUROS E CARNÊS DE PAGAMENTO (is_insurance & installments):
    - Se o documento for de uma seguradora (ex: Tokio Marine Seguradora, Porto Seguro, Azul, Allianz, etc.), marque is_insurance = true e category_suggestion = 'seguro'.
    - OBRIGATÓRIO: Se o documento contiver um carnê, histórico de parcelas ou tabela de pagamento parcelado (ex: 12 parcelas mensais), você DEVE extrair TODAS as parcelas dentro do array "installments" com installment_number, due_date (YYYY-MM-DD) e amount de cada parcela!
-5. Se o documento NÃO for financeiro (ex: foto de objeto, pessoa, paisagem, meme, documento não financeiro ou ilegível), defina is_financial_doc = false.
-6. Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.`,
+6. Se o documento NÃO for financeiro (ex: foto de objeto, pessoa, paisagem, meme, documento não financeiro ou ilegível), defina is_financial_doc = false.
+7. Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.`,
       });
 
       const result = await model.generateContent([

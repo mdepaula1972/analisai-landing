@@ -150,9 +150,12 @@ export async function analyzeBeneficiaryAndExpense(
     partners = data || [];
   }
 
+  const cleanKnownTaxId = (doc.known_company_tax_id || '').replace(/\D/g, '');
+  const isCpf = doc.payer_tax_type === 'cpf' || cleanPayerTaxId.length === 11;
+  const isCnpj = doc.payer_tax_type === 'cnpj' || cleanPayerTaxId.length === 14;
+
   // 2. Se o documento contiver dados de Pessoa Física como pagador/favorecido
-  const isCpf = cleanPayerTaxId.length === 11;
-  if (isCpf || (payerName && !payerName.toLowerCase().includes('ltda') && !payerName.toLowerCase().includes('me') && !payerName.toLowerCase().includes('s/a'))) {
+  if (isCpf || (payerName && !payerName.toLowerCase().includes('ltda') && !payerName.toLowerCase().includes('me') && !payerName.toLowerCase().includes('s/a') && !payerName.toLowerCase().includes('eireli') && !payerName.toLowerCase().includes('ss'))) {
     // Verifica se bate com algum sócio cadastrado
     const isPartner = partners.some((p) => {
       if (cleanPayerTaxId && p.partner_cpf && cleanPayerTaxId === p.partner_cpf.replace(/\D/g, '')) return true;
@@ -193,10 +196,51 @@ Essa prática pode sofrer **tributação punitiva de até 35% de IRRF na fonte**
 1. Se for prestador de serviço/colaborador, exija Nota Fiscal ou formalize via RPA com retenção legal.
 2. Se for ajuda a parentes/amigos, faça o acerto diretamente pela sua conta bancária **Pessoa Física (CPF)** após receber seu pró-labore!`,
       };
+    } else if (isCpf) {
+      // É CPF do próprio titular/empresário (Blindagem Patrimonial via Dividendos / Pró-labore)
+      const payerDisplay = payerName
+        ? `${payerName} (CPF ${doc.payer_tax_id || cleanPayerTaxId})`
+        : doc.payer_tax_id
+          ? `CPF ${doc.payer_tax_id}`
+          : 'Pessoa Física';
+
+      return {
+        isPersonalExpense: true,
+        adviceMessage: `🛡️ *Alerta de Blindagem Patrimonial — Conta no CPF (Pessoa Física)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no **CPF de Pessoa Física**:
+👤 *Titular:* ${payerDisplay}
+
+💡 *Orientação dos nossos Especialistas Contábeis:*
+Se esta despesa pessoal for paga com o caixa da sua empresa (PJ), a regra de ouro contábil é escriturá-la como **Distribuição de Lucros / Dividendos** (ou Pró-Labore), e **nunca como despesa operacional da empresa**.
+
+👉 *Procedimento Seguro e Recomendado:*
+1️⃣ Transfira o valor exato da conta bancária da sua PJ para a sua conta de Pessoa Física como **Distribuição de Lucros/Dividendos**;
+2️⃣ Em seguida, realize o pagamento pelo app da sua conta de **Pessoa Física**!
+
+_(Assim você evita a confusão patrimonial perante a Receita Federal e não distorce a apuração do lucro real da sua empresa!)_`,
+      };
     }
   }
 
-  // 3. Fallback de palavras-chave de despesas pessoais cotidianas
+  // 3. Alerta de CNPJ diferente da empresa cadastrada
+  if (isCnpj && cleanKnownTaxId && cleanPayerTaxId && cleanPayerTaxId !== cleanKnownTaxId) {
+    return {
+      isPersonalExpense: false,
+      isThirdPartyExpense: true,
+      adviceMessage: `🏢 *Atenção — Documento Emitido para CNPJ Diferente!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este documento de *${supplier}* está emitido para o CNPJ:
+• *Sacado/Tomador:* ${payerName || 'Empresa'} (CNPJ: ${doc.payer_tax_id || cleanPayerTaxId})
+
+Este CNPJ é diferente do cadastro principal da sua empresa (*${doc.known_company_name || doc.known_company_tax_id}*).
+
+💡 *Dica do AnalisAí:*
+Se este boleto pertence a outra filial ou empresa do seu grupo, podemos organizar seus relatórios separando cada CNPJ! Se for despesa de um parceiro ou terceiro, tome cuidado para não misturar os caixas bancários.`,
+    };
+  }
+
+  // 4. Fallback de palavras-chave de despesas pessoais cotidianas
   const textToAnalyze = [
     doc.supplier_name,
     doc.counterparty_name,
@@ -234,14 +278,73 @@ Evite pagar contas particulares diretamente pela conta bancária da sua PJ. A "c
   return { isPersonalExpense: false };
 }
 
-// Mantém retrocompatibilidade síncrona simples
+// Mantém retrocompatibilidade síncrona e adiciona detecção de CPF e CNPJ diferente
 export function analyzePatrimonialExpense(doc: {
   supplier_name?: string;
   counterparty_name?: string;
   category?: string;
   description?: string;
   amount?: number;
+  payer_name?: string | null;
+  payer_tax_id?: string | null;
+  payer_tax_type?: 'cpf' | 'cnpj' | null;
+  known_company_tax_id?: string | null;
+  known_company_name?: string | null;
 }): PatrimonialAdvice {
+  const supplier = doc.supplier_name || doc.counterparty_name || 'este lançamento';
+  const valFormatted = doc.amount
+    ? Number(doc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : '';
+
+  const cleanPayerTaxId = (doc.payer_tax_id || '').replace(/\D/g, '');
+  const cleanKnownTaxId = (doc.known_company_tax_id || '').replace(/\D/g, '');
+  const isCpfPayer = doc.payer_tax_type === 'cpf' || cleanPayerTaxId.length === 11;
+  const isCnpjPayer = doc.payer_tax_type === 'cnpj' || cleanPayerTaxId.length === 14;
+
+  // 1. Alerta de Conta no CPF (Pessoa Física) — Orientação de Dividendos / Pró-labore
+  if (isCpfPayer) {
+    const payerDisplay = doc.payer_name
+      ? `${doc.payer_name} (CPF ${doc.payer_tax_id})`
+      : doc.payer_tax_id
+        ? `CPF ${doc.payer_tax_id}`
+        : 'Pessoa Física';
+
+    return {
+      isPersonalExpense: true,
+      adviceMessage: `🛡️ *Alerta de Blindagem Patrimonial — Conta no CPF (Pessoa Física)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no **CPF de Pessoa Física**:
+👤 *Titular:* ${payerDisplay}
+
+💡 *Orientação dos nossos Especialistas Contábeis:*
+Se esta despesa pessoal for paga com o caixa da sua empresa (PJ), a regra de ouro contábil é escriturá-la como **Distribuição de Lucros / Dividendos** (ou Pró-Labore), e **nunca como despesa operacional da empresa**.
+
+👉 *Procedimento Seguro e Recomendado:*
+1️⃣ Transfira o valor exato da conta bancária da sua PJ para a sua conta de Pessoa Física como **Distribuição de Lucros/Dividendos**;
+2️⃣ Em seguida, realize o pagamento pelo app da sua conta de **Pessoa Física**!
+
+_(Assim você evita a confusão patrimonial perante a Receita Federal e não distorce a apuração do lucro real da sua empresa!)_`,
+    };
+  }
+
+  // 2. Alerta de CNPJ diferente da empresa cadastrada
+  if (isCnpjPayer && cleanKnownTaxId && cleanPayerTaxId && cleanPayerTaxId !== cleanKnownTaxId) {
+    return {
+      isPersonalExpense: false,
+      isThirdPartyExpense: true,
+      adviceMessage: `🏢 *Atenção — Documento Emitido para CNPJ Diferente!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este documento de *${supplier}* está emitido para o CNPJ:
+• *Sacado/Tomador:* ${doc.payer_name || 'Empresa'} (CNPJ: ${doc.payer_tax_id})
+
+Este CNPJ é diferente do cadastro principal da sua empresa (*${doc.known_company_name || doc.known_company_tax_id}*).
+
+💡 *Dica do AnalisAí:*
+Se este boleto pertence a outra filial ou empresa do seu grupo, podemos organizar seus relatórios separando cada CNPJ! Se for despesa de um parceiro ou terceiro, tome cuidado para não misturar os caixas bancários.`,
+    };
+  }
+
+  // 3. Fallback: Verificação por palavras-chave de despesas pessoais cotidianas
   const textToAnalyze = [
     doc.supplier_name,
     doc.counterparty_name,
@@ -259,19 +362,11 @@ export function analyzePatrimonialExpense(doc: {
     return textToAnalyze.includes(normKw);
   });
 
-  if (!matched) {
-    return { isPersonalExpense: false };
-  }
-
-  const supplier = doc.supplier_name || doc.counterparty_name || 'este lançamento';
-  const valFormatted = doc.amount
-    ? Number(doc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : '';
-
-  return {
-    isPersonalExpense: true,
-    categoryDetected: matched,
-    adviceMessage: `💡 *Orientação Consultiva AnalisAí (Blindagem Patrimonial)*
+  if (matched) {
+    return {
+      isPersonalExpense: true,
+      categoryDetected: matched,
+      adviceMessage: `💡 *Orientação Consultiva AnalisAí (Blindagem Patrimonial)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Identificamos que a conta de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} tem características de **despesa pessoal (PF)**.
 
@@ -283,5 +378,8 @@ Evite pagar contas particulares diretamente pela conta bancária da sua empresa 
 2️⃣ Em seguida, realize o pagamento do boleto pelo app da sua conta de **Pessoa Física**!
 
 _(Assim sua contabilidade fica 100% blindada e sua empresa protegida contra autuações fiscais!)_`,
-  };
+    };
+  }
+
+  return { isPersonalExpense: false };
 }

@@ -213,21 +213,24 @@ export async function recordTrialUsage(
   const barcodeOrPixCandidate = docData.barcode_or_pix || null;
 
   // Se for uma conta definitiva com valor real e existir uma provisão prévia para o mesmo fornecedor ou serviço, concilia!
+  // REGRA CRÍTICA: NUNCA reconcilia se a conta existente for uma conta real (duas contas reais são despesas distintas!)
   let reconciled = false;
   if (!isProvision && numAmount && numAmount > 0) {
     const existingIndex = billsList.findIndex((b: any) => {
-      const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase();
-      const candName = supplierCandidate.toLowerCase();
-      const bCat = (b.category || '').toLowerCase();
-      const candCat = (categoryCandidate || '').toLowerCase();
+      if (!b.is_provision) return false;
 
-      const nameMatch = bName.includes(candName) || candName.includes(bName) || bName.slice(0, 4) === candName.slice(0, 4);
+      const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
+      const candName = supplierCandidate.toLowerCase().trim();
+      const bCat = (b.category || '').toLowerCase().trim();
+      const candCat = (categoryCandidate || '').toLowerCase().trim();
+
+      const nameMatch = bName.length >= 3 && candName.length >= 3 && (bName.includes(candName) || candName.includes(bName));
       const categoryMatch = (bCat && candCat && (bCat.includes(candCat) || candCat.includes(bCat))) ||
         (candCat.includes('agua') && (bName.includes('água') || bName.includes('agua') || bName.includes('sabesp'))) ||
         (candCat.includes('energia') && (bName.includes('energia') || bName.includes('luz') || bName.includes('cpfl') || bName.includes('enel'))) ||
         (candCat.includes('telecom') && (bName.includes('internet') || bName.includes('vivo') || bName.includes('claro') || bName.includes('tim')));
 
-      return (b.is_provision && (nameMatch || categoryMatch)) || nameMatch;
+      return nameMatch || categoryMatch;
     });
 
     if (existingIndex >= 0) {
@@ -239,6 +242,8 @@ export async function recordTrialUsage(
         due_date: docData.due_date || old.due_date,
         barcode_or_pix: barcodeOrPixCandidate || old.barcode_or_pix,
         category: categoryCandidate || old.category,
+        payer_name: docData.payer_name || old.payer_name || null,
+        payer_tax_id: docData.payer_tax_id || old.payer_tax_id || null,
         is_provision: false,
         reconciled_at: new Date().toISOString(),
       };
@@ -269,6 +274,9 @@ export async function recordTrialUsage(
           due_date: inst.due_date || null,
           barcode_or_pix: inst.barcode_or_pix || barcodeOrPixCandidate,
           category: categoryCandidate,
+          payer_name: docData.payer_name || null,
+          payer_tax_id: docData.payer_tax_id || null,
+          payer_tax_type: docData.payer_tax_type || null,
           is_provision: isProvision,
           is_past: isPast,
           is_insurance: Boolean(docData.is_insurance),
@@ -286,6 +294,9 @@ export async function recordTrialUsage(
         due_date: docData.due_date || null,
         barcode_or_pix: barcodeOrPixCandidate,
         category: categoryCandidate,
+        payer_name: docData.payer_name || null,
+        payer_tax_id: docData.payer_tax_id || null,
+        payer_tax_type: docData.payer_tax_type || null,
         is_provision: isProvision,
         is_insurance: Boolean(docData.is_insurance),
         is_rent: Boolean(docData.is_rent),
@@ -308,6 +319,8 @@ export async function recordTrialUsage(
         due_date: effectiveDueDate,
         barcode_or_pix: barcodeOrPixCandidate,
         category: categoryCandidate,
+        payer_name: docData.payer_name || (leadRecord as any)?.payer_name || null,
+        payer_tax_id: docData.payer_tax_id || (leadRecord as any)?.payer_tax_id || null,
         trial_docs_count: reconciled ? (leadRecord as any)?.trial_docs_count || newCount : newCount,
         trial_docs_limit: newLimit,
         interested_plan: suggestedPlan,

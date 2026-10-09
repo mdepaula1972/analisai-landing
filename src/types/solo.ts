@@ -83,6 +83,9 @@ export interface ExtractedDocumentData {
   is_insurance?: boolean;
   policy_number?: string | null;
   rent_period?: string | null;
+  payer_name?: string | null;
+  payer_tax_id?: string | null;
+  payer_tax_type?: 'cpf' | 'cnpj' | null;
   category_suggestion: string;
   criticality_hint: number;
   confidence_score: number;

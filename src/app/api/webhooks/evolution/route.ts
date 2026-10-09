@@ -1426,6 +1426,34 @@ async function dispatchUserActionCommand(params: {
   const handledInstallmentConfirm = await handlePendingInstallmentConfirmation(client, phone, cleanPhone, text);
   if (handledInstallmentConfirm) return true;
 
+  // Intercepta resposta sobre Titularidade de Documento / Empresa vs CPF vs Sócio vs Outro CNPJ
+  const cleanTitular = clean.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
+  const isEmpresaAns = cleanTitular === 'minha empresa' || cleanTitular === 'empresa' || cleanTitular === 'empresa principal' || cleanTitular === 'minha' || cleanTitular.startsWith('empresa');
+  const isCpfAns = cleanTitular === 'meu cpf' || cleanTitular === 'cpf' || cleanTitular === 'pessoal' || cleanTitular === 'minha pessoal' || cleanTitular.startsWith('meu cpf');
+  const isSocioAns = cleanTitular === 'socio' || cleanTitular === 'sócio' || cleanTitular === 'de um socio' || cleanTitular === 'de um sócio' || cleanTitular.includes('socio') || cleanTitular.includes('sócio');
+  const isOutroCnpjAns = cleanTitular === 'outro cnpj' || cleanTitular === 'outra empresa' || cleanTitular === 'filial' || cleanTitular.includes('outro cnpj') || cleanTitular.includes('filial');
+
+  if (isEmpresaAns || isCpfAns || isSocioAns || isOutroCnpjAns) {
+    let confirmTxt = '';
+    if (isEmpresaAns) {
+      confirmTxt = `✅ *Registrado como Empresa Principal!*
+Vinculei este lançamento como despesa operacional da sua pessoa jurídica. Seus relatórios de DRE e Livro Caixa foram organizados para o seu negócio!`;
+    } else if (isCpfAns) {
+      confirmTxt = `🛡️ *Registrado como Despesa Pessoal (CPF)!*
+Lançamos esta obrigação com a anotação para pagamento via **Distribuição de Lucros / Dividendos** (ou Pró-labore), mantendo seu patrimônio blindado contra confusão patrimonial!`;
+    } else if (isOutroCnpjAns) {
+      confirmTxt = `🏢 *Registrado como Filial / Outra Empresa!*
+Lançamos este documento com centro de custo individualizado para sua outra unidade ou empresa parceira, garantindo separação fiscal perfeita!`;
+    } else {
+      confirmTxt = `👔 *Registrado como Conta de Sócio!*
+Marcamos esta despesa como adiantamento/pró-labore societário para manter a prestação de contas 100% transparente entre os sócios!`;
+    }
+
+    await sendEvolutionText({ phone, text: confirmTxt });
+    await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+    return true;
+  }
+
   // A) Interceptação de botões interativos de sequência / Menu Numerado
   // 1. Ver Minhas Contas
   if (
@@ -3284,14 +3312,37 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
         pix_key_type: extraction.pix_key_type,
       });
 
-      // 3. Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
+      // 3. Identificação de Titularidade e Consultoria de Blindagem Patrimonial
+      if (extraction.payer_tax_id) {
+        const isCpfTit = extraction.payer_tax_type === 'cpf' || extraction.payer_tax_id.replace(/\D/g, '').length === 11;
+        const payerTypeLabel = isCpfTit ? 'CPF' : 'CNPJ';
+        const titQuestion = isCpfTit
+          ? `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
+Identificamos o CPF *${extraction.payer_tax_id}* emitido para *${extraction.payer_name || 'Pessoa Física'}*.
+
+Para organizarmos seus relatórios contábeis e fiscais corretamente:
+Este documento é seu **CPF Pessoal**, da sua **Empresa Principal** ou de um **Sócio**?
+👉 _Responda: *Meu CPF*, *Minha Empresa* ou *Sócio*_`
+          : `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
+Identificamos o CNPJ *${extraction.payer_tax_id}* emitido para *${extraction.payer_name || 'Pessoa Jurídica'}*.
+
+Para organizarmos seus relatórios:
+Este documento pertence à sua **Empresa Principal**, a uma **Outra Empresa/Filial** ou a um **Sócio**?
+👉 _Responda: *Minha Empresa*, *Outro CNPJ* ou *Sócio*_`;
+
+        await sendEvolutionText({ phone, text: titQuestion });
+      }
+
       const patrimonialTrial = analyzePatrimonialExpense({
         supplier_name: extraction.counterparty_name,
         counterparty_name: extraction.counterparty_name,
         category: extraction.category_suggestion,
         amount: Number(extraction.total_amount),
+        payer_name: extraction.payer_name,
+        payer_tax_id: extraction.payer_tax_id,
+        payer_tax_type: extraction.payer_tax_type,
       });
-      if (patrimonialTrial.isPersonalExpense && patrimonialTrial.adviceMessage) {
+      if (patrimonialTrial.adviceMessage) {
         await sendEvolutionText({
           phone,
           text: patrimonialTrial.adviceMessage,
@@ -4012,16 +4063,39 @@ _Lançamento auditado e integrado ao seu Livro Caixa no piloto automático._`,
         });
       }
 
-      // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF e Sócio vs Terceiro)
+      // Identificação de Titularidade e Consultoria Pedagógica de Blindagem Patrimonial
+      if (extracted.payer_tax_id) {
+        const isCpfTit = extracted.payer_tax_type === 'cpf' || extracted.payer_tax_id.replace(/\D/g, '').length === 11;
+        const payerTypeLabel = isCpfTit ? 'CPF' : 'CNPJ';
+        const titQuestion = isCpfTit
+          ? `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
+Identificamos o CPF *${extracted.payer_tax_id}* emitido para *${extracted.payer_name || 'Pessoa Física'}*.
+
+Para organizarmos seus relatórios contábeis e fiscais corretamente:
+Este documento é seu **CPF Pessoal**, da sua **Empresa Principal** ou de um **Sócio**?
+👉 _Responda: *Meu CPF*, *Minha Empresa* ou *Sócio*_`
+          : `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
+Identificamos o CNPJ *${extracted.payer_tax_id}* emitido para *${extracted.payer_name || 'Pessoa Jurídica'}*.
+
+Para organizarmos seus relatórios:
+Este documento pertence à sua **Empresa Principal**, a uma **Outra Empresa/Filial** ou a um **Sócio**?
+👉 _Responda: *Minha Empresa*, *Outro CNPJ* ou *Sócio*_`;
+
+        await sendEvolutionText({ phone, text: titQuestion });
+      }
+
       const patrimonialDoc = await analyzeBeneficiaryAndExpense(client.id, {
         supplier_name: extracted.counterparty_name,
         counterparty_name: extracted.counterparty_name,
-        payer_name: (extracted as any).payer_name,
-        payer_tax_id: (extracted as any).payer_tax_id,
+        payer_name: extracted.payer_name,
+        payer_tax_id: extracted.payer_tax_id,
+        payer_tax_type: extracted.payer_tax_type,
         category: extracted.category_suggestion,
         amount: Number(extracted.total_amount),
+        known_company_tax_id: client.tax_id,
+        known_company_name: client.name,
       });
-      if (patrimonialDoc.isPersonalExpense && patrimonialDoc.adviceMessage) {
+      if (patrimonialDoc.adviceMessage) {
         await sendEvolutionText({
           phone,
           text: patrimonialDoc.adviceMessage,

@@ -300,7 +300,7 @@ export async function getUpcomingBillsSummary(
 
   let rawBills: any[] = [];
 
-  // 1. Tenta carregar do cliente em payables_receivables
+  // 1. Carrega do cliente em payables_receivables se houver clientId
   if (clientId) {
     const { data: dbBills } = await supabase
       .from('payables_receivables')
@@ -317,17 +317,27 @@ export async function getUpcomingBillsSummary(
         entry_type: b.type === 'receivable' ? 'receivable' : 'payable',
         barcode_or_pix: b.barcode_or_pix || null,
         category: b.category || null,
-        is_provision: false,
+        is_provision: Boolean(b.is_provision),
         is_recurring: Boolean(b.is_recurring),
       }));
     }
   }
 
-  // 2. Se não encontrou contas no payables_receivables (ex: lead em degustação ou usuário testando como lead)
-  if (rawBills.length === 0 && cleanPhone) {
+  // 2. Carrega e mescla contas de degustação (trial_leads) para garantir que nenhum boleto seja perdido
+  if (cleanPhone) {
     const trialBills = await getTrialBills(cleanPhone);
     if (trialBills && trialBills.length > 0) {
-      rawBills = trialBills;
+      // Adiciona contas que ainda não existam em rawBills por ID ou combinação de fornecedor/vencimento
+      for (const tb of trialBills) {
+        const tbSup = (tb.supplier_name || tb.counterparty_name || '').toLowerCase().trim();
+        const alreadyExists = rawBills.some((rb) => {
+          const rbSup = (rb.supplier_name || rb.counterparty_name || '').toLowerCase().trim();
+          return rbSup === tbSup && rb.due_date === tb.due_date && Math.abs(Number(rb.amount) - Number(tb.amount)) < 0.05;
+        });
+        if (!alreadyExists) {
+          rawBills.push(tb);
+        }
+      }
     } else {
       const { data: lead } = await supabase
         .from('trial_leads')
@@ -335,19 +345,21 @@ export async function getUpcomingBillsSummary(
         .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
         .maybeSingle();
 
-      if (lead && lead.due_date && (lead.amount || lead.doc_data?.total_amount)) {
+      if (lead && (lead.amount || lead.doc_data?.total_amount)) {
         const leadAmount = lead.amount !== undefined && lead.amount !== null ? lead.amount : lead.doc_data?.total_amount;
-        rawBills = [
-          {
+        const leadSup = (lead.supplier_name || lead.doc_data?.counterparty_name || 'Fornecedor').toLowerCase().trim();
+        const alreadyExists = rawBills.some((rb) => (rb.supplier_name || '').toLowerCase().trim() === leadSup);
+        if (!alreadyExists) {
+          rawBills.push({
             supplier_name: lead.supplier_name || lead.doc_data?.counterparty_name || 'Fornecedor',
             amount: Number(leadAmount),
-            due_date: lead.due_date,
+            due_date: lead.due_date || null,
             barcode_or_pix: lead.barcode_or_pix || lead.doc_data?.barcode_or_pix || null,
             category: lead.category || lead.doc_data?.category_suggestion || lead.doc_data?.category || null,
             is_provision: false,
             entry_type: 'payable',
-          },
-        ];
+          });
+        }
       }
     }
   }
@@ -360,24 +372,20 @@ Você não possui nenhuma conta cadastrada no momento.
 👉 Envie uma foto ou PDF de boleto, ou envie um áudio/texto dizendo suas contas para agendar seu primeiro compromisso! 🚀`;
   }
 
-  // Filtra as contas do período solicitado
+  // Filtra as contas do período solicitado — NUNCA oculta contas vencidas nem contas com data a definir!
   let filteredBills = rawBills.filter((b) => {
     if (!b.due_date) return true;
     if (period.periodDays === 'all') return true;
-    return b.due_date >= todayIso && b.due_date <= maxDueIso;
+    if (b.due_date < todayIso) return true; // Contas vencidas continuam pendentes e devem aparecer!
+    return b.due_date <= maxDueIso;
   });
 
   let noticePrefix = '';
 
-  // Se o usuário pediu um período curto (ex: 7 dias) e não tem contas no período, mas TEM contas futuras cadastradas
+  // Se o usuário pediu um período curto (ex: 7 dias) e não tem contas no período, mostra todas as cadastradas
   if (filteredBills.length === 0 && rawBills.length > 0) {
-    noticePrefix = `ℹ️ _Você não possui contas a vencer para os *${period.periodLabel}*! 🎉_\n💡 _Mostrando seus compromissos agendados para os próximos 30 dias:_\n\n`;
-    const next30DaysIso = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    filteredBills = rawBills.filter((b) => !b.due_date || (b.due_date >= todayIso && b.due_date <= next30DaysIso));
-    if (filteredBills.length === 0) {
-      filteredBills = rawBills; // Mostra todas as contas salvas
-      noticePrefix = `ℹ️ _Você não possui contas a vencer para os *${period.periodLabel}*! 🎉_\n💡 _Mostrando todas as suas contas cadastradas:_\n\n`;
-    }
+    noticePrefix = `ℹ️ _Você não possui contas a vencer para os *${period.periodLabel}*! 🎉_\n💡 _Mostrando seus compromissos agendados:_\n\n`;
+    filteredBills = rawBills;
   }
 
   return noticePrefix + formatTrialBillsListMessage(filteredBills, `Agenda Financeira — ${period.periodLabel}`);
