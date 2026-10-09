@@ -66,7 +66,34 @@ export async function extractDocumentWithGemini(
               barcode_or_pix: {
                 type: SchemaType.STRING,
                 description:
-                  'Código de barras numérico legível (linha digitável de 47 ou 48 dígitos) ou chave Pix / payload Pix copia e cola presente no documento.',
+                  'Código de barras numérico legível (linha digitável bancária com 44, 47 ou 48 dígitos). NUNCA insira CNPJs ou CPFs aqui (coloque em pix_key se for Pix).',
+                nullable: true,
+              },
+              pix_key: {
+                type: SchemaType.STRING,
+                description:
+                  'Chave Pix para pagamento informada no documento (CNPJ, CPF, celular, e-mail, chave aleatória ou payload Pix Copia e Cola).',
+                nullable: true,
+              },
+              pix_key_type: {
+                type: SchemaType.STRING,
+                enum: ['cnpj', 'cpf', 'email', 'telefone', 'aleatoria', 'copia_e_cola', 'outro'],
+                description: 'Tipo da chave Pix identificada',
+                nullable: true,
+              },
+              is_rent: {
+                type: SchemaType.BOOLEAN,
+                description:
+                  'True se o documento for notificação, recibo ou cobrança de aluguel de imóvel, condomínio ou taxa predial locatícia.',
+              },
+              is_insurance: {
+                type: SchemaType.BOOLEAN,
+                description:
+                  'True se o documento for apólice, carnê, fatura ou proposta de seguradora (ex: Tokio Marine, Porto Seguro, Bradesco Seguros, etc.).',
+              },
+              policy_number: {
+                type: SchemaType.STRING,
+                description: 'Número da apólice, proposta ou contrato se legível.',
                 nullable: true,
               },
               confidence_score: {
@@ -76,7 +103,7 @@ export async function extractDocumentWithGemini(
               category_suggestion: {
                 type: SchemaType.STRING,
                 description:
-                  'Sugestão de categoria contábil DRE (ex: energia_eletrica, telecomunicacoes, agua_saneamento, fornecedores_mercadoria, servicos_terceiros, tributos, aluguel, combustivel, alimentacao, outros)',
+                  'Sugestão de categoria contábil DRE (ex: aluguel, seguro, energia_eletrica, telecomunicacoes, agua_saneamento, fornecedores_mercadoria, servicos_terceiros, tributos, combustivel, alimentacao, outros)',
                 nullable: true,
               },
               critical_notes: {
@@ -87,7 +114,8 @@ export async function extractDocumentWithGemini(
               },
               installments: {
                 type: SchemaType.ARRAY,
-                description: 'Caso a nota/fatura contenha mais de uma parcela ou duplicata',
+                description:
+                  'OBRIGATÓRIO: Caso a fatura, nota fiscal, carnê de seguro ou contrato contenha mais de uma parcela ou cronograma de pagamentos, extraia CADA UMA das parcelas no array com número, vencimento (YYYY-MM-DD) e valor.',
                 items: {
                   type: SchemaType.OBJECT,
                   properties: {
@@ -115,21 +143,25 @@ export async function extractDocumentWithGemini(
           } as any),
         },
         systemInstruction: `Você é o AnalisAí Solo, um assistente contábil e financeiro de inteligência artificial de elite.
-Sua missão é ler documentos financeiros (fotos, PDFs, comprovantes, faturas e boletos bancários brasileiros).
+Sua missão é ler documentos financeiros (fotos, PDFs, comprovantes, faturas, carnês e boletos bancários brasileiros).
 
 DIRETRIZES DE EXTRAÇÃO:
 1. Priorize com extrema precisão a identificação de:
    - Fornecedor / Favorecido (counterparty_name)
    - Valor Total (total_amount)
    - Data de Vencimento (due_date)
-   - Código de barras ou Pix Copia e Cola (barcode_or_pix)
-2. Se o documento NÃO for financeiro (ex: foto de cachorro, paisagem, contrato longo sem valor de fatura, documento ilegível), defina is_financial_doc = false.
-3. Tom parceiro de trincheira: Sempre que identificar encargos pesados (multa > 2% ou juros altos), alerte em critical_notes e analysis_advice de forma rápida e prática.
-4. Limite ético profissional: Ofereça suporte consultivo técnico sem bancar psicólogo, sem drama e sem frieza mecânica.
-
-NOTAS FISCAIS & PARCELAS:
-Se o documento for uma Nota Fiscal (NF-e/NFS-e) com campo de duplicatas, faturas ou parcelamento, extraia cada parcela no array "installments" com seu respectivo vencimento e valor.
-Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.`,
+   - Código de barras bancário (barcode_or_pix) OU Chave Pix (pix_key e pix_key_type)
+2. DISTINÇÃO CRÍTICA ENTRE CÓDIGO DE BARRAS E CHAVE PIX:
+   - Linha digitável bancária SEMPRE possui 44, 47 ou 48 dígitos numéricos. Preencha em barcode_or_pix.
+   - NUNCA coloque CNPJ (14 dígitos) ou CPF (11 dígitos) no campo barcode_or_pix! Se o documento trouxer "PIX (CNPJ) XX.XXX.XXX/XXXX-XX" ou chave Pix, coloque a chave em pix_key e marque pix_key_type = 'cnpj' (ou 'cpf', 'email', etc.), deixando barcode_or_pix = null.
+3. ALUGUEL E LOCAÇÃO (is_rent):
+   - Se for notificação de aluguel, locação de imóvel, condomínio ou taxa de administração predial (ex: O&M Administradora de Bens, imobiliárias, etc.), marque is_rent = true e category_suggestion = 'aluguel'.
+   - Se o documento trouxer discriminação de aluguel, água, luz, condomínio, o total_amount deve ser o valor total líquido a pagar.
+4. SEGUROS E CARNÊS DE PAGAMENTO (is_insurance & installments):
+   - Se o documento for de uma seguradora (ex: Tokio Marine Seguradora, Porto Seguro, Azul, Allianz, etc.), marque is_insurance = true e category_suggestion = 'seguro'.
+   - OBRIGATÓRIO: Se o documento contiver um carnê, histórico de parcelas ou tabela de pagamento parcelado (ex: 12 parcelas mensais), você DEVE extrair TODAS as parcelas dentro do array "installments" com installment_number, due_date (YYYY-MM-DD) e amount de cada parcela!
+5. Se o documento NÃO for financeiro (ex: foto de objeto, pessoa, paisagem, meme, documento não financeiro ou ilegível), defina is_financial_doc = false.
+6. Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.`,
       });
 
       const result = await model.generateContent([
@@ -252,6 +284,11 @@ export async function parseConversationalFinancialEntry(
                       description: 'Dia do mês do vencimento (ex: 10, 21, 3)',
                       nullable: true,
                     },
+                    barcode_or_pix: {
+                      type: SchemaType.STRING,
+                      description: 'Código de barras numérico (linha digitável com 44-48 dígitos ou números ditados) ou chave Pix citada por voz se houver.',
+                      nullable: true,
+                    },
                   },
                   required: ['supplier_or_customer', 'entry_type', 'is_provision'],
                 },
@@ -291,7 +328,8 @@ REGRAS PARA CADA ITEM EM 'entries':
 4. 'entry_type': 'payable' para contas a pagar/despesas, 'receivable' para receitas.
 5. 'is_provision': true para valores aproximados ou contas de consumo variáveis; false para valores fixos definidos.
 6. 'is_recurring': true para contas pagas mensalmente ("todo mês", "todo dia X").
-7. 'recurrence_day': número do dia informado (ex: 10, 21, 3).`,
+7. 'recurrence_day': número do dia informado (ex: 10, 21, 3).
+8. 'barcode_or_pix': Se o usuário ditar ou escrever um código de barras, linha digitável ou chave Pix (ex: "com código de barras 8467...", "chave pix CNPJ tal"), extraia no campo barcode_or_pix de cada conta correspondente apenas os dígitos ou chave limpa.`,
       });
 
       const result = await model.generateContent(`Mensagem do usuário: "${userText}"`);
@@ -307,6 +345,7 @@ REGRAS PARA CADA ITEM EM 'entries':
               supplier_or_customer: cleanName,
               amount: item.amount ? Number(item.amount) : null,
               due_date: item.due_date || null,
+              barcode_or_pix: item.barcode_or_pix ? String(item.barcode_or_pix).trim() : null,
               entry_type: item.entry_type || 'payable',
               category_suggestion: item.category_suggestion || 'despesa_administrativa',
               is_provision: Boolean(item.is_provision),

@@ -178,6 +178,7 @@ Para contratar lançamentos extras válidos por 60 dias:
           current_due_date: item.due_date,
           status: 'open',
           is_provision: isProv,
+          barcode_or_pix: item.barcode_or_pix || null,
           notes: isProv ? '[PROVISÃO] Valor estimado a confirmar' : null,
         });
       }
@@ -193,6 +194,12 @@ Para contratar lançamentos extras válidos por 60 dias:
       msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nO AnalisAí vai te lembrar às 10h da véspera de cada vencimento! Digite *relatório* para gerar o PDF ou *contas* para ver seus agendamentos.`;
 
       await sendEvolutionText({ phone, text: msg });
+
+      for (const it of validEntries) {
+        if (it.barcode_or_pix) {
+          await sendPaymentCodeMessage(phone, { barcode_or_pix: it.barcode_or_pix });
+        }
+      }
       return true;
     }
 
@@ -303,6 +310,7 @@ Válido por 60 dias para qualquer canal (texto, áudio, fotos ou PDFs):
         original_due_date: conv.due_date,
         current_due_date: conv.due_date,
         status: 'open',
+        barcode_or_pix: conv.barcode_or_pix || null,
         is_provision: isProvision,
         notes: isProvision ? '[PROVISÃO / COMPROMISSO VARIÁVEL] Valor estimado a confirmar' : null,
       });
@@ -365,6 +373,10 @@ Assim que a fatura real chegar, basta me enviar a foto do boleto ou avisar por v
 ${quotaFootnote}
 O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para manter seu caixa impecável!`,
           });
+        }
+
+        if (conv.barcode_or_pix) {
+          await sendPaymentCodeMessage(phone, { barcode_or_pix: conv.barcode_or_pix });
         }
 
         // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF)
@@ -815,6 +827,284 @@ function parseDateFromSpokenText(str: string): string | null {
   return null;
 }
 
+/**
+ * Envia o código de pagamento destacado com identificação inteligente
+ * (Linha digitável / Código de barras bancário vs Chave Pix vs Pix Copia e Cola)
+ * Garante que CNPJ/CPF nunca sejam rotulados como Código de Barras!
+ */
+async function sendPaymentCodeMessage(phone: string, data: {
+  barcode_or_pix?: string | null;
+  pix_key?: string | null;
+  pix_key_type?: string | null;
+}): Promise<boolean> {
+  const rawCandidate = (data.barcode_or_pix || '').trim();
+  const pixKey = (data.pix_key || '').trim();
+  const pixType = (data.pix_key_type || '').toLowerCase();
+
+  // 1. Prioridade para Chave Pix explícita (CNPJ, CPF, Celular, E-mail, EVP)
+  if (pixKey) {
+    const labelType = pixType ? ` (${pixType.toUpperCase()})` : '';
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Chave Pix para Pagamento${labelType} (toque para copiar):*
+\`${pixKey}\`
+
+${BANK_SAFETY_NOTICE}`,
+    });
+    return true;
+  }
+
+  if (!rawCandidate) return false;
+
+  const digitsOnly = rawCandidate.replace(/\D/g, '');
+
+  // 2. Pix Copia e Cola (EMV payload padrão BR Code inicia com 000201)
+  if (rawCandidate.startsWith('000201')) {
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Pix Copia e Cola (toque para copiar):*
+\`${rawCandidate}\`
+
+${BANK_SAFETY_NOTICE}`,
+    });
+    return true;
+  }
+
+  // 3. Se parece com CNPJ (14 dígitos) ou CPF (11 dígitos):
+  // NUNCA rotular como código de barras!
+  const isCnpjPattern = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(rawCandidate) || (digitsOnly.length === 14 && rawCandidate.length <= 18);
+  const isCpfPattern = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(rawCandidate) || (digitsOnly.length === 11 && rawCandidate.length <= 14);
+
+  if (isCnpjPattern) {
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Chave Pix (CNPJ) para Pagamento (toque para copiar):*
+\`${rawCandidate}\`
+
+${BANK_SAFETY_NOTICE}`,
+    });
+    return true;
+  }
+
+  if (isCpfPattern) {
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Chave Pix (CPF) para Pagamento (toque para copiar):*
+\`${rawCandidate}\`
+
+${BANK_SAFETY_NOTICE}`,
+    });
+    return true;
+  }
+
+  // 4. Código de Barras / Linha Digitável Bancária (>= 40 dígitos)
+  if (digitsOnly.length >= 40) {
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
+\`${rawCandidate}\`
+
+${BANK_SAFETY_NOTICE}`,
+    });
+    return true;
+  }
+
+  // 5. Linhas de concessionárias com formatações menores mas claras (>= 20 dígitos numéricos)
+  if (digitsOnly.length >= 20) {
+    await sendEvolutionText({
+      phone,
+      text: `📋 *Código para Pagamento (toque para copiar):*
+\`${rawCandidate}\`
+
+${BANK_SAFETY_NOTICE}`,
+    });
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Intercepta resposta de data para contas que foram registradas sem vencimento
+ * (ex: NF Melissa Leite Machado, onde o bot perguntou para quando é o pagamento)
+ */
+async function handlePendingBillDateResponse(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  rawText: string
+): Promise<boolean> {
+  const clean = rawText.trim().toLowerCase();
+  // Se for uma mensagem muito longa ou comando complexo, não é apenas uma resposta de data
+  if (clean.length > 40 || clean.includes('ajuda') || clean.includes('plano')) return false;
+
+  const normalizedDate = parseDateFromSpokenText(clean);
+  if (!normalizedDate) return false;
+
+  const supabase = createServiceRoleClient();
+
+  // 1. Cliente Ativo
+  if (client?.id) {
+    const { data: pendingBill } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .eq('type', 'payable')
+      .is('original_due_date', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingBill) {
+      await supabase
+        .from('payables_receivables')
+        .update({
+          original_due_date: normalizedDate,
+          current_due_date: normalizedDate,
+          notes: `Vencimento informado pelo usuário em ${new Date().toLocaleDateString('pt-BR')}`,
+        })
+        .eq('id', pendingBill.id);
+
+      const valFmt = Number(pendingBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      await sendEvolutionText({
+        phone,
+        text: `📅 *Data de Vencimento Cadastrada com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Fornecedor:* ${pendingBill.counterparty_name}
+• *Vencimento:* *${formatDueDateDetails(normalizedDate)}*
+• *Valor:* ${valFmt}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h em ponto) te envio o lembrete aqui para você não esquecer da obrigação e manter seus pagamentos em dia!`,
+      });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+      return true;
+    }
+  }
+
+  // 2. Lead em Degustação (trial_leads)
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('id, whatsapp_number, bills_list, due_date, supplier_name, amount')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  if (lead && Array.isArray(lead.bills_list) && lead.bills_list.length > 0) {
+    const bills: any[] = [...lead.bills_list];
+    // Procura o bill mais recente sem due_date
+    const pendingIdx = bills.map((b, idx) => ({ b, idx })).reverse().find((item) => !item.b.due_date);
+
+    if (pendingIdx !== undefined) {
+      const targetBill = bills[pendingIdx.idx];
+      targetBill.due_date = normalizedDate;
+      bills[pendingIdx.idx] = targetBill;
+
+      await supabase
+        .from('trial_leads')
+        .update({
+          bills_list: bills,
+          due_date: lead.due_date || normalizedDate,
+        })
+        .eq('id', lead.id);
+
+      const valFmt = targetBill.amount
+        ? Number(targetBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : 'Valor registrado';
+
+      await sendEvolutionText({
+        phone,
+        text: `📅 *Data de Vencimento Cadastrada com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Fornecedor:* ${targetBill.supplier_name || lead.supplier_name || 'Fornecedor'}
+• *Vencimento:* *${formatDueDateDetails(normalizedDate)}*
+• *Valor:* ${valFmt}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h em ponto) te envio o lembrete aqui para você não esquecer da obrigação e manter seus pagamentos em dia!`,
+      });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Trata resposta do usuário sobre parcelas anteriores de carnê/seguro (Img 3 e 4)
+ */
+async function handlePendingInstallmentConfirmation(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  rawText: string
+): Promise<boolean> {
+  const clean = rawText.trim().toLowerCase();
+  const isAffirmative = /^(sim|ja paguei|já paguei|paguei|todas pagas|pagas|quitadas|lançar as vencidas|lancar as vencidas|pode lancar|pode lançar|sim já|sim ja)$/i.test(clean);
+  const isNegative = /^(não|nao|apenas as futuras|apenas futuras|so futuras|só futuras|so as que faltam|só as que faltam)$/i.test(clean);
+
+  if (!isAffirmative && !isNegative) return false;
+
+  const supabase = createServiceRoleClient();
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('id, bills_list, supplier_name')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  if (lead && Array.isArray(lead.bills_list)) {
+    const hasPendingConfirmation = lead.bills_list.some((b: any) => b.status === 'pending_past_confirmation' || b.is_past);
+    if (hasPendingConfirmation) {
+      const updatedBills = lead.bills_list.map((b: any) => {
+        if (b.status === 'pending_past_confirmation' || b.is_past) {
+          return {
+            ...b,
+            status: isAffirmative ? 'paid' : 'archived',
+            is_past_paid: isAffirmative,
+          };
+        }
+        return b;
+      });
+
+      await supabase
+        .from('trial_leads')
+        .update({ bills_list: updatedBills })
+        .eq('id', lead.id);
+
+      if (isAffirmative) {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Histórico Atualizado com Sucesso!*
+As parcelas anteriores foram registradas como quitadas no seu histórico financeiro.
+As parcelas futuras continuam ativas e monitoradas na véspera de cada vencimento (às 10h)!`,
+        });
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Perfeito!*
+Mantivemos no seu calendário apenas as parcelas futuras a vencer, sem poluir seu fluxo de caixa!`,
+        });
+      }
+      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function handleDueDateChange(
   client: any,
   phone: string,
@@ -1127,6 +1417,14 @@ async function dispatchUserActionCommand(params: {
   if (!text) return false;
   const clean = text.toLowerCase().trim();
   const normalizedClean = clean.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
+
+  // Intercepta respostas pendentes de data de vencimento (ex: NF sem vencimento)
+  const handledPendingDate = await handlePendingBillDateResponse(client, phone, cleanPhone, text);
+  if (handledPendingDate) return true;
+
+  // Intercepta confirmação de parcelas passadas de carnê/seguro (ex: Tokio Marine)
+  const handledInstallmentConfirm = await handlePendingInstallmentConfirmation(client, phone, cleanPhone, text);
+  if (handledInstallmentConfirm) return true;
 
   // A) Interceptação de botões interativos de sequência / Menu Numerado
   // 1. Ver Minhas Contas
@@ -2979,16 +3277,12 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
       const summaryText = formatTrialDocSummary(normalizedDoc, remainingAfter);
       await sendEvolutionText({ phone, text: summaryText });
 
-      // 2. Se houver código de barras / Pix / linha digitável, envia separado para cópia rápida
-      if (extraction.barcode_or_pix) {
-        await sendEvolutionText({
-          phone,
-          text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
-\`${extraction.barcode_or_pix.trim()}\`
-
-${BANK_SAFETY_NOTICE}`,
-        });
-      }
+      // 2. Se houver código de barras / Pix / linha digitável, envia com rotulagem inteligente
+      await sendPaymentCodeMessage(phone, {
+        barcode_or_pix: extraction.barcode_or_pix,
+        pix_key: extraction.pix_key,
+        pix_key_type: extraction.pix_key_type,
+      });
 
       // 3. Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
       const patrimonialTrial = analyzePatrimonialExpense({
@@ -3084,6 +3378,16 @@ ${BANK_SAFETY_NOTICE}`,
           const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - validEntries.length);
           const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, remainingAfter) + trialTaxBadge;
           await sendEvolutionText({ phone, text: confirmationText });
+
+          for (const ent of validEntries) {
+            if (ent.barcode_or_pix || (ent as any).pix_key) {
+              await sendPaymentCodeMessage(phone, {
+                barcode_or_pix: ent.barcode_or_pix,
+                pix_key: (ent as any).pix_key,
+                pix_key_type: (ent as any).pix_key_type,
+              });
+            }
+          }
 
           // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
           for (const ent of validEntries) {
@@ -3226,6 +3530,16 @@ ${BANK_SAFETY_NOTICE}`,
             phone,
             text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n${confirmationText}`,
           });
+
+          for (const ent of validEntries) {
+            if (ent.barcode_or_pix || (ent as any).pix_key) {
+              await sendPaymentCodeMessage(phone, {
+                barcode_or_pix: ent.barcode_or_pix,
+                pix_key: (ent as any).pix_key,
+                pix_key_type: (ent as any).pix_key_type,
+              });
+            }
+          }
 
           // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF na Degustação)
           for (const ent of validEntries) {
@@ -3525,19 +3839,17 @@ Identificamos que este boleto corresponde ao lançamento de *${duplicateCandidat
 O código de barras foi anexado com sucesso para pagamento e lembretes sem gerar despesa duplicada no seu fluxo de caixa!`,
           });
 
-          await sendEvolutionText({
-            phone,
-            text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
-${extracted.barcode_or_pix.trim()}
-
-${BANK_SAFETY_NOTICE}`,
+          await sendPaymentCodeMessage(phone, {
+            barcode_or_pix: extracted.barcode_or_pix,
+            pix_key: extracted.pix_key,
+            pix_key_type: extracted.pix_key_type,
           });
 
           return;
         }
       }
 
-      // ── SUPORTE A NOTA FISCAL COM MÚLTIPLAS PARCELAS / DUPLICATAS ──────────
+      // ── SUPORTE A NOTA FISCAL / CARNÊ COM MÚLTIPLAS PARCELAS ──────────
       if (extracted.installments && extracted.installments.length > 0) {
         for (const inst of extracted.installments) {
           await supabase.from('payables_receivables').insert({
@@ -3557,13 +3869,16 @@ ${BANK_SAFETY_NOTICE}`,
           .map((inst) => `• *Parc. ${inst.installment_number}:* R$ ${Number(inst.amount).toFixed(2)} — Vence ${formatDueDateDetails(inst.due_date)}`)
           .join('\n');
 
+        const isInsuranceDoc = extracted.is_insurance || /seguro|seguradora/i.test(extracted.counterparty_name);
+        const docHeader = isInsuranceDoc ? 'Carnê de Seguro' : 'Documento Faturado';
+
         const quotaFootnote = client.is_admin
           ? '👑 _Modo Admin Irrestrito_'
           : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
 
         await sendEvolutionText({
           phone,
-          text: `📑 *Nota Fiscal Faturada — ${extracted.installments.length} Parcelas Registradas!*
+          text: `📑 *${docHeader} — ${extracted.installments.length} Parcelas Registradas!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *Fornecedor:* ${extracted.counterparty_name}
 • *Valor Total:* R$ ${Number(extracted.total_amount).toFixed(2)}
@@ -3574,6 +3889,15 @@ ${parcelasDesc}
 💡 O AnalisAí vai te avisar na véspera e no dia de cada parcela! Quando os boletos chegarem, basta enviá-los aqui que vinculamos automaticamente ao pagamento.
 ${quotaFootnote}`,
         });
+
+        if (isInsuranceDoc) {
+          await sendEvolutionText({
+            phone,
+            text: `🛡️ *Auditoria de Apólice AnalisAí:*
+Identificamos que este carnê é da *${extracted.counterparty_name}*.
+Que tal me enviar aqui a **Apólice Completa** em PDF? Nós auditamos todas as coberturas contratadas, valores de franquia e vigência para garantir sua total proteção patrimonial!`,
+          });
+        }
 
         await sendEvolutionText({
           phone,
@@ -3704,29 +4028,65 @@ _Lançamento auditado e integrado ao seu Livro Caixa no piloto automático._`,
         });
       }
 
-      // Se identificou código de barras / linha digitável / Pix, envia em mensagem separada para cópia imediata
-      if (extracted.barcode_or_pix && extracted.barcode_or_pix.length >= 20) {
+      // Se identificou código de barras / linha digitável / Pix, envia em mensagem destacada
+      await sendPaymentCodeMessage(phone, {
+        barcode_or_pix: extracted.barcode_or_pix,
+        pix_key: extracted.pix_key,
+        pix_key_type: extracted.pix_key_type,
+      });
+
+      // 1. Tratamento de Vencimento Ausente (Ponto 1 e Ponto 4)
+      if (!extracted.due_date) {
         await sendEvolutionText({
           phone,
-          text: `📋 *Código de Barras / Linha Digitável (toque para copiar):*
-${extracted.barcode_or_pix.trim()}
-
-${BANK_SAFETY_NOTICE}`,
+          text: `⚠️ *Atenção:* Como este documento não possui data de vencimento expressa, *para quando é o pagamento?*
+👉 *Responda com a data* (ex: *25/10* ou *dia 25*) para eu agendar seu lembrete na véspera!`,
         });
-      }
-
-      // Acolhimento Afetivo & Menu de Superpoderes (Eliminando o Vazio Pós-Boleto)
-      await sendEvolutionText({
-        phone,
-        text: `💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
-Na véspera do vencimento (às 10h em ponto) eu te lembro aqui com o código de barras prontinho para pagar sem estresse e sem multas.
+      } else {
+        // Acolhimento Afetivo & Menu de Superpoderes
+        const hasFullCode = extracted.barcode_or_pix || extracted.pix_key;
+        const codeHint = hasFullCode ? ' com o código prontinho para pagar sem estresse e sem multas.' : ' para você não esquecer da obrigação e manter seus pagamentos em dia!';
+        await sendEvolutionText({
+          phone,
+          text: `💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
+Na véspera do vencimento (às 10h em ponto) eu te lembro aqui${codeHint}
 
 ✨ *Dicas rápidas do seu AnalisAí:*
 • Digite *Semana* para ver suas contas dos próximos 7 dias;
 • Digite *Relatório* ou *PDF* para receber seu Livro Caixa atualizado;
 • Pergunte _"qual conta devo atrasar?"_ se o caixa apertar (incluso no Solo e Solo Plus);
 • Digite *Indicar* para compartilhar seu link e zerar sua mensalidade com 3 indicações ativas!`,
-      });
+        });
+      }
+
+      // 2. Tratamento de Boleto sem Código de Barras (Ponto 2)
+      const hasAnyPayCode = Boolean(extracted.barcode_or_pix || extracted.pix_key);
+      if (extracted.doc_type === 'boleto' && !hasAnyPayCode && !extracted.is_rent && !extracted.is_insurance) {
+        await sendEvolutionText({
+          phone,
+          text: `💡 *Não identifiquei o código de barras/linha digitável nesta foto do boleto.*
+Se você tiver a linha digitável, envie os números aqui (ou tire uma foto mais aberta) para eu já deixar o código pronto para você pagar quando vencer!`,
+        });
+      }
+
+      // 3. Tratamento de Aluguel (Ponto 4)
+      if (extracted.is_rent || /aluguel|loca[cç][aã]o|administradora de bens/i.test(extracted.counterparty_name)) {
+        await sendEvolutionText({
+          phone,
+          text: `🏠 *Dica de Aluguel Recorrente:*
+Identificamos que este lançamento é um pagamento de aluguel. Deseja cadastrar como uma *despesa recorrente mensal* no mesmo dia de cada mês? Em qual dia de cada mês costuma vencer?`,
+        });
+      }
+
+      // 4. Tratamento de Seguro / Apólice Completa (Ponto 5)
+      if (extracted.is_insurance || /seguro|seguradora/i.test(extracted.counterparty_name)) {
+        await sendEvolutionText({
+          phone,
+          text: `🛡️ *Auditoria de Seguros AnalisAí:*
+Identificamos que este documento é uma cobrança da *${extracted.counterparty_name}*.
+Que tal me enviar a **Apólice Completa** em PDF para o AnalisAí auditar suas coberturas, franquias e vigência? 📄`,
+        });
+      }
 
       return;
     } catch (err) {
@@ -4325,6 +4685,7 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
             original_due_date: conv.due_date,
             current_due_date: conv.due_date,
             status: 'open',
+            barcode_or_pix: (conv as any).barcode_or_pix || null,
           });
 
           const formattedDate = formatDueDateDetails(conv.due_date);
@@ -4357,6 +4718,10 @@ Na véspera do vencimento (às 10h em ponto) eu te lembro aqui para manter seus 
 
 💡 Digite *Semana* a qualquer momento para ver sua agenda de pagamentos atualizada.`,
             });
+
+            if ((conv as any).barcode_or_pix) {
+              await sendPaymentCodeMessage(phone, { barcode_or_pix: (conv as any).barcode_or_pix });
+            }
           }
           return;
         }

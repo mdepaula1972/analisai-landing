@@ -246,19 +246,54 @@ export async function recordTrialUsage(
     }
   }
 
+  let effectiveDueDate = docData.due_date || null;
+  let effectiveAmount = numAmount;
+
   if (!reconciled) {
-    billsList.push({
-      id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      supplier_name: supplierCandidate,
-      amount: numAmount,
-      due_date: docData.due_date || null,
-      barcode_or_pix: barcodeOrPixCandidate,
-      category: categoryCandidate,
-      is_provision: isProvision,
-      reminder_eve_sent: false,
-      reminder_due_sent: false,
-      created_at: new Date().toISOString(),
-    });
+    if (docData.installments && Array.isArray(docData.installments) && docData.installments.length > 1) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const futureInstallments = docData.installments.filter((i: any) => !i.due_date || i.due_date >= todayStr);
+      const nextInst = futureInstallments[0] || docData.installments[0];
+
+      if (nextInst) {
+        effectiveDueDate = nextInst.due_date || effectiveDueDate;
+        effectiveAmount = Number(nextInst.amount) || effectiveAmount;
+      }
+
+      for (const inst of docData.installments) {
+        const isPast = inst.due_date ? inst.due_date < todayStr : false;
+        billsList.push({
+          id: `bill_${Date.now()}_${inst.installment_number || Math.random().toString(36).substring(2, 7)}`,
+          supplier_name: `${supplierCandidate} (Parc. ${inst.installment_number}/${docData.installments.length})`,
+          amount: Number(inst.amount) || null,
+          due_date: inst.due_date || null,
+          barcode_or_pix: inst.barcode_or_pix || barcodeOrPixCandidate,
+          category: categoryCandidate,
+          is_provision: isProvision,
+          is_past: isPast,
+          is_insurance: Boolean(docData.is_insurance),
+          status: isPast ? 'pending_past_confirmation' : 'open',
+          reminder_eve_sent: false,
+          reminder_due_sent: false,
+          created_at: new Date().toISOString(),
+        });
+      }
+    } else {
+      billsList.push({
+        id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        supplier_name: supplierCandidate,
+        amount: numAmount,
+        due_date: docData.due_date || null,
+        barcode_or_pix: barcodeOrPixCandidate,
+        category: categoryCandidate,
+        is_provision: isProvision,
+        is_insurance: Boolean(docData.is_insurance),
+        is_rent: Boolean(docData.is_rent),
+        reminder_eve_sent: false,
+        reminder_due_sent: false,
+        created_at: new Date().toISOString(),
+      });
+    }
   }
 
   await supabase
@@ -269,8 +304,8 @@ export async function recordTrialUsage(
         doc_processed: true,
         doc_data: docData,
         supplier_name: supplierCandidate,
-        amount: numAmount,
-        due_date: docData.due_date || null,
+        amount: effectiveAmount,
+        due_date: effectiveDueDate,
         barcode_or_pix: barcodeOrPixCandidate,
         category: categoryCandidate,
         trial_docs_count: reconciled ? (leadRecord as any)?.trial_docs_count || newCount : newCount,
@@ -662,6 +697,8 @@ export function formatCategoryLabel(rawCategory?: string | null): string {
     tributos: 'Impostos e Tributos',
     impostos: 'Impostos e Tributos',
     aluguel: 'Aluguel / Imóvel',
+    seguro: 'Seguro',
+    seguros: 'Seguro',
     combustivel: 'Combustível',
     alimentacao: 'Alimentação',
     contabilidade: 'Contabilidade',
@@ -675,10 +712,11 @@ export function formatCategoryLabel(rawCategory?: string | null): string {
 }
 
 /**
- * Formata o resumo do documento processado na degustação gratuita (limpo e sem poluição)
+ * Formata o resumo do documento processado na degustação gratuita (limpo, inteligente e com acolhimento contábil)
  */
 export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): string {
-  const dueInfo = doc.due_date ? formatDueDateDetails(doc.due_date) : 'Não identificado';
+  const isDuePresent = Boolean(doc.due_date);
+  const dueInfo = isDuePresent ? formatDueDateDetails(doc.due_date) : 'Não identificado';
   const rawAmount = doc.amount !== undefined && doc.amount !== null ? doc.amount : doc.total_amount;
   const valFormatted = rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) && Number(rawAmount) > 0
     ? Number(rawAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -696,11 +734,55 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
     cupom: 'Cupom Fiscal',
     outro: 'Boleto/Fatura de Consumo',
   };
-  const docTypeFormatted = docTypeMap[docTypeRaw] || doc.document_type || doc.doc_type || 'Boleto/Conta';
+  let docTypeFormatted = docTypeMap[docTypeRaw] || doc.document_type || doc.doc_type || 'Boleto/Conta';
+  if (doc.is_insurance || /seguro|seguradora/i.test(supplier)) docTypeFormatted = 'Seguro (Carnê/Apólice)';
+  if (doc.is_rent || /aluguel|loca[cç][aã]o|administradora de bens/i.test(supplier)) docTypeFormatted = 'Aluguel / Notificação de Locação';
 
   // Mapeamento amigável de categorias
   const categoryRaw = doc.category || doc.category_suggestion;
-  const categoryFormatted = categoryRaw ? formatCategoryLabel(categoryRaw) : null;
+  let categoryFormatted = categoryRaw ? formatCategoryLabel(categoryRaw) : null;
+  if (doc.is_rent && !categoryFormatted) categoryFormatted = 'Aluguel / Imóvel';
+  if (doc.is_insurance && !categoryFormatted) categoryFormatted = 'Seguro';
+
+  // Tratamento especializado para Carnê / Seguro com múltiplas parcelas (Img 3 e 4)
+  if (doc.installments && Array.isArray(doc.installments) && doc.installments.length > 1) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const past = doc.installments.filter((i: any) => i.due_date && i.due_date < todayStr);
+    const future = doc.installments.filter((i: any) => !i.due_date || i.due_date >= todayStr);
+    const nextInst = future[0] || doc.installments[0];
+    const nextVal = Number(nextInst.amount) || (rawAmount && Number(rawAmount) > 0 ? Number(rawAmount) / doc.installments.length : 0);
+    const nextValFmt = nextVal > 0 ? nextVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A calcular';
+    const totalContractFmt = rawAmount && Number(rawAmount) > 0
+      ? Number(rawAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : `${doc.installments.length}x de ${nextValFmt}`;
+
+    let txt = `📄 *Lançamento Registrado — Carnê Parcelado*\n`;
+    txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    txt += `🏢 *Cedente/Fornecedor:* ${supplier}\n`;
+    txt += `📑 *Tipo de Documento:* ${docTypeFormatted}\n`;
+    txt += `💰 *Valor Total do Contrato:* ${totalContractFmt} (${doc.installments.length} parcelas)\n`;
+    txt += `📅 *Próxima Parcela (${nextInst.installment_number || 1}ª):* ${formatDueDateDetails(nextInst.due_date)} — *${nextValFmt}*\n`;
+    if (categoryFormatted) {
+      txt += `📂 *Categoria:* ${categoryFormatted}\n`;
+    }
+    txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    txt += `📊 *Detalhamento do Cronograma:*\n`;
+    txt += `• *A Vencer:* ${future.length} parcela(s) agendadas no seu calendário.\n`;
+    if (past.length > 0) {
+      txt += `• *Anteriores:* ${past.length} parcela(s) com datas passadas.\n`;
+      txt += `\n❓ *Você já efetuou o pagamento das ${past.length} parcelas anteriores?*\n`;
+      txt += `👉 *Responda "Sim"* se já foram quitadas para eu manter seu histórico limpo, ou me avise se alguma ficou em aberto!\n`;
+    } else {
+      txt += `\n⏰ *Fique tranquilo:* Na véspera de cada parcela (às 10h em ponto), te aviso aqui para você não esquecer e manter seus pagamentos em dia!\n`;
+    }
+
+    if (doc.is_insurance || categoryRaw === 'seguro' || /seguro|seguradora/i.test(supplier)) {
+      txt += `\n🛡️ *Auditoria de Apólice AnalisAí:*\nIdentifiquei que este é um seguro de *${supplier}*. Que tal enviar a **Apólice Completa** em PDF para o AnalisAí analisar suas coberturas, franquias e vigência? 📄\n`;
+    }
+
+    txt += `\n💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
+    return txt;
+  }
 
   let txt = `📄 *Lançamento Registrado — Degustação AnalisAí*\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -712,12 +794,41 @@ export function formatTrialDocSummary(doc: any, remainingDocs: number = 0): stri
     txt += `📂 *Categoria:* ${categoryFormatted}\n`;
   }
 
-  const reminderText = doc.barcode_or_pix
-    ? 'te envio o lembrete aqui com o código prontinho para pagar sem estresse.'
-    : 'te envio o lembrete aqui para você não esquecer da obrigação e manter seus pagamentos em dia!';
+  // 1. Tratamento de Vencimento Ausente (Ponto 1 e Ponto 4)
+  if (!isDuePresent) {
+    txt += `\n⚠️ *Atenção:* Como este documento não possui data de vencimento expressa, *para quando é o pagamento?*\n`;
+    txt += `👉 *Responda com a data* (ex: *25/10* ou *dia 25*) para eu agendar seu lembrete na véspera!\n`;
+  } else {
+    const hasFullBarcode = doc.barcode_or_pix && doc.barcode_or_pix.length >= 20;
+    const reminderText = hasFullBarcode
+      ? 'te envio o lembrete aqui com o código prontinho para pagar sem estresse.'
+      : 'te envio o lembrete aqui para você não esquecer da obrigação e manter seus pagamentos em dia!';
+    txt += `\n⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h em ponto), ${reminderText}\n`;
+  }
 
-  txt += `\n⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h em ponto), ${reminderText}\n\n`;
-  txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
+  // 2. Tratamento de Boleto sem Código de Barras (Ponto 2)
+  const isBoleto = docTypeRaw === 'boleto' || docTypeFormatted.toLowerCase().includes('boleto');
+  const hasValidBarcode = doc.barcode_or_pix && doc.barcode_or_pix.length >= 20;
+  if (isBoleto && !hasValidBarcode && !doc.is_rent && !doc.is_insurance) {
+    txt += `\n💡 *Não identifiquei o código de barras/linha digitável nesta foto.*\n`;
+    txt += `Se você tiver a linha digitável, envie o número aqui (ou tire uma foto mais aberta) para eu já deixar o código pronto para você pagar quando vencer!\n`;
+  }
+
+  // 3. Tratamento de Aluguel e Chave Pix (Ponto 4)
+  if (doc.is_rent || categoryRaw === 'aluguel' || docTypeFormatted.includes('Aluguel')) {
+    if (doc.pix_key) {
+      const pixType = doc.pix_key_type ? doc.pix_key_type.toUpperCase() : 'PIX';
+      txt += `\n🔑 *Chave Pix para Pagamento (${pixType}):* \`${doc.pix_key}\`\n`;
+    }
+    txt += `\n🏠 *Dica de Aluguel:* Identifiquei que este é o aluguel do seu imóvel. Deseja cadastrar como *despesa recorrente mensal*? Em qual dia de cada mês costuma vencer?\n`;
+  }
+
+  // 4. Tratamento de Seguro / Apólice Completa (Ponto 5)
+  if (doc.is_insurance || categoryRaw === 'seguro' || /seguro|seguradora/i.test(supplier)) {
+    txt += `\n🛡️ *Dica de Blindagem:* Identifiquei que este é um seguro de *${supplier}*. Que tal enviar a **Apólice Completa** em PDF para o AnalisAí analisar suas coberturas, franquias e vigência? 📄\n`;
+  }
+
+  txt += `\n💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
 
   return txt;
 }
@@ -758,13 +869,22 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
     txt += `📑 *Tipo:* ${isIncome ? 'Conta a Receber (Receita)' : 'Conta a Pagar (Despesa)'}\n`;
     txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
-    const reminderMsg = isIncome
-      ? 'te envio um lembrete para acompanhar o recebimento desta receita!'
-      : (doc.barcode_or_pix
-        ? 'te envio o lembrete aqui com o código pronto para você pagar sem multas.'
-        : 'te envio o lembrete aqui para você não esquecer da obrigação e evitar juros de atraso!');
+    if (!doc.due_date) {
+      txt += `\n⚠️ *Atenção:* Como a data de vencimento não foi informada, *para quando é o pagamento?*\n`;
+      txt += `👉 *Responda aqui com a data* (ex: *25/10* ou *dia 25*) para eu agendar seu lembrete na véspera!\n\n`;
+    } else {
+      const reminderMsg = isIncome
+        ? 'te envio um lembrete para acompanhar o recebimento desta receita!'
+        : (doc.barcode_or_pix
+          ? 'te envio o lembrete aqui com o código pronto para você pagar sem multas.'
+          : 'te envio o lembrete aqui para você não esquecer da obrigação e evitar juros de atraso!');
+      txt += `\n⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h), ${reminderMsg}\n\n`;
+    }
 
-    txt += `⏰ *Fique tranquilo:* Na véspera do vencimento (às 10h), ${reminderMsg}\n\n`;
+    if (doc.barcode_or_pix) {
+      txt += `📋 *Código de Barras / Linha Digitável:*\n\`${doc.barcode_or_pix.trim()}\`\n\n`;
+    }
+
     txt += `💡 _Digite *contas* para ver seus agendamentos ou *planos* para assinar._`;
     return txt;
   }
@@ -787,7 +907,11 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
     const typeBadge = isIncome ? '🟢 _(Receita)_' : '🔴 _(Despesa)_';
 
     txt += `${num} *${sup}* ${typeBadge}\n`;
-    txt += `   💰 ${valFormatted}${provTag} · 📅 ${dueInfo}\n\n`;
+    txt += `   💰 ${valFormatted}${provTag} · 📅 ${dueInfo}\n`;
+    if (e.barcode_or_pix) {
+      txt += `   📋 Código/Pix: \`${e.barcode_or_pix.trim()}\`\n`;
+    }
+    txt += `\n`;
   });
 
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -801,7 +925,10 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
     txt += `🔴 *Total das Despesas a Pagar:* *${totalPayableFmt}*\n`;
   }
 
-  if (payables.length > 0) {
+  const hasMissingDue = entries.some((e) => !e.due_date);
+  if (hasMissingDue) {
+    txt += `⚠️ *Atenção:* Algumas contas estão sem data de vencimento definida. Você pode responder a qualquer momento com a data (ex: *"Sabesp vence dia 20"*).\n\n`;
+  } else if (payables.length > 0) {
     txt += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você não esquecer de suas obrigações e manter seu fluxo em dia!\n\n`;
   } else {
     txt += `⏰ *Fique tranquilo:* Te avisarei nas datas programadas para acompanhar o recebimento das suas receitas!\n\n`;

@@ -77,6 +77,12 @@ export interface ExtractedDocumentData {
   due_date?: string | null;
   issue_date?: string | null;
   barcode_or_pix?: string | null;
+  pix_key?: string | null;
+  pix_key_type?: 'cnpj' | 'cpf' | 'email' | 'telefone' | 'aleatoria' | 'copia_e_cola' | 'outro' | null;
+  is_rent?: boolean;
+  is_insurance?: boolean;
+  policy_number?: string | null;
+  rent_period?: string | null;
   category_suggestion: string;
   criticality_hint: number;
   confidence_score: number;
@@ -89,6 +95,9 @@ export interface ConversationalFinancialEntry {
   supplier_or_customer: string | null;
   amount: number | null;
   due_date: string | null;
+  barcode_or_pix?: string | null;
+  is_rent?: boolean;
+  is_insurance?: boolean;
   category_suggestion?: string | null;
   missing_fields: Array<'amount' | 'supplier_or_customer' | 'due_date'>;
   needs_clarification: boolean;
