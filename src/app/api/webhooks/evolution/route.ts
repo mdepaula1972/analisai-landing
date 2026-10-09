@@ -11,7 +11,7 @@ import { routeConversationalIntent, UserConversationalContext } from '@/lib/solo
 import { recordAuditLog } from '@/lib/solo/audit';
 import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand, markTeamMemberActivated } from '@/lib/solo/team';
 import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
-import { handleAdminCommands } from '@/lib/solo/admin';
+import { handleAdminCommands, inviteContactVip } from '@/lib/solo/admin';
 import {
   generateCashFlowPostponeAdvice,
   isLongTermCashFlowQuery,
@@ -86,6 +86,8 @@ interface EvolutionWebhookBody {
       imageMessage?: { mimetype: string; caption?: string; url?: string };
       documentMessage?: { mimetype: string; fileName?: string; url?: string };
       audioMessage?: { mimetype: string; url?: string; ptt?: boolean };
+      contactMessage?: { displayName?: string; vcard?: string };
+      contactsArrayMessage?: { displayName?: string; contacts?: Array<{ displayName?: string; vcard?: string }> };
     };
     messageType?: string;
     base64?: string;
@@ -1707,6 +1709,69 @@ function extractTextFromMessage(msg: any, fullData?: any): string {
   return '';
 }
 
+export interface ExtractedContact {
+  name: string;
+  phone: string;
+  rawVcard?: string;
+}
+
+export function extractContactsFromPayload(msg: any): ExtractedContact[] {
+  const unwrapped = unwrapMessage(msg);
+  const contacts: ExtractedContact[] = [];
+  const rawList: Array<{ displayName?: string; vcard?: string }> = [];
+
+  if (unwrapped?.contactMessage) rawList.push(unwrapped.contactMessage);
+  if (unwrapped?.contactsArrayMessage?.contacts && Array.isArray(unwrapped.contactsArrayMessage.contacts)) {
+    rawList.push(...unwrapped.contactsArrayMessage.contacts);
+  }
+
+  for (const item of rawList) {
+    if (!item) continue;
+    const vcard = item.vcard || '';
+    let name = item.displayName || '';
+
+    if (!name && vcard) {
+      const fnMatch = vcard.match(/FN[;:]([^\r\n]+)/i);
+      if (fnMatch && fnMatch[1]) {
+        name = fnMatch[1].trim();
+      } else {
+        const nMatch = vcard.match(/N[;:]([^;\r\n]*);([^;\r\n]*)/i);
+        if (nMatch) {
+          name = `${nMatch[2] || ''} ${nMatch[1] || ''}`.trim();
+        }
+      }
+    }
+
+    let phone = '';
+    const waidMatch = vcard.match(/waid=(\d+)/i);
+    if (waidMatch && waidMatch[1]) {
+      phone = waidMatch[1];
+    } else {
+      const telMatches = [...vcard.matchAll(/TEL[^:]*:([^\r\n]+)/gi)];
+      for (const tm of telMatches) {
+        const rawDigits = (tm[1] || '').replace(/\D/g, '');
+        if (rawDigits.length >= 8) {
+          phone = rawDigits;
+          if (rawDigits.length >= 10) break;
+        }
+      }
+    }
+
+    if (phone) {
+      if (phone.length <= 11 && !phone.startsWith('55')) {
+        phone = '55' + phone;
+      }
+      contacts.push({
+        name: name ? name.trim() : 'Convidado VIP',
+        phone: phone.trim(),
+        rawVcard: vcard,
+      });
+    }
+  }
+
+  return contacts;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
@@ -1718,6 +1783,11 @@ export async function POST(req: NextRequest) {
       body.data?.messageType === 'audioMessage' ||
       !!message?.audioMessage ||
       !!body.data?.message?.audioMessage;
+    const isContact =
+      body.data?.messageType === 'contactMessage' ||
+      body.data?.messageType === 'contactsArrayMessage' ||
+      !!message?.contactMessage ||
+      !!message?.contactsArrayMessage;
 
     const key = body.data?.key || ({} as any);
     const remoteJid = key.remoteJid || '';
@@ -1744,8 +1814,8 @@ export async function POST(req: NextRequest) {
 
     const isAdminTester = phone === '5514930855878' || phone.includes('930855878');
 
-    // Ignora fromMe apenas se NÃO for o Marcos Administrador testando, NÃO for comando e NÃO for áudio
-    if (body.data?.key?.fromMe && !isAdminTester && !isCommand && !isAudio) {
+    // Ignora fromMe apenas se NÃO for o Marcos Administrador testando, NÃO for comando, áudio ou contato
+    if (body.data?.key?.fromMe && !isAdminTester && !isCommand && !isAudio && !isContact) {
       return NextResponse.json({ ignored: true, reason: 'from_me' }, { status: 200 });
     }
 
@@ -2341,6 +2411,41 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
       clientName: client?.name || body.data?.pushName,
     });
     await sendEvolutionText({ phone, text: res.userReply });
+    return;
+  }
+
+  // ── Interceptação 0.05: Contato(s) Anexado(s) via WhatsApp (VCard) ────────────
+  const attachedContacts = extractContactsFromPayload(body.data?.message);
+  if (attachedContacts.length > 0) {
+    if (client?.is_admin || isAdminPhone || cleanText.startsWith('!convidar') || cleanText.startsWith('/convidar')) {
+      const inviterName = client?.name || 'Marcos Administrador';
+
+      if (attachedContacts.length > 1) {
+        let summary = `🎉 *${attachedContacts.length} Convites VIP Processados!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        for (const c of attachedContacts) {
+          const res = await inviteContactVip(inviterName, c.phone, c.name);
+          summary += `• 👤 *${res.name}* (${res.formattedTarget}): ${res.inviteSent ? '✅ Convite enviado!' : '⚠️ Erro no envio'}\n`;
+        }
+        summary += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTodos foram liberados com acesso irrestrito de QA no AnalisAí! 🚀`;
+        await sendEvolutionText({ phone, text: summary });
+        return;
+      }
+
+      const targetContact = attachedContacts[0];
+      const customName = cleanText.replace(/^[!/](convidar|convite)\s*/i, '').trim();
+      const finalName = customName || targetContact.name;
+
+      const res = await inviteContactVip(inviterName, targetContact.phone, finalName);
+      await sendEvolutionText({ phone, text: res.message });
+      return;
+    }
+
+    // Se for cliente comum compartilhando contato
+    const contact = attachedContacts[0];
+    await sendEvolutionText({
+      phone,
+      text: `Recebi o contato de *${contact.name}* (${contact.phone})! 😊\n\n💡 *O que você gostaria de fazer?*\n• Para cadastrá-lo como operador da sua equipe, envie:\n👉 *!equipe add ${contact.phone} ${contact.name}*\n• Ou envie *!indicar* para compartilhar seu link de parceiro e receber 10% de comissão recorrente!`,
+    });
     return;
   }
 
