@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText, sendEvolutionPoll } from '@/lib/solo/evolution';
-import { ASAAS_WEBHOOK_AUTH_TOKEN, ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
+import { ASAAS_WEBHOOK_AUTH_TOKEN, ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP } from '@/lib/solo/constants';
 import { addDays, format } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -602,7 +602,7 @@ Adicionamos *+${docsAmount} documentos extras* à sua carteira de reserva!
       if (clientPhone) {
         const firstName = (clientName || 'Cliente').split(' ')[0];
         const cleanDigits = clientPhone.replace(/\D/g, '');
-        const inviteLink = `https://wa.me/551331500987?text=${encodeURIComponent(
+        const inviteLink = `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${encodeURIComponent(
           `Olá! Vim por indicação do Analisador ${cleanDigits} para testar o AnalisAí.`
         )}`;
 

@@ -5,10 +5,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { CheckCircle2, Clock, Mail, ArrowRight, Shield, MessageCircle, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { WHATSAPP_NUMBER } from '@/lib/contact';
 
 /* ── CONFIGURAÇÃO ── */
 const VERSION = 'v3.8 · 23/08/2026 - 14:00';
-const PHONE_NUMBER = '551331500987';
+const PHONE_NUMBER = WHATSAPP_NUMBER;
 const WA_SUCESSO_LINK = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent('Olá! Acabei de contratar o Diagnóstico Financeiro (R$ 197) e gostaria de confirmar meus dados e receber o formulário.')}`;
 
 function SucessoContent() {

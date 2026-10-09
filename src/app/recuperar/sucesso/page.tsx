@@ -3,6 +3,7 @@
 import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { WHATSAPP_NUMBER } from '@/lib/contact';
 
 function RecuperarSucessoContent() {
   const searchParams = useSearchParams();
@@ -46,7 +47,7 @@ function RecuperarSucessoContent() {
         </p>
 
         <a
-          href="https://wa.me/551331500987"
+          href={`https://wa.me/${WHATSAPP_NUMBER}`}
           className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition duration-200 shadow-lg text-sm"
         >
           <ArrowLeft className="w-4 h-4" />

@@ -6,9 +6,11 @@
 export const ASAAS_WEBHOOK_AUTH_TOKEN =
   process.env.ASAAS_WEBHOOK_TOKEN || process.env.ASAAS_WEBHOOK_AUTH_TOKEN || '';
 
-/** WhatsApp Oficial do Robô AnalisAí Solo: (13) 3150-0987 */
-export const OFFICIAL_BOT_WHATSAPP = '551331500987';
-export const OFFICIAL_BOT_PHONE_DISPLAY = '(13) 3150-0987';
+/** WhatsApp Oficial do Robô AnalisAí: (13) 92009-9874 */
+export const OFFICIAL_BOT_WHATSAPP =
+  process.env.OFFICIAL_BOT_WHATSAPP || process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5513920099874';
+export const OFFICIAL_BOT_PHONE_DISPLAY =
+  process.env.OFFICIAL_BOT_PHONE_DISPLAY || process.env.NEXT_PUBLIC_WHATSAPP_DISPLAY || '(13) 92009-9874';
 
 export const ASAAS_PLANS = {
   monthly: {

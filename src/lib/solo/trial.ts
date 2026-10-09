@@ -3,7 +3,7 @@ import { ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_D
 
 /**
  * Retorna o link de convite oficial para o parceiro indicar contatos
- * Aponta diretamente para o robô oficial do AnalisAí: (13) 3150-0987
+ * Aponta diretamente para o robô oficial do AnalisAí: (13) 92009-9874
  */
 export function getPioneerShareLink(phone: string): string {
   const clean = phone.replace(/\D/g, '');

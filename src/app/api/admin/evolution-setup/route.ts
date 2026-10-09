@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEvolutionText, getEvolutionConfig } from '@/lib/solo/evolution';
+import { OFFICIAL_BOT_WHATSAPP } from '@/lib/solo/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -258,7 +259,7 @@ export async function POST(req: NextRequest) {
     // Disparo de teste simples
     if (action === 'test_send') {
       const testMsg = await sendEvolutionText({
-        phone: '551331500987',
+        phone: OFFICIAL_BOT_WHATSAPP,
         text: `🚀 *Evolution API Conectada com Sucesso ao AnalisAí!*
 Envie *!ajuda* para ver todos os comandos de teste do modo administrador.`,
       });

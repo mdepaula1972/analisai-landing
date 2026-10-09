@@ -135,7 +135,7 @@ export async function notificarAdminNovaColeta(dados: {
   email: string;
   whatsapp: string;
 }) {
-  const adminWhatsApp = process.env.ADMIN_WHATSAPP || '551331500987';
+  const adminWhatsApp = process.env.ADMIN_WHATSAPP || '5513920099874';
 
   const mensagem = `🚀 *NOVA COLETA DE DIAGNÓSTICO RECEBIDA!*\n\n` +
     `🏢 *Empresa:* ${dados.nome_negocio}\n` +

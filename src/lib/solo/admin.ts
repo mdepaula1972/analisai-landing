@@ -14,6 +14,7 @@ import {
 } from './referral';
 import { getMonthlyDividendTracking } from './dividend-tracker';
 import { addDays } from 'date-fns';
+import { ADMIN_PERSONAL_WHATSAPP } from './constants';
 
 export interface AdminCommandResult {
   handled: boolean;
@@ -642,7 +643,7 @@ O arquivo completo com suas contas agendadas, contas vencidas e parecer de caixa
     return {
       handled: true,
       message: `📲 *Testando Escalonamento para Consultoria Humana!*
-A ficha estruturada do lead qualificado está sendo despachada agora para o seu WhatsApp (+551331500987).`,
+A ficha estruturada do lead qualificado está sendo despachada agora para o seu WhatsApp (+${ADMIN_PERSONAL_WHATSAPP}).`,
     };
   }
 

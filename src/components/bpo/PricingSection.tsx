@@ -5,7 +5,7 @@ import {
   Check, CheckCircle2, Star, Sparkles, MessageCircle,
   ArrowRight, AlertCircle, Zap, Shield, Bot, Users, ExternalLink,
 } from 'lucide-react';
-import { WHATSAPP } from '@/lib/contact';
+import { WHATSAPP, createWhatsAppLink } from '@/lib/contact';
 import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
 
 // ── Planos BPO Humano Tradicional ──────────────────────────────────────────
@@ -422,7 +422,7 @@ export default function PricingSection() {
                 </div>
 
                 <a
-                  href={`https://wa.me/551331500987?text=${encodeURIComponent('Olá! Tenho interesse no Plano Pro (sob demanda) e gostaria de consultar disponibilidade de vagas para a minha empresa.')}`}
+                  href={createWhatsAppLink('Olá! Tenho interesse no Plano Pro (sob demanda) e gostaria de consultar disponibilidade de vagas para a minha empresa.')}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/20 bg-cyan-950/30 transition-all hover:-translate-y-0.5"
@@ -482,7 +482,7 @@ export default function PricingSection() {
                 </div>
 
                 <a
-                  href={`https://wa.me/551331500987?text=${encodeURIComponent('Olá! Tenho interesse no Plano Super (sob demanda) e gostaria de consultar disponibilidade de vagas para o nosso grupo empresarial.')}`}
+                  href={createWhatsAppLink('Olá! Tenho interesse no Plano Super (sob demanda) e gostaria de consultar disponibilidade de vagas para o nosso grupo empresarial.')}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-1.5 rounded-2xl py-3 px-3 font-extrabold text-xs border border-purple-500/40 text-purple-200 hover:bg-purple-500/20 bg-purple-950/30 transition-all hover:-translate-y-0.5"

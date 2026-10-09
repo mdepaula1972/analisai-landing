@@ -10,10 +10,11 @@ import {
   Building2, DollarSign, PieChart, Sparkles, HelpCircle,
   AlertCircle, ChevronRight, Lock
 } from 'lucide-react';
+import { WHATSAPP_NUMBER } from '@/lib/contact';
 
 /* ── CONFIGURAÇÃO ── */
 const VERSION = 'v4.0 · Coleta Oficial';
-const WHATSAPP_OFICIAL = '551331500987';
+const WHATSAPP_OFICIAL = WHATSAPP_NUMBER;
 
 function ColetaFormContent() {
   const searchParams = useSearchParams();
