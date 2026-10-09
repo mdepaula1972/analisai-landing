@@ -403,6 +403,75 @@ export async function recordMultipleTrialUsage(
 export async function getHowItWorksMessage(phone?: string): Promise<string> {
   const supabase = createServiceRoleClient();
 
+  if (phone) {
+    const cleanPhone = phone.replace(/\D/g, '');
+    let altPhone = cleanPhone;
+    if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+      altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+    } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+      altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+    }
+
+    // 1. Verifica se está na Whitelist de QA (Convidado VIP do Admin)
+    const { data: whitelistEntry } = await supabase
+      .from('qa_whitelist')
+      .select('description, created_by')
+      .or(`identifier.eq.${cleanPhone},identifier.eq.${altPhone}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (whitelistEntry) {
+      const guestFirstName = whitelistEntry.description ? whitelistEntry.description.split(' ')[0] : 'Convidado VIP';
+      const inviter = whitelistEntry.created_by || 'Marcos';
+      return `👋 *Olá, ${guestFirstName}! Que prazer ter você por aqui!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O *${inviter}* liberou o seu **acesso VIP completo e irrestrito** no **AnalisAí**, o seu assistente de inteligência financeira no WhatsApp!
+
+Aqui você não precisa decorar comandos nem preencher formulários complicados:
+• 📸 *Notas, Boletos e Comprovantes:* Basta enviar fotos ou PDFs que eu extraio valores, datas e CNPJs automaticamente;
+• 🎙️ *Áudios ou Mensagens:* Pode falar ou digitar do seu jeito (ex: *"Paguei 180 de combustível"* ou *"Anota receber 1.200 do cliente"*);
+• 💡 *Inteligência de Caixa e Relatórios:* Além de contas a pagar e receber, eu analiso seu fluxo de caixa, calculo juros e gero seu DRE em PDF.
+
+💬 *Você tem total liberdade para conversar:*
+Ficou com alguma dúvida ou quer saber o que mais posso fazer pela sua empresa? **Basta me perguntar por áudio ou texto** (ex: *"o que você pode fazer por mim?"* ou *"como vejo meu fluxo de caixa?"*) que eu te oriento passo a passo!
+
+👉 *Para começar agora mesmo:*
+Envie uma foto de um **boleto** ou mande um áudio/texto dizendo suas contas. Em segundos eu organizo tudo para você! 🚀`;
+    }
+
+    // 2. Verifica se o lead veio por indicação pré-cadastrada de cliente
+    const { data: lead } = await supabase
+      .from('trial_leads')
+      .select('referrer_phone')
+      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (lead?.referrer_phone) {
+      const { data: referrerClient } = await supabase
+        .from('clients')
+        .select('name')
+        .eq('whatsapp_number', lead.referrer_phone)
+        .maybeSingle();
+
+      const referrerName = referrerClient?.name || 'um amigo parceiro';
+      return `👋 *Olá! Que prazer ter você por aqui!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O *${referrerName}* indicou o **AnalisAí** para você!
+
+Eu sou o assistente de inteligência financeira no WhatsApp que simplifica a gestão do seu negócio:
+• 📸 *Praticidade total:* Envie fotos de boletos, notas fiscais, áudios ou textos com suas contas a pagar e receber do jeito que preferir.
+• ⏰ *Lembretes na véspera:* Te aviso com antecedência para te ajudar a evitar juros e multas por atraso ou esquecimento.
+• 📊 *Fluxo de Caixa Descomplicado:* Veja o saldo futuro e receba relatórios de Livro Caixa direto no celular.
+
+🎁 *Presente de Indicação:*
+Pela indicação do *${referrerName}*, liberamos uma **Degustação VIP Gratuita** para você experimentar na prática, sem compromisso e sem precisar cadastrar cartão!
+
+👉 *Para começar agora mesmo:*
+Envie uma foto de um **boleto** ou mande um áudio/texto com uma conta sua (ex: *"Pagar internet R$ 90 dia 21"*). Em instantes eu organizo tudo para você! 🚀`;
+    }
+  }
+
   const { count } = await supabase
     .from('trial_leads')
     .select('*', { count: 'exact', head: true });

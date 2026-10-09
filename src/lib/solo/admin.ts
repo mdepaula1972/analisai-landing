@@ -804,8 +804,8 @@ _(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
 • 📎 *Ou simplesmente anexe o contato:* Compartilhe o cartão de contato do WhatsApp aqui na conversa!
 
 💡 *O que este comando faz automaticamente:*
-1. Libera o contato na **Whitelist de QA** (acesso ilimitado e sem barreiras para testar o AnalisAí);
-2. Dispara uma mensagem oficial no WhatsApp dele apresentando o robô e convidando-o para testar!`,
+1. Pré-cadastra o contato na **Whitelist de QA** (acesso ilimitado e sem barreiras para testar o AnalisAí);
+2. Gera o link e o texto pronto para você encaminhar para ele (100% seguro contra banimento de WhatsApp)!`,
       };
     }
 
@@ -1230,16 +1230,18 @@ O cliente já foi notificado via WhatsApp sobre a recuperação de conta.`,
 
 export interface InviteContactResult {
   success: boolean;
-  inviteSent: boolean;
   cleanDigits: string;
   cleanPhoneWith55: string;
   formattedTarget: string;
   name: string;
+  inviteLink: string;
+  forwardMessage: string;
   message: string;
 }
 
 /**
- * Cadastra um convidado na QA Whitelist e envia convite VIP com mensagem oficial.
+ * Cadastra um convidado na QA Whitelist e prepara o link e texto de convite VIP (Wait for Inbound).
+ * Proteção Anti-Spam: O robô NÃO aborda o convidado primeiro; o admin encaminha o convite.
  */
 export async function inviteContactVip(
   inviterName: string,
@@ -1247,62 +1249,60 @@ export async function inviteContactVip(
   name: string
 ): Promise<InviteContactResult> {
   const { addQaWhitelist, formatIdentifierDisplay } = await import('@/lib/solo/qa-whitelist');
-  const { sendEvolutionText } = await import('@/lib/solo/evolution');
+  const { OFFICIAL_BOT_WHATSAPP } = await import('./constants');
 
   const cleanDigits = rawTarget.replace(/\D/g, '');
   const cleanPhoneWith55 =
     cleanDigits.length <= 11 && !cleanDigits.startsWith('55') ? `55${cleanDigits}` : cleanDigits;
 
-  // 1. Cadastra na QA Whitelist para que ele tenha acesso 100% livre
-  await addQaWhitelist(cleanDigits, name || 'Convidado VIP', inviterName);
+  const targetName = name || 'Convidado VIP';
+  const guestFirstName = targetName.split(' ')[0];
 
-  // 2. Dispara mensagem oficial no WhatsApp do convidado
-  const guestFirstName = name ? name.split(' ')[0] : 'Parceiro';
-  let inviteSent = false;
-  try {
-    await sendEvolutionText({
-      phone: cleanPhoneWith55,
-      text: `👋 Olá, ${guestFirstName}! Que bom ter você por aqui!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *${inviterName}* liberou o seu acesso VIP completo no **AnalisAí**, o seu assistente de inteligência financeira no WhatsApp!
-
-Aqui você não precisa decorar comandos nem preencher formulários complicados:
-• 📸 *Notas, Boletos e Comprovantes:* Basta enviar fotos ou PDFs que eu extraio valores, datas e CNPJs automaticamente;
-• 🎙️ *Áudios ou Mensagens:* Pode falar ou digitar do seu jeito (ex: *"Paguei 180 de combustível"* ou *"Anota receber 1.200 do cliente"*);
-• 💡 *Inteligência de Caixa e Relatórios:* Além de contas a pagar e receber, eu analiso seu fluxo de caixa, calculo juros e gero seu DRE em PDF.
-
-💬 *Você tem total liberdade para conversar:*
-Ficou com alguma dúvida ou quer saber o que mais posso fazer pela sua empresa? **Basta me perguntar por áudio ou texto** (ex: *"o que você pode fazer por mim?"* ou *"como vejo meu fluxo de caixa?"*) que eu te oriento passo a passo!
-
-👉 *Para começar:* Salve este contato na sua agenda e envie seu primeiro documento ou pergunta por aqui! 🚀`,
-    });
-    inviteSent = true;
-  } catch (sendErr) {
-    console.error('[Convidar Send Error]:', sendErr);
-  }
+  // 1. Cadastra na QA Whitelist para que ele tenha acesso 100% livre quando interagir
+  await addQaWhitelist(cleanDigits, targetName, inviterName);
 
   const formattedTarget = formatIdentifierDisplay(cleanDigits);
 
-  const confirmationMessage = `🎉 *Convite Concluído com Sucesso!*
+  // 2. Link wa.me com mensagem inicial pronta para o convidado
+  const greetingPrompt = `Olá! Recebi o convite VIP do ${inviterName}!`;
+  const inviteLink = `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${encodeURIComponent(greetingPrompt)}`;
+
+  // 3. Mensagem pronta para o Admin encaminhar para o amigo no WhatsApp
+  const forwardMessage = `👋 Olá, ${guestFirstName}!
+O *${inviterName}* liberou um *acesso VIP completo e irrestrito* para você no **AnalisAí**, nosso assistente de inteligência financeira no WhatsApp!
+
+Aqui você não precisa instalar nada nem decorar comandos:
+• 📸 *Notas, Boletos e Comprovantes:* Basta enviar fotos ou PDFs que ele extrai valores e datas na hora;
+• 🎙️ *Áudios ou Mensagens:* Pode falar ou digitar do seu jeito (ex: *"Paguei 180 de combustível"* ou *"Anota receber 1.200"*);
+• 💡 *Inteligência de Caixa:* Ele calcula juros, prevê seu saldo futuro e gera seu DRE em PDF.
+
+👉 *Para ativar seu acesso VIP agora mesmo, basta clicar no link abaixo e dar um "Oi":*
+${inviteLink}`;
+
+  const confirmationMessage = `🎉 *Pré-cadastro VIP Concluído com Sucesso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 *Convidado:* ${name || 'Convidado VIP'}
+👤 *Convidado:* ${targetName}
 📱 *WhatsApp:* ${formattedTarget}
 ⚡ *Status QA:* **Acesso Livre & Irrestrito Liberado!**
-📲 *Mensagem no WhatsApp:* ${inviteSent ? '✅ Enviada com sucesso para ele!' : '⚠️ Não foi possível entregar automaticamente (verifique o número)'}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${name || 'Ele'} agora pode enviar fotos de boletos, áudios e pedir relatórios sem nenhuma trava de cobrança ou limite!
+🛡️ *Proteção Anti-Spam:* O robô **NÃO** disparou mensagem fria para ele.
 
-💡 *Dica de Equipe:* Se o objetivo for cadastrá-lo como operador da sua empresa (para lançar notas em nome da sua empresa e te notificar a cada ação), envie:
-👉 *!equipe add ${cleanPhoneWith55} ${name || 'Operador'}*`;
+📲 *Mensagem pronta para você encaminhar para ele no WhatsApp:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${forwardMessage}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *Como funciona:* Assim que o ${guestFirstName} clicar no link e enviar a primeira mensagem, o robô já o reconhecerá pelo nome e liberará todo o sistema sem nenhuma barreira comercial! 🚀
+
+👉 *Dica de Equipe:* Se o objetivo for cadastrá-lo como operador da sua empresa (para lançar notas em nome da sua empresa e te notificar a cada ação), envie:
+👉 *!equipe add ${cleanPhoneWith55} ${targetName}*`;
 
   return {
     success: true,
-    inviteSent,
     cleanDigits,
     cleanPhoneWith55,
     formattedTarget,
-    name: name || 'Convidado VIP',
+    name: targetName,
+    inviteLink,
+    forwardMessage,
     message: confirmationMessage,
   };
 }
-

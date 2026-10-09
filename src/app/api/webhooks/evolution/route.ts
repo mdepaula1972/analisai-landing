@@ -20,7 +20,7 @@ import {
   getExtendedCashFlowProposalMessage,
   getUpcomingBillsSummary,
 } from '@/lib/solo/cash-flow-advisor';
-import { ASAAS_PLANS, ASAAS_ONE_OFF } from '@/lib/solo/constants';
+import { ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP } from '@/lib/solo/constants';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { solicitarTrocaNumeroCom2FA, validarCodigo2FATrocaNumero } from '@/lib/solo/phone-change';
 import {
@@ -2421,12 +2421,12 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
       const inviterName = client?.name || 'Marcos Administrador';
 
       if (attachedContacts.length > 1) {
-        let summary = `🎉 *${attachedContacts.length} Convites VIP Processados!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        let summary = `🎉 *${attachedContacts.length} Pré-cadastros VIP Concluídos!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
         for (const c of attachedContacts) {
           const res = await inviteContactVip(inviterName, c.phone, c.name);
-          summary += `• 👤 *${res.name}* (${res.formattedTarget}): ${res.inviteSent ? '✅ Convite enviado!' : '⚠️ Erro no envio'}\n`;
+          summary += `• 👤 *${res.name}* (${res.formattedTarget}): ✅ Whitelist Liberada!\n  🔗 ${res.inviteLink}\n`;
         }
-        summary += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTodos foram liberados com acesso irrestrito de QA no AnalisAí! 🚀`;
+        summary += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🛡️ *Segurança Anti-Spam:* O robô NÃO disparou mensagens frias. Encaminhe os links acima para cada um deles ativar o acesso! 🚀`;
         await sendEvolutionText({ phone, text: summary });
         return;
       }
@@ -2440,11 +2440,41 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
       return;
     }
 
-    // Se for cliente comum compartilhando contato
+    // Se for cliente comum compartilhando contato (Pré-cadastro de indicação seguro)
     const contact = attachedContacts[0];
+    const clientName = client?.name || body.data?.pushName || 'Cliente Parceiro';
+    const clientPhone = client?.whatsapp_number || phone;
+
+    // Pré-registra o lead vinculado ao cliente para atribuir comissão futura
+    await linkReferralLead(contact.phone, clientPhone);
+
+    const refGreeting = `Olá! Recebi a indicação do ${clientName}!`;
+    const refLink = `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${encodeURIComponent(refGreeting)}`;
+    const contactFirstName = contact.name.split(' ')[0] || 'Parceiro';
+
+    const forwardShare = `👋 Olá, ${contactFirstName}!
+O *${clientName}* recomendou o **AnalisAí** para você!
+
+É o assistente de inteligência financeira no WhatsApp que organiza notas fiscais, boletos e fluxo de caixa automaticamente. Você ganha uma degustação gratuita para testar!
+
+👉 *Clica aqui para falar com o AnalisAí:*
+${refLink}`;
+
     await sendEvolutionText({
       phone,
-      text: `Recebi o contato de *${contact.name}* (${contact.phone})! 😊\n\n💡 *O que você gostaria de fazer?*\n• Para cadastrá-lo como operador da sua equipe, envie:\n👉 *!equipe add ${contact.phone} ${contact.name}*\n• Ou envie *!indicar* para compartilhar seu link de parceiro e receber 10% de comissão recorrente!`,
+      text: `Recebi o contato de *${contact.name}* (${contact.phone})! 😊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ **Pré-cadastro de Indicação Realizado!**
+🛡️ *Segurança Anti-Spam:* O robô **NÃO** enviou mensagem fria para ele. O vínculo de indicação já foi registrado no seu nome!
+
+📲 *Mensagem pronta para você encaminhar para ele no WhatsApp:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${forwardShare}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *Sua Recompensa:* Assim que ele assinar qualquer plano, você recebe até **R$ 120,00 no PIX todo mês** de comissão recorrente! 💰
+
+👉 *Obs:* Se você queria adicioná-lo como funcionário/operador da sua própria empresa, digite:
+*!equipe add ${contact.phone} ${contact.name}*`,
     });
     return;
   }
