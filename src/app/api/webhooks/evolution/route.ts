@@ -3870,6 +3870,25 @@ Este documento pertence à sua:
         return;
       }
 
+      // Trava de custo de API: Limite de 45 segundos por áudio
+      const audioDuration =
+        body.data?.message?.audioMessage?.seconds ||
+        message?.audioMessage?.seconds ||
+        (body.data as any)?.seconds ||
+        0;
+
+      if (audioDuration > 45) {
+        await sendEvolutionText({
+          phone,
+          text: `🎙️ *Áudio longo detectado (${audioDuration}s)!*
+
+Para garantir respostas rápidas e interpretação exata dos valores, consigo processar áudios de até *45 segundos* por vez.
+
+💡 *Dica:* Envie um áudio curtinho com o fornecedor, valor e vencimento da conta. Obrigado! 😊`,
+        });
+        return;
+      }
+
       let audioBase64 =
         (body.data as any)?.base64 ||
         (body.data as any)?.message?.base64 ||
@@ -4711,6 +4730,25 @@ No **AnalisAí Solo** (R$ 87,99/mês), você tem a praticidade de enviar áudios
 
 Deseja migrar para o Solo agora? 
 👉 Link de adesão direta: ${ASAAS_PLANS.monthly.solo.checkoutUrl}`,
+      });
+      return;
+    }
+
+    // Trava de custo de API: Limite de 45 segundos por áudio
+    const audioDuration =
+      body.data?.message?.audioMessage?.seconds ||
+      message?.audioMessage?.seconds ||
+      (body.data as any)?.seconds ||
+      0;
+
+    if (audioDuration > 45 && !client?.is_admin && !isAdminPhone) {
+      await sendEvolutionText({
+        phone,
+        text: `🎙️ *Áudio longo detectado (${audioDuration}s)!*
+
+Para garantir respostas rápidas e interpretação exata dos valores, consigo ouvir áudios de até *45 segundos* por vez.
+
+💡 *Dica:* Envie um áudio curtinho com sua dúvida ou despesa. Obrigado! 😊`,
       });
       return;
     }

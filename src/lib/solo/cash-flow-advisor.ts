@@ -48,29 +48,28 @@ Com esses boletos agendados, quando você perguntar *"qual conta devo atrasar?"*
   try {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      systemInstruction: `Você é o Consultor Sênior de Fluxo de Caixa e Blindagem Patrimonial do AnalisAí Solo.
-Seu trabalho é orientar autônomos, MEIs e empresários em momentos de aperto financeiro, analisando com extrema sensibilidade os riscos operacionais, contratuais e JURÍDICOS de cada conta.
+      systemInstruction: `Você é o Simulador de Cenários de Caixa e Comparador de Encargos do AnalisAí Solo.
+Seu trabalho é orientar autônomos, MEIs e empresários em momentos de aperto financeiro de forma NEUTRA, TÉCNICA e CONSULTIVA, comparando taxas de encargos e riscos operacionais sem assumir a responsabilidade pela escolha.
 
-MATRIZ DE RISCO CRÍTICO E JURÍDICO INEGOCIÁVEL (NUNCA RECOMENDAR ADIAR):
-1. PENSÃO ALIMENTÍCIA: Risco iminente de prisão civil (art. 528 CPC). Criticidade 5/5. NUNCA adiar sob qualquer hipótese.
-2. ACORDO JUDICIAL / TERMO DE CONCILIAÇÃO (TRT, TJ, CEJUSC): Atraso de 1 dia gera multa de 30% a 50% e bloqueio instantâneo de contas via SISBAJUD. Criticidade 5/5. NUNCA adiar.
-3. FINANCIAMENTO HABITACIONAL / IMOBILIÁRIO (Caixa, Bancos): 3 parcelas em atraso dão direito ao banco de executar a garantia fiduciária e leiloar o imóvel. Criticidade 5/5.
-4. FINANCIAMENTO DE VEÍCULO (Alienação Fiduciária): Atraso a partir de 2 ou 3 parcelas permite Ação de Busca e Apreensão liminar do veículo. Criticidade 4.5/5.
-5. INSS RETIDO DE FUNCIONÁRIOS / FGTS: Deixar de repassar INSS descontado em folha configura Crime de Apropriação Indébita Previdenciária (art. 168-A CP). Criticidade 5/5.
-6. SERVIÇOS ESSENCIAIS COM AVISO DE CORTE (Energia, Água, Internet): Paralisação física das operações e vendas.
+DIRETRIZES FUNDAMENTAIS DE NEUTRALIDADE E BLINDAGEM JURÍDICA:
+- Você NUNCA deve dar uma ordem imperativa ("Atrase a conta X").
+- Você deve comparar friamente os impactos: quais contas têm encargos puramente financeiros e maior flexibilidade de negociação comercial vs quais trazem risco operacional severo (corte de serviço essencial, busca e apreensão, bloqueio judicial).
+- A decisão final SEMPRE pertence ao empresário.
 
-CONTAS COM FLEXIBILIDADE DE NEGOCIAÇÃO (CANDIDATAS A POSTERGAÇÃO):
-- Fornecedores de insumos ou embalagens com relacionamento de parceria;
-- Prestadores de serviços secundários;
-- Boletos comuns sem cláusulas de garantia real ou bloqueio judicial.
+MATRIZ DE RISCO OPERACIONAL E JURÍDICO (ALERTAR COM FIRMEZA):
+1. PENSÃO ALIMENTÍCIA / ACORDOS JUDICIAIS: Risco iminente de prisão civil ou bloqueio judicial imediato.
+2. FINANCIAMENTOS COM GARANTIA REAL (Habitacional, Veículos): Risco de execução liminar e perda de bens.
+3. INSS RETIDO / FGTS: Risco de apropriação indébita.
+4. SERVIÇOS ESSENCIAIS (Energia, Água, Internet): Risco de paralisação imediata das atividades da empresa.
 
 ESTRUTURA DA RESPOSTA:
-- 🎯 **Recomendação Direta**: Qual boleto atrasar primeiro (valor e vencimento completo com dia da semana).
-- 🛡️ **Proteja Imediatamente (Riscos Críticos e Jurídicos)**: Alerte com firmeza quais contas NÃO podem ser postergadas (ex: risco de busca e apreensão, penhora ou corte).
-- 💬 **Texto Pronto de Negociação**: Modelo curto e cordial para o cliente enviar no WhatsApp do fornecedor pedindo prazo sem atrito.`,
+- 📊 **Cenários de Caixa & Comparativo de Encargos**: Compare as opções em aberto, destacando quais têm menor atrito ou juros menores para renegociar.
+- 🛡️ **Atenção aos Riscos Operacionais/Jurídicos**: Alerte claramente sobre contas que podem paralisar a empresa ou gerar penalidades graves.
+- 💬 **Texto Sugerido para Negociação Amigável**: Modelo cordial e respeitoso para o cliente copiar e enviar ao fornecedor pedindo prazo.
+- 👉 **Decisão do Empresário**: Finalize sempre com a pergunta neutra: "Aqui estão os impactos comparados. Diante disso, qual delas você prefere que eu priorize ou remarque para você?"`,
     });
 
-    const prompt = `Analise a situação de caixa deste cliente e forneça sua recomendação especializada:
+    const prompt = `Analise a situação de caixa deste cliente e apresente os cenários comparativos:
 - Saldo em caixa informado no momento: ${availableCash ? `R$ ${availableCash.toFixed(2)}` : 'Aperto temporário sem valor exato informado'}
 - Total de contas em aberto: R$ ${totalOpen.toFixed(2)}
 - Lista das contas:
@@ -97,19 +96,21 @@ ${billsContext}`;
 
     const targetPostpone = flexibleBills.length > 0 ? flexibleBills[0] : openBills[openBills.length - 1];
 
-    let fallbackText = `🎯 *Recomendação Direta de Caixa:*\n`;
-    fallbackText += `Recomendo postergar o pagamento da conta de *${targetPostpone.counterparty_name}* (R$ ${Number(targetPostpone.amount).toFixed(2)} - Vencimento: ${formatDueDateDetails(targetPostpone.current_due_date)}).\n\n`;
+    let fallbackText = `📊 *Simulação de Cenários e Comparativo de Encargos:*\n`;
+    fallbackText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    fallbackText += `• *Menor impacto operacional imediato:* *${targetPostpone.counterparty_name}* (R$ ${Number(targetPostpone.amount).toFixed(2)} - Vencimento: ${formatDueDateDetails(targetPostpone.current_due_date)}). Despesa comercial com maior margem para solicitação de prazo.\n\n`;
 
     if (criticalBills.length > 0) {
-      fallbackText += `🛡️ *Proteja Imediatamente (Risco Crítico ou Jurídico):*\n`;
+      fallbackText += `🛡️ *Atenção aos Riscos Operacionais/Jurídicos:*\n`;
       criticalBills.forEach((b: any) => {
-        fallbackText += `• *${b.counterparty_name}* (R$ ${Number(b.amount).toFixed(2)} - ${formatDueDateDetails(b.current_due_date)})\n`;
+        fallbackText += `• *${b.counterparty_name}* (R$ ${Number(b.amount).toFixed(2)} - ${formatDueDateDetails(b.current_due_date)}): Risco de corte de serviço essencial, perda de garantia ou encargos severos.\n`;
       });
       fallbackText += `\n`;
     }
 
-    fallbackText += `💬 *Texto Pronto para Negociação:* Copie e envie ao fornecedor:\n`;
-    fallbackText += `_"Olá! Devido a um ajuste pontual no nosso cronograma de recebimentos, gostaríamos de solicitar a prorrogação do vencimento para a próxima semana. Agradecemos a costumeira parceria!"_\n\n`;
+    fallbackText += `💬 *Texto Sugerido para Negociação Amigável:* Copie e envie ao fornecedor:\n`;
+    fallbackText += `_"Olá! Devido a um ajuste pontual no nosso fluxo de caixa, gostaríamos de verificar a possibilidade de prorrogar o vencimento desta conta para a próxima semana. Agradecemos imensamente a costumeira parceria!"_\n\n`;
+    fallbackText += `👉 *Decisão:* Diante dessas taxas e impactos comparados, **qual delas você prefere que eu priorize ou remarque para você?**\n\n`;
     fallbackText += LEGAL_DISCLAIMER;
 
     return fallbackText;
