@@ -396,3 +396,55 @@ ${itemsStr}${extraCount}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 *Ação de Fechamento:* Toque no link de WhatsApp de qualquer um deles para oferecer uma condição especial ou tirar dúvidas!`;
 }
+
+/**
+ * Retorna listagem dos clientes com assinaturas ativas
+ */
+export async function getActiveClientsReportWhatsAppMessage(): Promise<string> {
+  const supabase = createServiceRoleClient();
+
+  const { data: subsRaw } = await supabase
+    .from('subscriptions')
+    .select('id, client_id, status, billing_period, created_at, plans(name, code, monthly_price_cents), clients(id, name, whatsapp_number, is_admin, status)')
+    .eq('status', 'active');
+
+  const subs = subsRaw || [];
+
+  if (subs.length === 0) {
+    return `👥 *Nenhum Assinante Ativo:* Ainda não há assinaturas ativas cadastradas na base.`;
+  }
+
+  let totalMrrCents = 0;
+
+  const itemsStr = subs.map((s: any, idx: number) => {
+    const client = s.clients;
+    const plan = s.plans;
+    const cleanPhone = (client?.whatsapp_number || '').replace(/\D/g, '');
+    const formattedPhone = cleanPhone ? formatIdentifierDisplay(cleanPhone) : 'Não informado';
+    const period = s.billing_period === 'annual' ? 'Anual' : 'Mensal';
+    const priceCents = Number(plan?.monthly_price_cents || 0);
+    totalMrrCents += priceCents;
+    const priceFormatted = (priceCents / 100).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    const adminTag = client?.is_admin ? ' 👑 *(Admin)*' : '';
+
+    return `${idx + 1}. *${client?.name || 'Cliente'}*${adminTag}
+   📦 Plano: *${plan?.name || 'Solo'}* (${priceFormatted}/mês • ${period})
+   📱 ${formattedPhone}
+   📲 [Abrir no WhatsApp](https://wa.me/${cleanPhone})`;
+  }).join('\n\n');
+
+  const totalMrrFormatted = (totalMrrCents / 100).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+
+  return `👥 *CLIENTES ATIVOS (${subs.length} assinaturas ativas)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${itemsStr}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 *Receita Mensal Recorrente (MRR):* ${totalMrrFormatted}/mês
+💡 Para ver o funil completo e todos os contatos, envie *!painel*.`;
+}

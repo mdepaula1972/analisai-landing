@@ -19,6 +19,7 @@ import {
   getAdminExecutiveDashboardWhatsAppMessage,
   getDormantLeadsReportWhatsAppMessage,
   getHotLeadsReportWhatsAppMessage,
+  getActiveClientsReportWhatsAppMessage,
 } from './admin-metrics';
 
 export interface AdminCommandResult {
@@ -130,6 +131,7 @@ Use estes códigos para navegar e testar cada nível na prática:
 Comandos disponíveis para você testar todas as opções:
 
 • *!painel* ou *!metricas* → Dashboard Executivo: Clientes, MRR, Planos, Funil e link Web
+• *!clientes* ou *!assinantes* → Lista completa de clientes com assinaturas ativas e MRR
 • *!dormindo* ou *!frios* → Lista de convidados que NÃO enviaram nenhuma conta
 • *!quentes* ou *!leads* → Lista de leads que testaram no trial e aguardam fechamento
 • *!status* → Exibe seu plano atual, limites consumidos e status
@@ -205,6 +207,20 @@ Comandos disponíveis para você testar todas as opções:
     action === 'fechamento'
   ) {
     const msg = await getHotLeadsReportWhatsAppMessage();
+    return {
+      handled: true,
+      message: msg,
+    };
+  }
+
+  // ── !clientes / !assinantes ─────────────────────────────────────────────────
+  if (
+    action === 'clientes' ||
+    action === 'assinantes' ||
+    action === 'clientes_ativos' ||
+    action === 'base'
+  ) {
+    const msg = await getActiveClientsReportWhatsAppMessage();
     return {
       handled: true,
       message: msg,
