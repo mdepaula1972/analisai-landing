@@ -15,6 +15,11 @@ import {
 import { getMonthlyDividendTracking } from './dividend-tracker';
 import { addDays } from 'date-fns';
 import { ADMIN_PERSONAL_WHATSAPP } from './constants';
+import {
+  getAdminExecutiveDashboardWhatsAppMessage,
+  getDormantLeadsReportWhatsAppMessage,
+  getHotLeadsReportWhatsAppMessage,
+} from './admin-metrics';
 
 export interface AdminCommandResult {
   handled: boolean;
@@ -124,6 +129,9 @@ Use estes códigos para navegar e testar cada nível na prática:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Comandos disponíveis para você testar todas as opções:
 
+• *!painel* ou *!metricas* → Dashboard Executivo: Clientes, MRR, Planos, Funil e link Web
+• *!dormindo* ou *!frios* → Lista de convidados que NÃO enviaram nenhuma conta
+• *!quentes* ou *!leads* → Lista de leads que testaram no trial e aguardam fechamento
 • *!status* → Exibe seu plano atual, limites consumidos e status
 • *!reset* → Zera todos os contadores do seu ciclo para testar do início
 • *!convidar <tel> <nome>* → Libera acesso QA livre e prepara convite VIP (ou anexe o contato)
@@ -157,6 +165,49 @@ Comandos disponíveis para você testar todas as opções:
 • *!bypass on* → Ativa modo sem limites (tudo liberado)
 • *!bypass off* → Desativa bypass (vivencia a experiência de cliente normal)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    };
+  }
+
+  // ── !painel / !metricas / !dashboard / !funil ──────────────────────────────
+  if (
+    action === 'painel' ||
+    action === 'metricas' ||
+    action === 'métricas' ||
+    action === 'dashboard' ||
+    action === 'funil'
+  ) {
+    const msg = await getAdminExecutiveDashboardWhatsAppMessage();
+    return {
+      handled: true,
+      message: msg,
+    };
+  }
+
+  // ── !dormindo / !frios / !naotestaram ───────────────────────────────────────
+  if (
+    action === 'dormindo' ||
+    action === 'frios' ||
+    action === 'naotestaram' ||
+    action === 'convidados_sem_teste'
+  ) {
+    const msg = await getDormantLeadsReportWhatsAppMessage();
+    return {
+      handled: true,
+      message: msg,
+    };
+  }
+
+  // ── !quentes / !leads / !testaram ───────────────────────────────────────────
+  if (
+    action === 'quentes' ||
+    action === 'leads' ||
+    action === 'testaram' ||
+    action === 'fechamento'
+  ) {
+    const msg = await getHotLeadsReportWhatsAppMessage();
+    return {
+      handled: true,
+      message: msg,
     };
   }
 
