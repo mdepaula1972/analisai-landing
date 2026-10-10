@@ -126,7 +126,8 @@ Comandos disponíveis para você testar todas as opções:
 
 • *!status* → Exibe seu plano atual, limites consumidos e status
 • *!reset* → Zera todos os contadores do seu ciclo para testar do início
-• *!convidar <tel> <nome>* → Libera acesso QA livre e envia convite VIP no WhatsApp!
+• *!convidar <tel> <nome>* → Libera acesso QA livre e prepara convite VIP (ou anexe o contato)
+• *!inabilitar <tel>* → Revoga privilégios de QA do convidado (ou anexe o contato com !inabilitar)
 • *!equipe add <tel> <nome>* → Cadastra operador na equipe da sua empresa (Modo Onisciência)
 • *!projeto <nome> <ideia>* → Cria novo SaaS/App do zero (GitHub + Vercel + DB)
 • *!ideia <texto>* → Envia nova ideia pelo WhatsApp para o backlog da IA
@@ -814,6 +815,27 @@ _(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
       handled: true,
       message: result.message,
     };
+  }
+
+  // ── !inabilitar / !desconvidar ──────────────────────────────────────────────
+  if (action === 'inabilitar' || action === 'desconvidar') {
+    const rawTarget = commandText.replace(/^[!/](inabilitar|desconvidar)\s+/i, '').trim();
+    if (!rawTarget) {
+      return {
+        handled: true,
+        message: `🔒 *Como inabilitar um convidado:*
+• \`!inabilitar <telefone>\` ou \`!desconvidar <telefone>\`
+  ↳ _Exemplo:_ \`!inabilitar +55 14 99894-7271\`
+• 📎 *Ou anexe o contato com a legenda:* \`!inabilitar\`
+• \`!qa list\` → Para ver todos os convidados ativos
+
+💡 *O que este comando faz:*
+Revoga imediatamente o acesso VIP irrestrito daquele número na Whitelist de QA, fazendo-o voltar às regras normais de limites e planos.`,
+      };
+    }
+    const { removeQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+    const res = await removeQaWhitelist(rawTarget);
+    return { handled: true, message: res.message };
   }
 
   // ── !equipe / !time ─────────────────────────────────────────────────────────

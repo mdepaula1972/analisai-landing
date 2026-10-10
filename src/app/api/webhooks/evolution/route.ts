@@ -3059,6 +3059,20 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
   // ── Interceptação 0.05: Contato(s) Anexado(s) via WhatsApp (VCard) ────────────
   const attachedContacts = extractContactsFromPayload(body.data?.message);
   if (attachedContacts.length > 0) {
+    const isDeactivate =
+      cleanText.startsWith('!inabilitar') || cleanText.startsWith('/inabilitar') ||
+      cleanText.startsWith('!desconvidar') || cleanText.startsWith('/desconvidar') ||
+      cleanText.startsWith('!remover') || cleanText.startsWith('/remover') ||
+      cleanText.startsWith('!qa remove') || cleanText.startsWith('/qa remove');
+
+    if (isDeactivate && (client?.is_admin || isAdminPhone)) {
+      const { removeQaWhitelist } = await import('@/lib/solo/qa-whitelist');
+      const targetContact = attachedContacts[0];
+      const res = await removeQaWhitelist(targetContact.phone);
+      await sendEvolutionText({ phone, text: res.message });
+      return;
+    }
+
     if (client?.is_admin || isAdminPhone || cleanText.startsWith('!convidar') || cleanText.startsWith('/convidar')) {
       const inviterName = client?.name || 'Marcos Administrador';
 
