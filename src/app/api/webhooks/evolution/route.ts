@@ -3136,7 +3136,7 @@ ${refLink}`;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${forwardShare}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Sua Recompensa:* Assim que ele assinar qualquer plano, você recebe até **R$ 120,00 no PIX todo mês** de comissão recorrente! 💰
+💡 *Sua Recompensa:* Assim que ele assinar qualquer plano, você ganha **1 Mês Grátis de AnalisAí** abatido na sua assinatura! 🎁
 
 👉 *Obs:* Se você queria adicioná-lo como funcionário/operador da sua própria empresa, digite:
 *!equipe add ${contact.phone} ${contact.name}*`,
@@ -3158,6 +3158,64 @@ ${forwardShare}
     const teamResponse = await handleNaturalLanguageTeamCommand(client.id, rawText);
     if (teamResponse.handled && teamResponse.message) {
       await sendEvolutionText({ phone, text: teamResponse.message });
+      return;
+    }
+  }
+
+  // ── Interceptação 0.3: Tag Rápida [Pessoal] vs [Empresa] ─────────────────
+  const isTagPersonal = /^(pessoal|é pessoal|conta pessoal|mudar para pessoal|particular|despesa pessoal)$/i.test(cleanText);
+  const isTagBusiness = /^(empresa|é da empresa|conta da empresa|mudar para empresa|pj|despesa da empresa)$/i.test(cleanText);
+
+  if (isTagPersonal || isTagBusiness) {
+    let billUpdated = false;
+    let billName = '';
+
+    if (client?.id) {
+      const { data: lastBill } = await supabase
+        .from('payables_receivables')
+        .select('id, counterparty_name, category')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastBill) {
+        const newCat = isTagPersonal ? 'despesa_pessoal' : 'despesa_operacional';
+        await supabase
+          .from('payables_receivables')
+          .update({ category: newCat })
+          .eq('id', lastBill.id);
+        billUpdated = true;
+        billName = lastBill.counterparty_name || 'Última conta';
+      }
+    } else {
+      // Degustação / Trial Lead
+      const { data: trialLead } = await supabase
+        .from('trial_leads')
+        .select('id, bills_list')
+        .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+        .maybeSingle();
+
+      if (trialLead && Array.isArray(trialLead.bills_list) && trialLead.bills_list.length > 0) {
+        const list = [...trialLead.bills_list];
+        const lastIdx = list.length - 1;
+        list[lastIdx].category = isTagPersonal ? 'despesa_pessoal' : 'despesa_operacional';
+        await supabase.from('trial_leads').update({ bills_list: list }).eq('id', trialLead.id);
+        billUpdated = true;
+        billName = list[lastIdx].supplier_name || 'Última conta';
+      }
+    }
+
+    if (billUpdated) {
+      await sendEvolutionText({
+        phone,
+        text: `✅ *Classificação atualizada para [${isTagPersonal ? '🏠 Pessoal/Particular' : '💼 Empresa/Operacional'}]!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${billName}
+• *Classificação:* ${isTagPersonal ? 'Despesa Pessoal' : 'Despesa da Empresa'}
+
+Seus relatórios e Livro Caixa já foram sincronizados com essa separação.`,
+      });
       return;
     }
   }

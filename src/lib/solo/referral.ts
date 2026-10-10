@@ -250,26 +250,27 @@ function renderProgressBar(current: number, target: number = 3): string {
 }
 
 /**
- * Painel Oficial do Analisador (mensagem vibrante, jovem e completa)
+ * Painel Oficial de Indicação Member Get Member (MGM)
+ * Ganhe 1 Mês Grátis por amigo que assinar!
  */
 export async function getReferralShareMessage(phoneOrClientId: string, pushName?: string): Promise<string> {
   const status = await getReferralStatus(phoneOrClientId);
 
-  let txt = `⚡ *Painel do Analisador • AnalisAí* ⚡\n`;
+  let txt = `🎁 *Indique e Ganhe Meses Grátis • AnalisAí* 🎁\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  txt += `Transforme suas conexões em renda mensal no Pix e use o AnalisAí de graça!\n\n`;
+  txt += `Indique empresários e parceiros para usar o AnalisAí e ganhe meses de assinatura grátis!\n\n`;
 
   // Status e Selo
   if (status.isAnalisadorOficial) {
     txt += `🎖️ *Selo Conquistado:* *ANALISADOR OFICIAL* 🏆\n`;
-    txt += `🎁 *Sua Assinatura Solo:* 🎉 *100% GRATUITA* (Zero custo para você todo mês!)\n\n`;
+    txt += `🎉 *Sua Assinatura Solo é 100% GRATUITA!* (Zero mensalidades para você todo mês!)\n\n`;
   } else {
-    txt += `🎯 *Seu Selo:* *Analisador em Ação*\n`;
-    txt += `🎁 *Meta para Selo Oficial:* Faltam apenas *${status.neededForExemption} indicação(ões) ativas* para conquistar o **Selo Analisador Oficial** e ter o **AnalisAí Solo 100% GRATUITO** para sempre!\n\n`;
+    txt += `🎯 *Seu Desempenho:* *${status.activeQualified} amigo(s) ativo(s)*\n`;
+    txt += `Faltam apenas *${status.neededForExemption} indicação(ões)* para você conquistar o **Selo Analisador Oficial** e ter o **AnalisAí Solo 100% GRATUITO** para sempre!\n\n`;
   }
 
   // Barra de Progresso
-  txt += `📊 *Régua de Meta (Gratuidade Solo):*\n`;
+  txt += `📊 *Régua de Recompensas:*\n`;
   txt += `${renderProgressBar(status.activeQualified, 3)} `;
   if (status.isAnalisadorOficial) {
     txt += `*(Meta 100% Atingida!)* 🚀\n\n`;
@@ -277,38 +278,20 @@ export async function getReferralShareMessage(phoneOrClientId: string, pushName?
     txt += `*(${status.activeQualified} de 3 ativos)*\n\n`;
   }
 
-  // Renda Mensal no Pix
-  txt += `💰 *Sua Renda Mensal Recorrente no Pix:*\n`;
-  txt += `• Clientes ativos indicados: *${status.activeQualified}*\n`;
-  txt += `• Comissão mensal acumulada: *${status.monthlyEarningsFormatted}/mês*\n`;
-  
-  if (status.pixKey) {
-    txt += `• Chave Pix cadastrada: \`${status.pixKey}\` ${status.isDocumentPixKey ? '🛡️ *(CNPJ/CPF Oficial)*' : '✅'}\n\n`;
-  } else {
-    txt += `• Chave Pix cadastrada: ⚠️ *Nenhuma chave informada ainda!*\n`;
-    txt += `  _(Cadastre agora enviando: *!pix sua_chave* para receber suas comissões)_\n\n`;
-  }
-
-  // Tabela de Comissões por Plano
-  txt += `📋 *Comissões Recorrentes por Plano (~20%/mês no Pix):*\n`;
-  txt += `• *Plano Start (R$ 39,90):* +R$ 8,00 / mês\n`;
-  txt += `• *Plano Solo (R$ 87,99):* +R$ 18,00 / mês\n`;
-  txt += `• *Plano Solo Plus (R$ 157,99):* +R$ 32,00 / mês\n`;
-  txt += `• *Plano Pro (R$ 297,00):* +R$ 60,00 / mês\n`;
-  txt += `• *Plano Super (R$ 597,00):* +R$ 120,00 / mês\n`;
-  txt += `_(A comissão cai na sua conta todo mês enquanto seu indicado mantiver o plano ativo. Sem limite de indicados!)_\n\n`;
+  // Como Funciona
+  txt += `🎁 *Como Funciona a Recompensa (Member Get Member):*\n`;
+  txt += `• A cada amigo ou parceiro que assinar qualquer plano pelo seu link, você ganha **1 Mês Grátis** de AnalisAí!\n`;
+  txt += `• Com 3 amigos ativos contínuos, você atinge o **Selo Oficial** e sua assinatura fica gratuita para sempre.\n\n`;
 
   // Link Oficial de Divulgação
-  txt += `🔗 *Seu Link Exclusivo de Analisador:*
-${status.referralLink}
+  txt += `🔗 *Seu Link Exclusivo para Indicar:*\n`;
+  txt += `${status.referralLink}\n\n`;
 
-📲 *Mensagem pronta para você copiar e enviar:*
-_"Opa! Estou usando o AnalisAí para organizar minhas contas e pagar tudo sem estresse direto pelo WhatsApp. Você pode testar de graça agora enviando uma foto de conta ou boleto para o robô oficial: ${status.referralLink}"_
+  txt += `📲 *Mensagem pronta para você copiar e enviar:*\n`;
+  txt += `_"Opa! Estou usando o AnalisAí para organizar minhas contas e pagar tudo sem estresse direto pelo WhatsApp. Você pode testar de graça agora enviando uma foto de conta ou boleto para o assistente oficial: ${status.referralLink}"_\n\n`;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Comandos Rápidos:*
-• *!pix [chave]* → Alterar chave Pix (com proteção 2FA)
-• *!analisador* → Atualizar seu painel e saldo de comissões`;
+  txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  txt += `💡 *Dica:* Cada contato que iniciar pelo seu link já fica vinculado à sua conta automaticamente!`;
 
   return txt;
 }

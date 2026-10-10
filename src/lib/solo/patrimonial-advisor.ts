@@ -168,61 +168,19 @@ export async function analyzeBeneficiaryAndExpense(
       return {
         isPersonalExpense: true,
         isPartnerExpense: true,
-        adviceMessage: `💡 *Orientação de Blindagem Patrimonial (Conta do Sócio)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que a conta de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está vinculada ao titular/sócio *${payerName || 'da empresa'}*.
-
-🛡️ *Dica Consultiva AnalisAí:*
-Evite pagar contas particulares diretamente pela conta bancária da sua PJ. Isso distorce o lucro real do negócio e gera risco de confusão patrimonial perante a Receita Federal.
-
-👉 *Procedimento Seguro e Recomendado:*
-1️⃣ Transfira o valor exato da conta bancária PJ para sua conta pessoal (PF) como **Pró-Labore** ou **Distribuição de Lucros**;
-2️⃣ Em seguida, efetue o pagamento pelo app da sua conta de **Pessoa Física**!`,
+        adviceMessage: `💡 *Tag: [Despesa Pessoal/Sócio]* • Registrado! Se for custo da empresa, basta responder *empresa*.`,
       };
     } else if (partners.length > 0 && cleanPayerTaxId) {
-      // É despesa de TERCEIRO EXTERNO (Pior ainda!)
+      // É despesa de Terceiro/CPF
       return {
         isPersonalExpense: true,
         isThirdPartyExpense: true,
-        adviceMessage: `⚠️ *Alerta Contábil Crítico — Pagamento a Terceiro Sem Causa!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este boleto de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido para *${payerName || 'Pessoa Física Externa'}* (CPF: ${cleanPayerTaxId}), que **NÃO consta no quadro de sócios** da sua empresa.
-
-⚖️ *Risco Fiscal Grave (Receita Federal):*
-Pagar despesas de terceiros diretamente pela conta bancária da sua PJ é caracterizado como "Pagamento sem Causa ou a Beneficiário Indireto" (Art. 61 da Lei nº 8.981/95).
-Essa prática pode sofrer **tributação punitiva de até 35% de IRRF na fonte** e quebra da blindagem da personalidade jurídica no Código Civil!
-
-👉 *Recomendação dos nossos Consultores:*
-1. Se for prestador de serviço/colaborador, exija Nota Fiscal ou formalize via RPA com retenção legal.
-2. Se for ajuda a parentes/amigos, faça o acerto diretamente pela sua conta bancária **Pessoa Física (CPF)** após receber seu pró-labore!`,
+        adviceMessage: `💡 *Tag: [Despesa CPF]* • Registrado! Se for custo da empresa, basta responder *empresa*.`,
       };
     } else if (isCpf) {
-      // É CPF (Pessoa Física) — Pode ser Sócio, Funcionário ou Terceiro Aleatório
-      const payerDisplay = payerName
-        ? `${payerName} (CPF ${doc.payer_tax_id || cleanPayerTaxId})`
-        : doc.payer_tax_id
-          ? `CPF ${doc.payer_tax_id}`
-          : 'Pessoa Física';
-
       return {
         isPersonalExpense: true,
-        adviceMessage: `🛡️ *Consultoria Contábil & Patrimonial — Conta no CPF (Pessoa Física)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no CPF de *${payerDisplay}*.
-
-💡 *Se a sua Empresa (PJ) for pagar esta conta diretamente, veja a correta classificação contábil:*
-
-1️⃣ *Conta do Sócio / Titular:*
-• O ideal é transferir da PJ para sua conta PF como **Distribuição de Lucros / Dividendos** (ou Pró-Labore) e pagar na PF;
-• Se pagar direto pelo banco da PJ, escriture como **Distribuição de Dividendos / Retirada do Sócio** (nunca como despesa da empresa!).
-
-2️⃣ *Conta de Funcionário / Colaborador:*
-• Prática comum em PMEs (adiantamento emergencial, faculdade/curso, auxílio médico);
-• Categorize como **Adiantamento Salarial / Vale** (a descontar no próximo holerite), **Bônus / Premiação** ou **Ajuda de Custo / Benefício** para blindar sua empresa contra riscos e passivos trabalhistas!
-
-3️⃣ *Conta de Terceiro Aleatório / Amigo / Parente:*
-• Jamais lance como despesa operacional (evita autuação fiscal de até 35% de IRRF por pagamento sem causa);
-• Classifique como **Distribuição de Lucros / Dividendos do Sócio** — o sócio assume o pagamento abatendo da sua retirada de lucro!`,
+        adviceMessage: `💡 *Tag: [Conta no CPF]* • Registrado! Se for custo da empresa, basta responder *empresa*.`,
       };
     }
   }
@@ -232,15 +190,7 @@ Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormat
     return {
       isPersonalExpense: false,
       isThirdPartyExpense: true,
-      adviceMessage: `🏢 *Atenção — Documento Emitido para CNPJ Diferente!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este documento de *${supplier}* está emitido para o CNPJ:
-• *Sacado/Tomador:* ${payerName || 'Empresa'} (CNPJ: ${doc.payer_tax_id || cleanPayerTaxId})
-
-Este CNPJ é diferente do cadastro principal da sua empresa (*${doc.known_company_name || doc.known_company_tax_id}*).
-
-💡 *Dica do AnalisAí:*
-Se este boleto pertence a outra filial ou empresa do seu grupo, podemos organizar seus relatórios separando cada CNPJ! Se for despesa de um parceiro ou terceiro, tome cuidado para não misturar os caixas bancários.`,
+      adviceMessage: `🏢 *Nota:* Documento emitido para outro CNPJ (${doc.payer_tax_id || cleanPayerTaxId}). Registrado normalmente!`,
     };
   }
 
@@ -315,23 +265,7 @@ export function analyzePatrimonialExpense(doc: {
 
     return {
       isPersonalExpense: true,
-      adviceMessage: `🛡️ *Consultoria Contábil & Patrimonial — Conta no CPF (Pessoa Física)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} está emitido no CPF de *${payerDisplay}*.
-
-💡 *Se a sua Empresa (PJ) for pagar esta conta diretamente, veja a correta classificação contábil:*
-
-1️⃣ *Conta do Sócio / Titular:*
-• O ideal é transferir da PJ para sua conta PF como **Distribuição de Lucros / Dividendos** (ou Pró-Labore) e pagar na PF;
-• Se pagar direto pelo banco da PJ, escriture como **Distribuição de Dividendos / Retirada do Sócio** (nunca como despesa da empresa!).
-
-2️⃣ *Conta de Funcionário / Colaborador:*
-• Prática comum em PMEs (adiantamento emergencial, faculdade/curso, auxílio médico);
-• Categorize como **Adiantamento Salarial / Vale** (a descontar no próximo holerite), **Bônus / Premiação** ou **Ajuda de Custo / Benefício** para blindar sua empresa contra riscos e passivos trabalhistas!
-
-3️⃣ *Conta de Terceiro Aleatório / Amigo / Parente:*
-• Jamais lance como despesa operacional (evita autuação fiscal de até 35% de IRRF por pagamento sem causa);
-• Classifique como **Distribuição de Lucros / Dividendos do Sócio** — o sócio assume o pagamento abatendo da sua retirada de lucro!`,
+      adviceMessage: `💡 *Tag: [Conta no CPF]* • Registrado! Se for custo da empresa, basta responder *empresa*.`,
     };
   }
 
@@ -340,15 +274,7 @@ Identificamos que este documento de *${supplier}* ${valFormatted ? `(${valFormat
     return {
       isPersonalExpense: false,
       isThirdPartyExpense: true,
-      adviceMessage: `🏢 *Atenção — Documento Emitido para CNPJ Diferente!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este documento de *${supplier}* está emitido para o CNPJ:
-• *Sacado/Tomador:* ${doc.payer_name || 'Empresa'} (CNPJ: ${doc.payer_tax_id})
-
-Este CNPJ é diferente do cadastro principal da sua empresa (*${doc.known_company_name || doc.known_company_tax_id}*).
-
-💡 *Dica do AnalisAí:*
-Se este boleto pertence a outra filial ou empresa do seu grupo, podemos organizar seus relatórios separando cada CNPJ! Se for despesa de um parceiro ou terceiro, tome cuidado para não misturar os caixas bancários.`,
+      adviceMessage: `🏢 *Nota:* Documento emitido para outro CNPJ (${doc.payer_tax_id || cleanPayerTaxId}). Registrado normalmente!`,
     };
   }
 
@@ -374,18 +300,7 @@ Se este boleto pertence a outra filial ou empresa do seu grupo, podemos organiza
     return {
       isPersonalExpense: true,
       categoryDetected: matched,
-      adviceMessage: `💡 *Orientação Consultiva AnalisAí (Blindagem Patrimonial)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que a conta de *${supplier}* ${valFormatted ? `(${valFormatted})` : ''} tem características de **despesa pessoal (PF)**.
-
-🛡️ *Dica de Ouro para a Saúde da sua Empresa:*
-Evite pagar contas particulares diretamente pela conta bancária da sua empresa (PJ). A "confusão patrimonial" distorce o lucro real do negócio e gera riscos desnecessários com a Receita Federal.
-
-👉 *O caminho recomendado pelos nossos consultores:*
-1️⃣ Transfira o valor exato da conta bancária da sua PJ para a sua conta pessoal (PF) como **Pró-Labore** ou **Distribuição de Lucros**;
-2️⃣ Em seguida, realize o pagamento do boleto pelo app da sua conta de **Pessoa Física**!
-
-_(Assim sua contabilidade fica 100% blindada e sua empresa protegida contra autuações fiscais!)_`,
+      adviceMessage: `💡 *Tag: [Despesa Pessoal/Familiar]* • Registrado no Livro Caixa! Se for custo da empresa, basta responder *empresa*.`,
     };
   }
 
