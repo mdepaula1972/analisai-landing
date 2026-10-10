@@ -1280,6 +1280,36 @@ export async function inviteContactVip(
   const targetName = name || 'Convidado VIP';
   const guestFirstName = targetName.split(' ')[0];
 
+  const { getIdentifierVariations } = await import('@/lib/solo/qa-whitelist');
+  const targetVariations = getIdentifierVariations(cleanDigits);
+  const adminVariations = getIdentifierVariations('5514930855878');
+  if (targetVariations.some((v) => adminVariations.includes(v))) {
+    return {
+      success: false,
+      cleanDigits,
+      cleanPhoneWith55,
+      formattedTarget: formatIdentifierDisplay(cleanDigits),
+      name: targetName,
+      inviteLink: '',
+      forwardMessage: '',
+      message: '⚠️ *Este é o seu próprio número de Administrador!*\nVocê já possui acesso irrestrito e ilimitado a todas as ferramentas e planos do AnalisAí.',
+    };
+  }
+
+  const botVariations = getIdentifierVariations(OFFICIAL_BOT_WHATSAPP || '5513920099874');
+  if (targetVariations.some((v) => botVariations.includes(v))) {
+    return {
+      success: false,
+      cleanDigits,
+      cleanPhoneWith55,
+      formattedTarget: formatIdentifierDisplay(cleanDigits),
+      name: targetName,
+      inviteLink: '',
+      forwardMessage: '',
+      message: '⚠️ *Este é o número oficial do robô AnalisAí!*\nPara convidar, compartilhe o contato de outro empresário ou parceiro.',
+    };
+  }
+
   // 1. Cadastra na QA Whitelist para que ele tenha acesso 100% livre quando interagir
   await addQaWhitelist(cleanDigits, targetName, inviterName);
 

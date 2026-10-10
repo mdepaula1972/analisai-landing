@@ -3102,7 +3102,16 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
     const clientPhone = client?.whatsapp_number || phone;
 
     // Pré-registra o lead vinculado ao cliente para atribuir comissão futura
-    await linkReferralLead(contact.phone, clientPhone);
+    const linkResult = await linkReferralLead(contact.phone, clientPhone);
+    if (!linkResult.success) {
+      await sendEvolutionText({
+        phone,
+        text:
+          linkResult.message ||
+          `⚠️ Não foi possível cadastrar o contato *${contact.name}* (${contact.phone}) como sua indicação.`,
+      });
+      return;
+    }
 
     const refGreeting = `Olá! Recebi a indicação do ${clientName}!`;
     const refLink = `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${encodeURIComponent(refGreeting)}`;

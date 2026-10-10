@@ -838,40 +838,140 @@ export async function setAnalisadorPixKey(
   };
 }
 
+export interface LinkReferralResult {
+  success: boolean;
+  reason?: 'self_referral' | 'bot_number' | 'admin_number' | 'already_client' | 'already_referred' | 'invalid_phone';
+  message?: string;
+}
+
 /**
- * Registra o vínculo do novo lead com o Analisador que o indicou
+ * Registra o vínculo do novo lead com o Analisador que o indicou.
+ * Valida com rigor: auto-indicação, número de admin, bot oficial e clientes já cadastrados.
  */
-export async function linkReferralLead(referredPhone: string, referrerPhone: string): Promise<void> {
+export async function linkReferralLead(
+  referredPhone: string,
+  referrerPhone: string
+): Promise<LinkReferralResult> {
   const supabase = createServiceRoleClient();
+  const { getIdentifierVariations, isQaWhitelisted, formatIdentifierDisplay } = await import('@/lib/solo/qa-whitelist');
+  const { OFFICIAL_BOT_WHATSAPP } = await import('@/lib/solo/constants');
+
   const cleanReferred = referredPhone.replace(/\D/g, '');
   const cleanReferrer = referrerPhone.replace(/\D/g, '');
 
-  if (!cleanReferred || !cleanReferrer || cleanReferred === cleanReferrer) return;
+  if (!cleanReferred || cleanReferred.length < 8) {
+    return {
+      success: false,
+      reason: 'invalid_phone',
+      message: '❌ *Telefone do contato inválido para indicação.*',
+    };
+  }
 
-  // Garante que o indicador tenha registro em clients
-  const referrer = await ensureClientForAnalisador(cleanReferrer);
+  const variationsReferred = getIdentifierVariations(cleanReferred);
+  const variationsReferrer = getIdentifierVariations(cleanReferrer);
 
-  // Salva no trial_leads do novo contato
-  const { data: existingLead } = await supabase
-    .from('trial_leads')
-    .select('id')
-    .eq('whatsapp_number', cleanReferred)
+  // 1. Não pode indicar a si mesmo (mesmo com ou sem 55 / 9º dígito)
+  if (variationsReferred.some((v) => variationsReferrer.includes(v))) {
+    return {
+      success: false,
+      reason: 'self_referral',
+      message: '⚠️ *Você não pode indicar o seu próprio número de WhatsApp!*\nO programa de indicação é exclusivo para indicar outros parceiros e empresários.',
+    };
+  }
+
+  // 2. Não pode indicar o número oficial do robô AnalisAí
+  const botVariations = getIdentifierVariations(OFFICIAL_BOT_WHATSAPP || '5513920099874');
+  if (variationsReferred.some((v) => botVariations.includes(v))) {
+    return {
+      success: false,
+      reason: 'bot_number',
+      message: '⚠️ *Este é o número oficial do AnalisAí!*\nPara indicar, compartilhe o contato de outro empresário ou parceiro.',
+    };
+  }
+
+  // 3. Não pode indicar o Administrador Oficial (Marcos)
+  const adminVariations = getIdentifierVariations('5514930855878');
+  if (variationsReferred.some((v) => adminVariations.includes(v))) {
+    return {
+      success: false,
+      reason: 'admin_number',
+      message: '⚠️ *Este número pertence à equipe de administração do AnalisAí!*\nEle já possui acesso irrestrito ao sistema e não é válido para comissões de indicação.',
+    };
+  }
+
+  // 4. Checa se o número já é cliente cadastrado na base (clients)
+  const { data: existingClient } = await supabase
+    .from('clients')
+    .select('id, name, whatsapp_number, is_admin, status')
+    .in('whatsapp_number', variationsReferred)
+    .limit(1)
     .maybeSingle();
 
+  if (existingClient) {
+    if (existingClient.is_admin) {
+      return {
+        success: false,
+        reason: 'admin_number',
+        message: '⚠️ *Este número pertence à administração oficial do AnalisAí!*',
+      };
+    }
+    return {
+      success: false,
+      reason: 'already_client',
+      message: `⚠️ *O contato ${formatIdentifierDisplay(cleanReferred)} já é um cliente cadastrado no AnalisAí!* (${existingClient.name || 'Cliente Ativo'})\nO programa do Analisador recompensa a atração de *novos* clientes para a plataforma.`,
+    };
+  }
+
+  // 5. Checa se o contato já está ativo na Whitelist de QA
+  const isQa = await isQaWhitelisted(cleanReferred);
+  if (isQa) {
+    return {
+      success: false,
+      reason: 'already_client',
+      message: `⚠️ *O contato ${formatIdentifierDisplay(cleanReferred)} já possui acesso especial (VIP/QA) no AnalisAí!*`,
+    };
+  }
+
+  // 6. Checa se já foi indicado anteriormente por outro parceiro
+  const { data: existingLead } = await supabase
+    .from('trial_leads')
+    .select('id, referrer_phone')
+    .in('whatsapp_number', variationsReferred)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingLead && existingLead.referrer_phone) {
+    const leadReferrerVars = getIdentifierVariations(existingLead.referrer_phone);
+    const isSameReferrer = variationsReferrer.some((v) => leadReferrerVars.includes(v));
+    if (!isSameReferrer) {
+      return {
+        success: false,
+        reason: 'already_referred',
+        message: `⚠️ *O contato ${formatIdentifierDisplay(cleanReferred)} já foi indicado anteriormente por outro parceiro.*`,
+      };
+    }
+  }
+
+  // Garante que o indicador tenha registro em clients
+  await ensureClientForAnalisador(cleanReferrer);
+
+  // Salva ou atualiza no trial_leads do novo contato
   if (existingLead) {
     await supabase
       .from('trial_leads')
       .update({ referrer_phone: cleanReferrer })
-      .eq('whatsapp_number', cleanReferred);
+      .eq('id', existingLead.id);
   } else {
-    await supabase
-      .from('trial_leads')
-      .insert({
-        whatsapp_number: cleanReferred,
-        referrer_phone: cleanReferrer,
-        first_interaction_at: new Date().toISOString(),
-      });
+    await supabase.from('trial_leads').insert({
+      whatsapp_number: cleanReferred,
+      referrer_phone: cleanReferrer,
+      first_interaction_at: new Date().toISOString(),
+    });
   }
+
+  return {
+    success: true,
+  };
 }
 
 /**
