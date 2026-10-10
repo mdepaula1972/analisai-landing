@@ -3397,7 +3397,30 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
       };
 
       // Registra que a degustação foi realizada
-      await recordTrialUsage(cleanPhone, normalizedDoc);
+      const trialResult = await recordTrialUsage(cleanPhone, normalizedDoc);
+
+      if (trialResult?.isDuplicate) {
+        const existing = trialResult.existingBill || normalizedDoc;
+        const valFmt = Number(existing.amount || normalizedDoc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const dueFmt = formatDueDateDetails(existing.due_date || normalizedDoc.due_date);
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Boleto/Conta Já Cadastrado Anteriormente!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este lançamento de *${existing.supplier_name || normalizedDoc.supplier_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está cadastrado e guardado** na sua agenda financeira!
+
+💡 *Fique tranquilo(a):* Nós já estamos monitorando esta conta e vamos te avisar na véspera. Mantivemos seu registro original para evitar cobranças duplicadas e sem consumir sua cota de testes!`,
+        });
+
+        await sendPaymentCodeMessage(phone, {
+          barcode_or_pix: extraction.barcode_or_pix,
+          pix_key: extraction.pix_key,
+          pix_key_type: extraction.pix_key_type,
+        });
+
+        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+        return;
+      }
 
       // 1. Envia resumo executivo do documento informando a cota restante
       const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
@@ -3951,21 +3974,43 @@ Os dados estão corretos?
         return;
       }
 
-      await supabase.from('cash_ledger_entries').insert({
-        client_id: client.id,
-        document_id: docRecord?.id,
-        entry_date: extracted.due_date || new Date().toISOString().split('T')[0],
-        description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}`,
-        amount: -Math.abs(Number(extracted.total_amount)),
-        entry_type: 'expense',
-        dre_group: extracted.category_suggestion || 'despesa_administrativa',
-        status: 'realizado',
-      });
-
       // ── MECANISMO ANTI-DUPLICAÇÃO INTELIGENTE ──────────────────────────────
-      // Se o documento tiver código de barras, verifica se já existe uma parcela em aberto
-      // cadastrada anteriormente sem código de barras (ex: via Nota Fiscal prévia)
-      let duplicateMatched = false;
+      // 1. Checagem por Código de Barras / Linha Digitável Exato Já Cadastrado
+      if (extracted.barcode_or_pix) {
+        const cleanExtractedBarcode = String(extracted.barcode_or_pix).replace(/\D/g, '');
+        if (cleanExtractedBarcode.length >= 20) {
+          const { data: alreadySavedBill } = await supabase
+            .from('payables_receivables')
+            .select('id, counterparty_name, amount, current_due_date, barcode_or_pix')
+            .eq('client_id', client.id)
+            .eq('barcode_or_pix', extracted.barcode_or_pix)
+            .limit(1)
+            .maybeSingle();
+
+          if (alreadySavedBill) {
+            const valFmt = Number(alreadySavedBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const dueFmt = formatDueDateDetails(alreadySavedBill.current_due_date);
+            await sendEvolutionText({
+              phone,
+              text: `⚠️ *Boleto Já Cadastrado Anteriormente!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que este boleto de *${alreadySavedBill.counterparty_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está registrado e guardado** na sua agenda financeira!
+
+💡 *Fique tranquilo(a):* Nós já estamos monitorando esta conta e vamos te avisar na véspera do vencimento às 10h com o código prontinho para pagar. Não geramos despesa duplicada no seu fluxo de caixa nem consumimos novos créditos!`,
+            });
+
+            await sendPaymentCodeMessage(phone, {
+              barcode_or_pix: extracted.barcode_or_pix,
+              pix_key: extracted.pix_key,
+              pix_key_type: extracted.pix_key_type,
+            });
+
+            return;
+          }
+        }
+      }
+
+      // 2. Se o documento tiver código de barras, verifica se existe parcela prévia sem código (ex: NF prévia)
       if (extracted.barcode_or_pix && extracted.due_date) {
         const { data: duplicateCandidate } = await supabase
           .from('payables_receivables')
@@ -3989,8 +4034,6 @@ Os dados estão corretos?
             })
             .eq('id', duplicateCandidate.id);
 
-          duplicateMatched = true;
-
           await sendEvolutionText({
             phone,
             text: `🔗 *Boleto vinculado à parcela existente sem duplicar!*
@@ -4009,6 +4052,68 @@ O código de barras foi anexado com sucesso para pagamento e lembretes sem gerar
           return;
         }
       }
+
+      // 3. Checagem de Conta Idêntica (Mesmo Fornecedor + Mesmo Valor + Mesmo Vencimento)
+      if (extracted.due_date && extracted.total_amount && Number(extracted.total_amount) > 0) {
+        const candSupName = (extracted.counterparty_name || '').toLowerCase().trim();
+        const { data: sameBillCandidates } = await supabase
+          .from('payables_receivables')
+          .select('id, counterparty_name, amount, current_due_date, barcode_or_pix, is_provision')
+          .eq('client_id', client.id)
+          .eq('current_due_date', extracted.due_date)
+          .gte('amount', Number(extracted.total_amount) - 0.05)
+          .lte('amount', Number(extracted.total_amount) + 0.05)
+          .limit(5);
+
+        const exactMatch = sameBillCandidates?.find((b: any) => {
+          if (b.is_provision) return false;
+          const bName = (b.counterparty_name || '').toLowerCase().trim();
+          return bName.length >= 3 && candSupName.length >= 3 && (bName.includes(candSupName) || candSupName.includes(bName));
+        });
+
+        if (exactMatch) {
+          const valFmt = Number(exactMatch.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          const dueFmt = formatDueDateDetails(exactMatch.current_due_date);
+
+          // Se a conta existente não tinha código e agora veio código, anexa
+          if (extracted.barcode_or_pix && !exactMatch.barcode_or_pix) {
+            await supabase
+              .from('payables_receivables')
+              .update({ barcode_or_pix: extracted.barcode_or_pix, document_id: docRecord?.id })
+              .eq('id', exactMatch.id);
+          }
+
+          await sendEvolutionText({
+            phone,
+            text: `⚠️ *Lançamento Já Registrado Anteriormente!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Identificamos que esta conta de *${exactMatch.counterparty_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está cadastrada no seu Livro Caixa**.
+
+Mantivemos seu registro original ativo para evitar duplicidade de despesas e proteger a exatidão do seu fluxo de caixa!`,
+          });
+
+          if (extracted.barcode_or_pix) {
+            await sendPaymentCodeMessage(phone, {
+              barcode_or_pix: extracted.barcode_or_pix,
+              pix_key: extracted.pix_key,
+              pix_key_type: extracted.pix_key_type,
+            });
+          }
+
+          return;
+        }
+      }
+
+      await supabase.from('cash_ledger_entries').insert({
+        client_id: client.id,
+        document_id: docRecord?.id,
+        entry_date: extracted.due_date || new Date().toISOString().split('T')[0],
+        description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}`,
+        amount: -Math.abs(Number(extracted.total_amount)),
+        entry_type: 'expense',
+        dre_group: extracted.category_suggestion || 'despesa_administrativa',
+        status: 'realizado',
+      });
 
       // ── SUPORTE A NOTA FISCAL / CARNÊ COM MÚLTIPLAS PARCELAS ──────────
       if (extracted.installments && extracted.installments.length > 0) {

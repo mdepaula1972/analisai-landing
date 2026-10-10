@@ -142,7 +142,7 @@ export async function recordTrialUsage(
   phone: string,
   docData: any,
   grantedLimit?: number
-): Promise<void> {
+): Promise<{ isDuplicate: boolean; existingBill?: any }> {
   const supabase = createServiceRoleClient();
   const cleanPhone = phone.replace(/\D/g, '');
 
@@ -211,6 +211,43 @@ export async function recordTrialUsage(
   const numAmount = rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) && Number(rawAmount) > 0 ? Number(rawAmount) : null;
   const categoryCandidate = docData.category || docData.category_suggestion || null;
   const barcodeOrPixCandidate = docData.barcode_or_pix || null;
+
+  // ── DETECÇÃO ANTI-DUPLICIDADE EM CONTAS REAIS DA DEGUSTAÇÃO ────────────
+  // Se o usuário enviar o mesmo boleto ou uma conta com mesmo fornecedor + valor + vencimento
+  if (!isProvision && numAmount && numAmount > 0) {
+    const duplicateIndex = billsList.findIndex((b: any) => {
+      if (b.is_provision) return false;
+
+      // 1. Mesmo código de barras / linha digitável
+      if (barcodeOrPixCandidate && b.barcode_or_pix) {
+        const cleanB = String(b.barcode_or_pix).replace(/\D/g, '');
+        const cleanCand = String(barcodeOrPixCandidate).replace(/\D/g, '');
+        if (cleanB.length >= 20 && cleanB === cleanCand) return true;
+      }
+
+      // 2. Mesmo fornecedor + mesma data de vencimento + mesmo valor (tolerância R$ 0,05)
+      const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
+      const candName = supplierCandidate.toLowerCase().trim();
+      const sameSupplier = bName.length >= 3 && candName.length >= 3 && (bName.includes(candName) || candName.includes(bName));
+      const sameDate = Boolean(b.due_date && docData.due_date && b.due_date === docData.due_date);
+      const sameAmount = Boolean(b.amount && Math.abs(Number(b.amount) - numAmount) < 0.05);
+
+      return sameSupplier && sameDate && sameAmount;
+    });
+
+    if (duplicateIndex >= 0) {
+      const existing = billsList[duplicateIndex];
+      // Se a conta cadastrada não tinha código de barras e o novo envio tem, anexa sem duplicar!
+      if (barcodeOrPixCandidate && !existing.barcode_or_pix) {
+        existing.barcode_or_pix = barcodeOrPixCandidate;
+        await supabase
+          .from('trial_leads')
+          .update({ bills_list: billsList })
+          .eq('whatsapp_number', targetPhone);
+      }
+      return { isDuplicate: true, existingBill: existing };
+    }
+  }
 
   // Se for uma conta definitiva com valor real e existir uma provisão prévia para o mesmo fornecedor ou serviço, concilia!
   // REGRA CRÍTICA: NUNCA reconcilia se a conta existente for uma conta real (duas contas reais são despesas distintas!)
@@ -331,6 +368,8 @@ export async function recordTrialUsage(
       },
       { onConflict: 'whatsapp_number' }
     );
+
+  return { isDuplicate: false };
 }
 
 /**
