@@ -134,6 +134,8 @@ Comandos disponíveis para você testar todas as opções:
 • *!clientes* ou *!assinantes* → Lista completa de clientes com assinaturas ativas e MRR
 • *!dormindo* ou *!frios* → Lista de convidados que NÃO enviaram nenhuma conta
 • *!quentes* ou *!leads* → Lista de leads que testaram no trial e aguardam fechamento
+• *!cobrar [nome]* → Gera cobrança amigável com chave Pix e link de 1 toque no WhatsApp
+• *!pago [nome]* → Marca recebimento como pago e lança a receita no Livro Caixa
 • *!status* → Exibe seu plano atual, limites consumidos e status
 • *!reset* → Zera todos os contadores do seu ciclo para testar do início
 • *!convidar <tel> <nome>* → Libera acesso QA livre e prepara convite VIP (ou anexe o contato)
@@ -224,6 +226,28 @@ Comandos disponíveis para você testar todas as opções:
     return {
       handled: true,
       message: msg,
+    };
+  }
+
+  // ── !cobrar / !receber / !recebimentos ─────────────────────────────────────
+  if (action === 'cobrar' || action === 'receber' || action === 'recebimentos') {
+    const targetQuery = commandText.replace(/^[!/](cobrar|receber|recebimentos)\s*/i, '').trim();
+    const { handleGenerateFriendlyCollection } = await import('@/lib/solo/friendly-collection');
+    const res = await handleGenerateFriendlyCollection(client.whatsapp_number, targetQuery);
+    return {
+      handled: true,
+      message: res.message,
+    };
+  }
+
+  // ── !pago / !recebido / !baixar ─────────────────────────────────────────────
+  if (action === 'pago' || action === 'recebido' || action === 'baixar') {
+    const targetQuery = commandText.replace(/^[!/](pago|recebido|baixar)\s*/i, '').trim();
+    const { markReceivableAsPaid } = await import('@/lib/solo/friendly-collection');
+    const res = await markReceivableAsPaid(client.whatsapp_number, targetQuery);
+    return {
+      handled: true,
+      message: res.message,
     };
   }
 

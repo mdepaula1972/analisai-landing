@@ -58,6 +58,11 @@ import {
 } from '@/lib/solo/referral';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
+import {
+  handleGenerateFriendlyCollection,
+  markReceivableAsPaid,
+  getOpenReceivables,
+} from '@/lib/solo/friendly-collection';
 import { getTaxRevenueTracking, updateTaxRegime, addTrialLeadRevenue } from '@/lib/solo/tax-meter';
 import { isQaWhitelisted } from '@/lib/solo/qa-whitelist';
 import {
@@ -3216,6 +3221,50 @@ ${forwardShare}
 
 Seus relatórios e Livro Caixa já foram sincronizados com essa separação.`,
       });
+      return;
+    }
+  }
+
+  // ── Interceptação 0.4: Cobrança Amigável & Baixa de Recebimentos ────────────
+  // A. Pedido de Cobrança (!cobrar, !recebimentos, ou linguagem natural "cobrar o Carlos")
+  const isCollectCommand = /^[!/](cobrar|receber|recebimentos)(\s+(.*))?$/i.test(cleanText);
+  const isCollectNatural = /^(cobrar|quero cobrar|gerar cobrança d[eao]|cobrança d[eao]|manda a cobrança d[eao])\s+(.+)$/i.test(cleanText);
+
+  if (isCollectCommand || isCollectNatural) {
+    let targetQuery = '';
+    const matchCmd = cleanText.match(/^[!/](cobrar|receber|recebimentos)(\s+(.*))?$/i);
+    const matchNat = cleanText.match(/^(cobrar|quero cobrar|gerar cobrança d[eao]|cobrança d[eao]|manda a cobrança d[eao])\s+(.+)$/i);
+
+    if (matchCmd && matchCmd[3]) {
+      targetQuery = matchCmd[3].trim();
+    } else if (matchNat && matchNat[2]) {
+      targetQuery = matchNat[2].trim();
+    }
+
+    const collectRes = await handleGenerateFriendlyCollection(cleanPhone, targetQuery);
+    await sendEvolutionText({ phone, text: collectRes.message });
+    return;
+  }
+
+  // B. Baixa de Recebimento (!pago, !recebido, ou "Carlos pagou", "Recebi do Carlos")
+  const isPaidCommand = /^[!/](pago|recebido|baixar)\s+(.+)$/i.test(cleanText);
+  const isPaidNatural1 = /^(.+?)\s+(já\s+)?(pagou|acertou|quitou)$/i.test(cleanText);
+  const isPaidNatural2 = /^(recebi|caiu o pix|pago|recebido)\s+(d[eao]\s+)?(.+)$/i.test(cleanText);
+
+  if (isPaidCommand || isPaidNatural1 || isPaidNatural2) {
+    let customerQuery = '';
+    const matchCmd = cleanText.match(/^[!/](pago|recebido|baixar)\s+(.+)$/i);
+    const matchNat1 = cleanText.match(/^(.+?)\s+(já\s+)?(pagou|acertou|quitou)$/i);
+    const matchNat2 = cleanText.match(/^(recebi|caiu o pix|pago|recebido)\s+(d[eao]\s+)?(.+)$/i);
+
+    if (matchCmd && matchCmd[2]) customerQuery = matchCmd[2].trim();
+    else if (matchNat1 && matchNat1[1]) customerQuery = matchNat1[1].trim();
+    else if (matchNat2 && matchNat2[3]) customerQuery = matchNat2[3].trim();
+
+    // Filtra palavras que poderiam ser falso positivo (ex: "já pagou a conta de luz?")
+    if (customerQuery && !/^(a|o|uma|minha)\s+conta/i.test(customerQuery)) {
+      const paidRes = await markReceivableAsPaid(cleanPhone, customerQuery);
+      await sendEvolutionText({ phone, text: paidRes.message });
       return;
     }
   }
