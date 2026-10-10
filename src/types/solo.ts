@@ -90,6 +90,14 @@ export interface ExtractedDocumentData {
   criticality_hint: number;
   confidence_score: number;
   installments?: DocumentInstallment[];
+  entry_type?: 'payable' | 'receivable' | 'other';
+  is_bank_statement?: boolean;
+  bank_transactions?: Array<{
+    date: string;
+    description: string;
+    amount: number;
+    transaction_type: 'credit' | 'debit';
+  }>;
 }
 
 export interface ConversationalFinancialEntry {

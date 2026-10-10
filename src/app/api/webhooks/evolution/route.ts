@@ -65,6 +65,7 @@ import {
   processarRespostaDesafioEmail,
 } from '@/lib/solo/email-recovery';
 import { escalateToHumanConsultant } from '@/lib/solo/consultant-escalation';
+import { reconcileBankTransactions } from '@/lib/solo/bank-reconciliation';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -504,7 +505,6 @@ async function handleAmountChange(
       .from('payables_receivables')
       .select('*')
       .eq('client_id', client.id)
-      .eq('type', 'payable')
       .in('status', ['open', 'postponed'])
       .order('current_due_date', { ascending: true });
 
@@ -516,6 +516,7 @@ async function handleAmountChange(
     if (matchedBill) {
       const oldAmount = Number(matchedBill.amount);
       const isProv = Boolean(matchedBill.is_provision);
+      const isRec = matchedBill.type === 'receivable';
 
       await supabase
         .from('payables_receivables')
@@ -529,7 +530,7 @@ async function handleAmountChange(
       if (matchedBill.document_id) {
         await supabase
           .from('cash_ledger_entries')
-          .update({ amount: -Math.abs(newAmount) })
+          .update({ amount: isRec ? Math.abs(newAmount) : -Math.abs(newAmount) })
           .eq('document_id', matchedBill.document_id);
       }
 
@@ -541,7 +542,7 @@ async function handleAmountChange(
         phone,
         text: `✅ *${isProv ? 'Provisão Conciliada com a Fatura Real!' : 'Valor Atualizado com Sucesso!'}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${matchedBill.counterparty_name}
+• *${isRec ? 'Cliente' : 'Fornecedor'}:* ${matchedBill.counterparty_name}
 • *Valor Anterior:* ${oldFmt}
 • *Novo Valor Corrigido:* *${newFmt}*
 • *Vencimento:* ${dueFmt}
@@ -694,6 +695,185 @@ Deseja realmente excluir este lançamento?
 
 👉 _Responda com *1* (ou *Sim*) para confirmar, ou *2* (ou *Não*) para cancelar._`,
   });
+}
+
+async function handleMarkBillPaid(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  supplierQuery: string
+) {
+  const supabase = createServiceRoleClient();
+  const cleanQuery = supplierQuery ? supplierQuery.toLowerCase().trim() : '';
+
+  let matchedBill: any = null;
+  let isTrial = false;
+
+  if (client?.id) {
+    const { data: bills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .in('status', ['open', 'postponed'])
+      .order('current_due_date', { ascending: true });
+
+    if (bills && bills.length > 0) {
+      if (cleanQuery.includes('últim') || cleanQuery.includes('ultim') || cleanQuery.includes('recente') || !cleanQuery || cleanQuery === 'tudo' || cleanQuery === 'conta') {
+        matchedBill = bills[0];
+      } else {
+        const stopWords = ['conta', 'fornecedor', 'cliente', 'boleto', 'de', 'da', 'do', 'a', 'o', 'pagar', 'paguei', 'baixar', 'baixa', 'recebi', 'recebido'];
+        const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+        matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
+        if (!matchedBill && tokens.length > 0) {
+          matchedBill = bills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+        }
+      }
+    }
+  }
+
+  if (!matchedBill) {
+    const trialBills = await getTrialBills(cleanPhone);
+    if (trialBills && trialBills.length > 0) {
+      const openTrialBills = trialBills.filter((b: any) => b.status !== 'paid' && b.status !== 'canceled');
+      if (openTrialBills.length > 0) {
+        if (cleanQuery.includes('últim') || cleanQuery.includes('ultim') || cleanQuery.includes('recente') || !cleanQuery || cleanQuery === 'tudo' || cleanQuery === 'conta') {
+          matchedBill = openTrialBills[0];
+          isTrial = true;
+        } else {
+          matchedBill = openTrialBills.find((b: any) =>
+            b.supplier_name && (b.supplier_name.toLowerCase().includes(cleanQuery) || cleanQuery.includes(b.supplier_name.toLowerCase()))
+          );
+          if (matchedBill) isTrial = true;
+        }
+      }
+    }
+  }
+
+  if (!matchedBill) {
+    const bills = client
+      ? (await supabase.from('payables_receivables').select('counterparty_name, amount').eq('client_id', client.id).in('status', ['open', 'postponed']))?.data
+      : await getTrialBills(cleanPhone);
+
+    const listStr = bills && bills.length > 0
+      ? bills.map((b: any) => `• *${b.counterparty_name || b.supplier_name}* (R$ ${Number(b.amount || 0).toFixed(2)})`).join('\n')
+      : 'Nenhuma conta pendente encontrada.';
+
+    await sendEvolutionText({
+      phone,
+      text: `Não localizei uma conta em aberto correspondente a "${supplierQuery}".\n\nSuas contas pendentes são:\n${listStr}\n\nEnvie o nome da conta que deseja dar baixa (ex: *"Paguei a Sabesp"* ou *"Recebi do João"*).`,
+    });
+    return;
+  }
+
+  const supplier = matchedBill.counterparty_name || matchedBill.supplier_name;
+  const amount = Number(matchedBill.amount || 0);
+  const amtFmt = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const isReceivable = (matchedBill.type || matchedBill.entry_type) === 'receivable';
+  const todayYMD = new Date().toISOString().split('T')[0];
+
+  if (client?.id) {
+    await supabase
+      .from('payables_receivables')
+      .update({
+        status: 'paid',
+        notes: `Baixa manual informada pelo usuário em ${new Date().toLocaleDateString('pt-BR')}`,
+      })
+      .eq('id', matchedBill.id);
+
+    if (matchedBill.document_id) {
+      await supabase
+        .from('cash_ledger_entries')
+        .update({ status: 'realizado', entry_date: todayYMD })
+        .eq('document_id', matchedBill.document_id);
+    } else {
+      await supabase.from('cash_ledger_entries').insert({
+        client_id: client.id,
+        entry_date: todayYMD,
+        description: `${isReceivable ? 'RECEBIMENTO' : 'PAGAMENTO'} BAIXADO - ${supplier}`,
+        amount: isReceivable ? Math.abs(amount) : -Math.abs(amount),
+        entry_type: isReceivable ? 'income' : 'expense',
+        dre_group: matchedBill.category || (isReceivable ? 'receita_operacional' : 'despesa_administrativa'),
+        status: 'realizado',
+      });
+    }
+  } else {
+    await updateTrialBill(cleanPhone, supplier, {
+      status: 'paid',
+      notes: `Baixa informada pelo usuário em ${new Date().toLocaleDateString('pt-BR')}`,
+    });
+  }
+
+  const actionLabel = isReceivable ? 'Recebimento Confirmado e Liquidado' : 'Conta Baixada como Paga';
+  await sendEvolutionText({
+    phone,
+    text: `✅ *${actionLabel}!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *${isReceivable ? 'Cliente' : 'Fornecedor'}:* ${supplier}
+• *Valor:* *${amtFmt}*
+• *Data da Baixa:* ${formatDueDateDetails(todayYMD)}
+• *Status:* Liquidado no Livro Caixa
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Seu fluxo de caixa e relatórios já foram atualizados com a quitação!`,
+  });
+
+  await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+}
+
+async function handleMarkBillOverdue(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  supplierQuery: string
+) {
+  const supabase = createServiceRoleClient();
+  const cleanQuery = supplierQuery ? supplierQuery.toLowerCase().trim() : '';
+
+  let matchedBill: any = null;
+  if (client?.id) {
+    const { data: bills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .in('status', ['open', 'postponed'])
+      .order('current_due_date', { ascending: true });
+
+    if (bills && bills.length > 0) {
+      if (!cleanQuery || cleanQuery === 'atrasada' || cleanQuery === 'atrasado' || cleanQuery === '2') {
+        matchedBill = bills[0];
+      } else {
+        matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery)) || bills[0];
+      }
+    }
+  } else {
+    const trialBills = await getTrialBills(cleanPhone);
+    if (trialBills && trialBills.length > 0) {
+      matchedBill = trialBills[0];
+    }
+  }
+
+  if (matchedBill) {
+    const sup = matchedBill.counterparty_name || matchedBill.supplier_name;
+    const amtFmt = Number(matchedBill.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    if (client?.id) {
+      await supabase
+        .from('payables_receivables')
+        .update({ notes: `Marcada como atrasada pelo usuário em ${new Date().toLocaleDateString('pt-BR')}` })
+        .eq('id', matchedBill.id);
+    }
+    await sendEvolutionText({
+      phone,
+      text: `⚠️ *Registrado como Atrasada!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${sup}
+• *Valor:* ${amtFmt}
+• *Status:* Em Atraso (Monitoramento de Cobrança Ativo)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Vamos manter este título sob vigilância no seu radar para você não perder o controle de juros e multas. Quando efetuar o pagamento, basta me avisar!`,
+    });
+    await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -1129,7 +1309,6 @@ async function handleDueDateChange(
       .from('payables_receivables')
       .select('*')
       .eq('client_id', client.id)
-      .eq('type', 'payable')
       .in('status', ['open', 'postponed']);
 
     const cleanQuery = supplierQuery.toLowerCase().trim();
@@ -1143,11 +1322,12 @@ async function handleDueDateChange(
         })
         .eq('id', matchedBill.id);
 
+      const isRec = matchedBill.type === 'receivable';
       await sendEvolutionText({
         phone,
         text: `✅ *Vencimento Atualizado com Sucesso!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Conta:* ${matchedBill.counterparty_name}
+• *${isRec ? 'Recebível / Cliente' : 'Conta / Fornecedor'}:* ${matchedBill.counterparty_name}
 • *Novo Vencimento:* *${formatDueDateDetails(normalizedDate)}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 O lembrete da véspera foi reprogramado automaticamente (às 10h)!`,
@@ -1828,6 +2008,43 @@ Exemplo: *"Excluir conta da Sabesp"*`,
       await handleDueDateChange(client, phone, cleanPhone, rawSup, targetDate);
       return true;
     }
+  }
+
+  // H) Baixa de Pagamento ou Recebimento Conversacional
+  const markPaidMatch =
+    clean.match(/^(?:j[aá]\s+)?(?:paguei|quitei|liquidei|baixei|pago)\s+(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|a\s+|o\s+)?(.+)/i) ||
+    clean.match(/^(?:dar\s+)?baixa\s+(?:n[ao]|da|de|em|para)?\s*(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|a\s+|o\s+)?(.+)/i) ||
+    clean.match(/^(?:j[aá]\s+)?(?:recebi|recebido|recebimento)\s+(?:d[ao]|de|do\s+cliente|da\s+cliente)?\s*(.+)/i) ||
+    clean.match(/^(?:o\s+)?cliente\s+(.+?)\s+(?:já\s+)?pagou/i);
+
+  if (markPaidMatch) {
+    let target = markPaidMatch[1]?.replace(/[?.!]+$/, '').trim();
+    if (target && !['conta', 'contas', 'plano', 'planos'].includes(target)) {
+      await handleMarkBillPaid(client, phone, cleanPhone, target);
+      return true;
+    }
+  }
+
+  if (
+    clean === 'paguei' || clean === 'já paguei' || clean === 'ja paguei' ||
+    clean === 'baixar' || clean === 'dar baixa' || clean === 'baixa' ||
+    clean === 'recebi' || clean === 'já recebi' || clean === 'ja recebi' ||
+    clean === 'conta paga' || clean === 'já foi paga' || clean === 'ja foi paga' ||
+    clean === '1' && (clean.includes('paga') || clean.includes('recebi'))
+  ) {
+    await handleMarkBillPaid(client, phone, cleanPhone, '');
+    return true;
+  }
+
+  // I) Respostas de Auditoria de Contas Vencidas: Atrasada, Postergada, Cancelada
+  if (
+    clean === 'atrasada' || clean === 'está atrasada' || clean === 'esta atrasada' ||
+    clean === 'atrasou' || clean === 'marcar como atrasada' || clean === 'considerar atrasada' ||
+    clean.startsWith('atrasada ') || clean.startsWith('atrasado ') || clean === '2' && clean.includes('atras')
+  ) {
+    const supQuery = clean.replace(/^(?:marcar\s+como\s+|considerar\s+)?(?:atrasada|atrasado|está atrasada|esta atrasada)\s*(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|d[ao])?/i, '').trim();
+    const handledOverdue = await handleMarkBillOverdue(client, phone, cleanPhone, supQuery);
+    if (handledOverdue) return true;
   }
 
   return false;
@@ -3372,17 +3589,36 @@ Aguarde alguns segundos enquanto nossa inteligência artificial faz a leitura co
 
       const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
       const extraction = await extractDocumentWithGemini(base64, mimeType);
+
+      // Suporte a Conciliação de Extratos Bancários (PDF / Imagem)
+      if (extraction.is_bank_statement && Array.isArray(extraction.bank_transactions) && extraction.bank_transactions.length > 0) {
+        const reconRes = await reconcileBankTransactions({
+          clientId: null,
+          phone,
+          cleanPhone,
+          transactions: extraction.bank_transactions,
+          bankName: extraction.counterparty_name !== 'Desconhecido' ? extraction.counterparty_name : undefined,
+        });
+
+        await sendEvolutionText({
+          phone,
+          text: reconRes.summaryMessage,
+        });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+        return;
+      }
+
       const isFinancial =
         extraction.is_financial_doc !== false &&
-        (extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
+        (Boolean(extraction.is_bank_statement) || extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
 
       if (!isFinancial) {
         await sendEvolutionText({
           phone,
           text: `⚠️ *Documento não identificado como financeiro.*
-O arquivo enviado não parece ser um boleto, conta de consumo ou nota fiscal.
+O arquivo enviado não parece ser um boleto, conta de consumo, nota fiscal ou extrato bancário.
 
-Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para ver o robô funcionando em tempo real!`,
+Na nossa degustação gratuita, envie uma foto nítida de um boleto, NF ou extrato para ver o robô funcionando em tempo real!`,
         });
         return;
       }
@@ -3390,10 +3626,11 @@ Na nossa degustação gratuita, envie uma foto nítida de um boleto ou NF para v
       // Normaliza os campos para compatibilidade total entre extratores e formatadores
       const normalizedDoc = {
         ...extraction,
-        supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || 'Fornecedor',
+        supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || (extraction.entry_type === 'receivable' ? 'Cliente' : 'Fornecedor'),
         amount: extraction.total_amount !== undefined && extraction.total_amount !== null ? extraction.total_amount : (extraction as any).amount,
         document_type: extraction.doc_type || (extraction as any).document_type || 'Boleto/Conta',
-        category: extraction.category_suggestion || (extraction as any).category || null,
+        category: extraction.category_suggestion || (extraction as any).category || (extraction.entry_type === 'receivable' ? 'receita_operacional' : null),
+        entry_type: extraction.entry_type || 'payable',
       };
 
       // Registra que a degustação foi realizada
@@ -3945,6 +4182,24 @@ Se o volume da sua empresa aumentou e você deseja uma cota maior todo mês:
         .select()
         .single();
 
+      // Suporte a Conciliação de Extratos Bancários (PDF / Imagem) para Assinantes
+      if (extracted.is_bank_statement && Array.isArray(extracted.bank_transactions) && extracted.bank_transactions.length > 0) {
+        const reconRes = await reconcileBankTransactions({
+          clientId: client.id,
+          phone,
+          cleanPhone,
+          transactions: extracted.bank_transactions,
+          bankName: extracted.counterparty_name !== 'Desconhecido' ? extracted.counterparty_name : undefined,
+        });
+
+        await sendEvolutionText({
+          phone,
+          text: reconRes.summaryMessage,
+        });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+        return;
+      }
+
       if (extracted.confidence_score < 0.7) {
         await supabase.from('bot_action_confirmations').insert({
           client_id: client.id,
@@ -4104,14 +4359,16 @@ Mantivemos seu registro original ativo para evitar duplicidade de despesas e pro
         }
       }
 
+      const isReceivable = extracted.entry_type === 'receivable';
+
       await supabase.from('cash_ledger_entries').insert({
         client_id: client.id,
         document_id: docRecord?.id,
         entry_date: extracted.due_date || new Date().toISOString().split('T')[0],
-        description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}`,
-        amount: -Math.abs(Number(extracted.total_amount)),
-        entry_type: 'expense',
-        dre_group: extracted.category_suggestion || 'despesa_administrativa',
+        description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}${isReceivable ? ' (RECEBÍVEL)' : ''}`,
+        amount: isReceivable ? Math.abs(Number(extracted.total_amount)) : -Math.abs(Number(extracted.total_amount)),
+        entry_type: isReceivable ? 'income' : 'expense',
+        dre_group: extracted.category_suggestion || (isReceivable ? 'receita_operacional' : 'despesa_administrativa'),
         status: 'realizado',
       });
 
@@ -4225,7 +4482,7 @@ Na véspera de cada uma delas (às 10h em ponto) eu vou te avisar aqui para voc�
             client_id: client.id,
             document_id: docRecord?.id,
             counterparty_name: extracted.counterparty_name,
-            type: 'payable',
+            type: isReceivable ? 'receivable' : 'payable',
             amount: Number(extracted.total_amount),
             original_due_date: extracted.due_date,
             current_due_date: extracted.due_date,
@@ -4242,9 +4499,23 @@ Na véspera de cada uma delas (às 10h em ponto) eu vou te avisar aqui para voc�
           ? `🎁 _Lançado utilizando sua carteira de documentos extras (restam ${quotaCheck.extra_credits_remaining} extras válidos)._`
           : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
 
-      await sendEvolutionText({
-        phone,
-        text: `✅ *Lançamento registrado no Livro Caixa!*
+      if (isReceivable) {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Recebimento registrado no Livro Caixa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Cliente / Pagador:* ${extracted.counterparty_name}
+• *Valor a Receber:* R$ ${Number(extracted.total_amount).toFixed(2)}
+• *Previsão de Recebimento:* ${formattedDueDate}
+• *Classificação:* ${extracted.category_suggestion || 'Receita Operacional'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 O AnalisAí vai acompanhar esta entrada na sua agenda de recebíveis!
+${quotaFootnote}`,
+        });
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Lançamento registrado no Livro Caixa!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *Fornecedor:* ${extracted.counterparty_name}
 • *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
@@ -4252,7 +4523,8 @@ Na véspera de cada uma delas (às 10h em ponto) eu vou te avisar aqui para voc�
 • *Classificação:* ${extracted.category_suggestion}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${quotaFootnote}`,
-      });
+        });
+      }
 
       // PONTO 2: Modo Onisciência - Notifica o Dono em tempo real sobre ação da equipe
       if (isOperator && operatorRecord?.notify_owner_on_action !== false && client.whatsapp_number && client.whatsapp_number !== phone) {
