@@ -16,7 +16,8 @@ export function getGeminiClient() {
  */
 export async function extractDocumentWithGemini(
   fileBufferBase64: string,
-  mimeType: string
+  mimeType: string,
+  userInstruction?: string
 ): Promise<ExtractedDocumentData> {
   const genAI = getGeminiClient();
   const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
@@ -38,11 +39,11 @@ export async function extractDocumentWithGemini(
               },
               doc_type: {
                 type: SchemaType.STRING,
-                enum: ['nfe', 'nfse', 'boleto', 'recibo', 'cupom', 'outro'],
+                enum: ['nfe', 'nfse', 'boleto', 'recibo', 'cupom', 'das_mei', 'outro'],
               },
               counterparty_name: {
                 type: SchemaType.STRING,
-                description: 'Nome do fornecedor, prestador ou emissor',
+                description: 'Nome do fornecedor, prestador, órgão emissor ou Receita Federal',
               },
               tax_id: {
                 type: SchemaType.STRING,
@@ -63,10 +64,25 @@ export async function extractDocumentWithGemini(
                 description: 'Data de emissão no formato YYYY-MM-DD se identificável',
                 nullable: true,
               },
+              tax_competence: {
+                type: SchemaType.STRING,
+                description: 'Mês e ano da competência tributária de apuração (ex: 10/2026), especialmente para guias de tributos como DAS-MEI',
+                nullable: true,
+              },
               barcode_or_pix: {
                 type: SchemaType.STRING,
                 description:
-                  'Código de barras numérico legível (linha digitável bancária com 44, 47 ou 48 dígitos). NUNCA insira CNPJs ou CPFs aqui (coloque em pix_key se for Pix).',
+                  'Código de barras numérico legível (linha digitável bancária com 44, 47 ou 48 dígitos, ou arrecadação governamental iniciada com 8). NUNCA insira CNPJs ou CPFs aqui.',
+                nullable: true,
+              },
+              barcode: {
+                type: SchemaType.STRING,
+                description: 'Código de barras ou linha digitável de arrecadação governamental (iniciado pelo dígito 8)',
+                nullable: true,
+              },
+              pix_code: {
+                type: SchemaType.STRING,
+                description: 'Código copia-e-cola Pix presente no documento ou guia PGMEI',
                 nullable: true,
               },
               pix_key: {
@@ -144,6 +160,15 @@ export async function extractDocumentWithGemini(
                 },
                 nullable: true,
               },
+              installments_count: {
+                type: SchemaType.INTEGER,
+                description: 'Número de parcelas se indicado pelo usuário na legenda ou no documento (ex: se o usuário disse "dividido em 10x", retorne 10)',
+                nullable: true,
+              },
+              is_installment: {
+                type: SchemaType.BOOLEAN,
+                description: 'True se o documento ou a legenda do usuário indicar que é um pagamento parcelado',
+              },
               entry_type: {
                 type: SchemaType.STRING,
                 enum: ['payable', 'receivable'],
@@ -217,9 +242,37 @@ DIRETRIZES DE EXTRAÇÃO:
 7. SEGUROS E CARNÊS DE PAGAMENTO (is_insurance & installments):
    - Se o documento for de uma seguradora (ex: Tokio Marine Seguradora, Porto Seguro, Azul, Allianz, etc.), marque is_insurance = true e category_suggestion = 'seguro'.
    - OBRIGATÓRIO: Se o documento contiver um carnê, histórico de parcelas ou tabela de pagamento parcelado (ex: 12 parcelas mensais), você DEVE extrair TODAS as parcelas dentro do array "installments" com installment_number, due_date (YYYY-MM-DD) e amount de cada parcela!
-8. Se o documento NÃO for financeiro (ex: foto de objeto, pessoa, paisagem, meme, documento não financeiro ou ilegível), defina is_financial_doc = false.
-9. Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.`,
+8. GUIA DAS-MEI / PGMEI / TRIBUTOS DO SIMPLES NACIONAL (doc_type = 'das_mei'):
+   - Caso o documento seja o Documento de Arrecadação do Simples Nacional (DAS, DAS-MEI ou PGMEI emitido pela Receita Federal):
+   - Defina doc_type = 'das_mei', entry_type = 'payable' e category_suggestion = 'tributos'.
+   - O favorecido/fornecedor (counterparty_name) deve ser 'Receita Federal (DAS-MEI)'.
+   - Capture a competência de apuração no campo tax_competence (ex: '10/2026' ou o mês/ano discriminado no período de apuração).
+   - O vencimento oficial geralmente é o dia 20 (YYYY-MM-20).
+   - Capture a linha digitável de arrecadação governamental (iniciada pelo dígito 8, com 48 dígitos) em barcode e barcode_or_pix.
+   - Capture o código copia-e-cola Pix presente na guia PGMEI em pix_code e pix_key.
+9. Se o documento NÃO for financeiro (ex: foto de objeto, pessoa, paisagem, meme, documento não financeiro ou ilegível), defina is_financial_doc = false.
+10. Se a imagem estiver cortada, borrada ou dados ambíguos, indique confidence_score < 0.7.
+11. INSTRUÇÃO OU LEGENDA CONTEXTUAL DO USUÁRIO (PARCELAMENTO E NOTAS FISCAIS):
+    - O usuário pode enviar a foto de uma Nota Fiscal (NF-e, NFC-e, NFS-e), boleto ou cupom fiscal acompanhada de uma legenda com orientações (ex: "valor total dividido em 10x", "parcelar em 3 vezes", "paguei no pix", "metade entrada e metade no cartão").
+    - Você DEVE considerar a legenda do usuário com prioridade máxima para entender as condições comerciais.
+    - Se a legenda indicar parcelamento (ex: "em 10x", "dividido em 10 vezes", "10 parcelas"):
+      a) Defina is_installment = true;
+      b) Defina installments_count com o número de parcelas indicado (ex: 10);
+      c) Extraia o valor total da nota em total_amount;
+      d) No array installments, se as datas não estiverem explícitas no documento, gere as N parcelas consecutivas a cada 30 dias a partir da data de vencimento da 1ª parcela (ou data da emissão + 30 dias), com o valor unitário igual a (total_amount / N);
+    - NUNCA diga que não consegue ler Nota Fiscal! Notas Fiscais e Danfes são documentos financeiros primários suportados. Extraia sempre o emitente/fornecedor (counterparty_name), CNPJ (tax_id), valor total (total_amount) e data.
+12. EXTRAÇÃO DE NOTAS FISCAIS E DANFEs (NF-e, NFC-e, NFS-e, DANFE):
+    - VALOR TOTAL (total_amount): O valor monetário total NUNCA deve ser retornado como 0 ou nulo se houver valores legíveis no documento.
+      Busque com prioridade máxima o campo "VALOR TOTAL DA NOTA", "VALOR TOTAL DOS PRODUTOS", "VALOR TOTAL DOS SERVIÇOS", "TOTAL A PAGAR" ou "VALOR LÍQUIDO".
+    - FORNECEDOR / EMITENTE (counterparty_name): Extraia a Razão Social ou Nome Fantasia da empresa que emitiu o documento fiscal (quadro "EMITENTE", "PRESTADOR DE SERVIÇOS" ou cabeçalho da nota). NUNCA utilize termos de forma de pagamento (como "Cartão", "Boleto", "Pix", "Parcela") como nome de fornecedor!
+    - DATA DE EMISSÃO (issue_date): Extraia a data de emissão impressa no documento fiscal (YYYY-MM-DD).
+    - DATA DE VENCIMENTO (due_date): Se a nota tiver quadro de faturas/duplicatas, capture o vencimento. Se não tiver vencimento explícito, preencha com a data de emissão.`,
       });
+
+      let promptText = 'Analise este documento fiscal/financeiro e retorne os dados contábeis estruturados.';
+      if (userInstruction && userInstruction.trim().length > 0) {
+        promptText += `\n\nLEGENDA / INSTRUÇÃO DO USUÁRIO ENVIADA JUNTO AO DOCUMENTO:\n"${userInstruction.trim()}"\nConsidere com máxima prioridade as instruções do usuário acima (ex: parcelamento, divisão de valores, condição de pagamento).`;
+      }
 
       const result = await model.generateContent([
         {
@@ -229,7 +282,7 @@ DIRETRIZES DE EXTRAÇÃO:
           },
         },
         {
-          text: 'Analise este documento fiscal/financeiro e retorne os dados contábeis estruturados.',
+          text: promptText,
         },
       ]);
 
@@ -375,18 +428,26 @@ Você DEVE identificar e incluir CADA UMA das contas citadas como um item indivi
 
 REGRAS PARA CADA ITEM EM 'entries':
 1. 'supplier_or_customer': Nome LIMPO, DIRETO e CURTO em português do favorecido ou compromisso.
-   Exemplos: "Contabilivre", "Vivo", "CPFL Piratininga", "Sabesp", "Pensão Alimentícia", "Empréstimo Irmão".
+   Exemplos: "Contabilivre", "Vivo", "CPFL Piratininga", "Sabesp", "Pensão Alimentícia", "Cartão de Crédito".
    NUNCA adicione frases longas, explicações ou termos em inglês como "primary supplier" ou "standard output".
 2. 'amount': Valor numérico em reais (ex: 170, 90, 85, 1200, 500). Se for aproximado ("uns 90 reais", "valor aproximado"), use o valor citado e marque is_provision = true.
-3. 'due_date': Data no formato YYYY-MM-DD calculada a partir de ${referenceDateStr}:
+   REGRA VITAL DE VALOR: Se o usuário NÃO informou o valor na frase (ex: "parcelado em 10x no cartão a começar em janeiro"), deixe amount = null e MARQUE OBRIGATORIAMENTE needs_clarification = true!
+3. 'due_date': Data no formato YYYY-MM-DD calculada com rigor a partir de ${referenceDateStr}:
+   - NUNCA invente anos do passado (como 2024, 2023, 2022).
    - Se disser "todo dia 10", "dia 10": se o dia 10 já passou ou é hoje em ${referenceDateStr}, use o dia 10 do mês seguinte; senão use o mês atual.
    - Se disser "todo dia 21", "dia 21": se dia 21 já passou em ${referenceDateStr}, use o dia 21 do mês seguinte; senão use o mês atual.
    - Se disser "todo dia 3", "dia 3": se dia 3 já passou em ${referenceDateStr}, use o dia 3 do mês seguinte; senão use o mês atual.
+   - Se disser "a começar em janeiro", "a partir de janeiro", "em janeiro": como hoje estamos no ano de ${referenceDateStr}, se o mês citado (janeiro) for anterior ao mês atual, o vencimento é no ano seguinte (ex: 2027). Se o usuário não disser o dia exato (ex: dia 10, dia 20), deixe due_date = null e marque needs_clarification = true para perguntar o dia do vencimento da fatura!
 4. 'entry_type': 'payable' para contas a pagar/despesas, 'receivable' para receitas.
 5. 'is_provision': true para valores aproximados ou contas de consumo variáveis; false para valores fixos definidos.
 6. 'is_recurring': true para contas pagas mensalmente ("todo mês", "todo dia X").
 7. 'recurrence_day': número do dia informado (ex: 10, 21, 3).
-8. 'barcode_or_pix': Se o usuário ditar ou escrever um código de barras, linha digitável ou chave Pix (ex: "com código de barras 8467...", "chave pix CNPJ tal"), extraia no campo barcode_or_pix de cada conta correspondente apenas os dígitos ou chave limpa.`,
+8. 'barcode_or_pix': Se o usuário ditar ou escrever um código de barras, linha digitável ou chave Pix (ex: "com código de barras 8467...", "chave pix CNPJ tal"), extraia no campo barcode_or_pix de cada conta correspondente apenas os dígitos ou chave limpa.
+9. CLARIFICAÇÃO PRÓ-ATIVA (needs_clarification):
+   Se o usuário quer lançar uma compra parcelada ou despesa mas faltou o valor ou o dia do vencimento, defina needs_clarification = true e elabore em clarification_prompt uma pergunta curta, acolhedora e direta em português perguntando os dados faltantes.
+10. INTENÇÃO DE CADASTRO/LANÇAMENTO SEM DADOS COMPLETOS (ex: "quero inserir uma conta a pagar", "preciso cadastrar uma conta", "como lanço uma conta", "quero lançar uma despesa"):
+   Marque is_financial_entry = true, needs_clarification = true e em clarification_prompt envie:
+   "Com certeza! Para eu registrar sua conta a pagar, me diz: quem é o fornecedor, qual o valor e qual a data de vencimento? Se já foi paga ou se foi parcelada, me avisa também. Pode me mandar tudo em texto ou áudio!"`,
       });
 
       const result = await model.generateContent(`Mensagem do usuário: "${userText}"`);
@@ -415,9 +476,10 @@ REGRAS PARA CADA ITEM EM 'entries':
 
       parsed.entries = normalizedEntries;
 
+      const hasValidAmount = normalizedEntries.some((e) => e.amount && Number(e.amount) > 0);
+
       if (parsed.entries.length > 0) {
         parsed.is_financial_entry = true;
-        parsed.needs_clarification = false;
         const first = parsed.entries[0];
         parsed.supplier_or_customer = first.supplier_or_customer;
         parsed.amount = first.amount;
@@ -425,6 +487,15 @@ REGRAS PARA CADA ITEM EM 'entries':
         parsed.entry_type = first.entry_type;
         parsed.category_suggestion = first.category_suggestion;
         parsed.is_provision = first.is_provision;
+
+        // Se NÃO há valor monetário válido em nenhuma entrada, OBRIGA clarification
+        if (!hasValidAmount) {
+          parsed.needs_clarification = true;
+          if (!parsed.clarification_prompt) {
+            const entity = first.supplier_or_customer || 'sua compra';
+            parsed.clarification_prompt = `Identifiquei o lançamento de *${entity}*, mas não encontrei o valor da compra. Qual é o valor total ou de cada parcela?`;
+          }
+        }
       }
 
       return parsed;
@@ -892,3 +963,339 @@ Se a mensagem for apenas um novo lançamento ou bate-papo, retorne has_correctio
     due_date_changes: [],
   };
 }
+
+export interface InvoicePaymentResolution {
+  is_understood: boolean;
+  needs_clarification?: boolean;
+  clarification_question?: string | null;
+  payment_condition: 'already_paid' | 'installments' | 'future_single';
+  payment_method: 'credit_card' | 'pix' | 'debit_card' | 'cash' | 'boleto' | 'transfer' | 'other';
+  total_amount: number;
+  total_installments: number;
+  paid_installments_count: number;
+  remaining_installments_count: number;
+  installment_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  first_upcoming_due_date?: string | null;
+  paid_date?: string | null;
+  upcoming_installments: Array<{
+    installment_number: number;
+    amount: number;
+    due_date: string;
+  }>;
+  past_installments: Array<{
+    installment_number: number;
+    amount: number;
+    paid_date: string;
+  }>;
+  summary_explanation: string;
+  category_override?: string | null;
+}
+
+/**
+ * 6. Interpretador Consultivo Preditivo de Pagamento de Nota Fiscal em Linguagem Natural
+ * Analisa respostas de voz ou texto sobre quitação, parcelamento, início dos pagamentos e parcelas passadas/futuras.
+ */
+export async function parseInvoicePaymentResolution(
+  userText: string,
+  invoiceContext: {
+    total_amount: number;
+    issue_date?: string | null;
+    counterparty_name?: string | null;
+    category_suggestion?: string | null;
+    known_payment_method?: string | null;
+    known_total_installments?: number | null;
+    known_payment_condition?: string | null;
+  }
+): Promise<InvoicePaymentResolution> {
+  const genAI = getGeminiClient();
+  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+  const todayStr = new Date().toISOString().split('T')[0];
+  const totalAmount = Math.abs(Number(invoiceContext.total_amount || 0));
+  const issueDateStr = invoiceContext.issue_date || todayStr;
+
+  let knownContextNotes = '';
+  if (invoiceContext.known_payment_method || invoiceContext.known_total_installments) {
+    knownContextNotes = `
+DADOS JÁ APURADOS EM MENSAGENS ANTERIORES DESTE MESMO DOCUMENTO:
+- Método já informado: ${invoiceContext.known_payment_method || 'Não especificado'}
+- Total de parcelas já informado: ${invoiceContext.known_total_installments || 'Não especificado'}
+Combine a nova resposta do usuário com esses dados prévios sem esquecê-los.`;
+  }
+
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: ({
+            type: SchemaType.OBJECT,
+            properties: {
+              is_understood: {
+                type: SchemaType.BOOLEAN,
+                description: 'True se a fala do usuário fornece informações suficientes ou se identificou a intenção financeira sobre a forma de pagamento',
+              },
+              needs_clarification: {
+                type: SchemaType.BOOLEAN,
+                description: 'True se ainda faltam informações essenciais para registrar com segurança (ex: faltou o dia de vencimento da fatura do cartão; ou se a nota é de data passada e o usuário disse que começou em janeiro, mas não esclareceu se começou naquele ano passado ou no futuro, nem quantas parcelas já foram pagas).',
+              },
+              clarification_question: {
+                type: SchemaType.STRING,
+                description: 'Pergunta conversacional natural, empática, em português do Brasil, fazendo a pergunta exata necessária para obter o dado faltante de forma direta e acolhedora.',
+                nullable: true,
+              },
+              payment_condition: {
+                type: SchemaType.STRING,
+                enum: ['already_paid', 'installments', 'future_single'],
+                description: 'already_paid se já foi paga/quitada totalmente à vista. installments se foi parcelada em 2 ou mais vezes. future_single se é pagamento único a vencer no futuro.',
+              },
+              payment_method: {
+                type: SchemaType.STRING,
+                enum: ['credit_card', 'pix', 'debit_card', 'cash', 'boleto', 'transfer', 'other'],
+                description: 'Forma ou método de pagamento mencionado pelo usuário',
+              },
+              total_installments: {
+                type: SchemaType.INTEGER,
+                description: 'Número total de parcelas da compra (ex: 10 para 10x, 1 para à vista)',
+              },
+              paid_installments_count: {
+                type: SchemaType.INTEGER,
+                description: 'Quantas parcelas já foram quitadas/pagas no passado (ex: se já pagou a 1ª, retorne 1; se não pagou nenhuma, retorne 0)',
+              },
+              remaining_installments_count: {
+                type: SchemaType.INTEGER,
+                description: 'Quantas parcelas faltam vencer e precisam ser provisionadas no contas a pagar futuro',
+              },
+              first_upcoming_due_date: {
+                type: SchemaType.STRING,
+                description: 'Data YYYY-MM-DD em que vencerá a próxima parcela a pagar (ou parcela única futura). NUNCA invente anos passados como 2024.',
+                nullable: true,
+              },
+              paid_date: {
+                type: SchemaType.STRING,
+                description: 'Data YYYY-MM-DD do pagamento à vista ou do início das parcelas passadas',
+                nullable: true,
+              },
+              summary_explanation: {
+                type: SchemaType.STRING,
+                description: 'Resumo amigável em português explicando o entendimento do AnalisAí (ex: "Compra parcelada em 10x no cartão, 8 já pagas e 2 a vencer a partir de 15/11")',
+              },
+              category_override: {
+                type: SchemaType.STRING,
+                description: 'Se o usuário mencionou categoria ou tipo de gasto específico na resposta',
+                nullable: true,
+              },
+            },
+            required: [
+              'is_understood',
+              'needs_clarification',
+              'payment_condition',
+              'payment_method',
+              'total_installments',
+              'paid_installments_count',
+              'remaining_installments_count',
+              'summary_explanation',
+            ],
+          } as any),
+        },
+        systemInstruction: `Você é o parceiro e consultor financeiro preditivo do AnalisAí.
+Sua missão é dialogar de forma 100% natural, humana e acolhedora com o usuário para entender como uma Nota Fiscal foi ou será paga.
+
+CONTEXTO DA NOTA FISCAL:
+- Valor Total: R$ ${totalAmount.toFixed(2)}
+- Data de Emissão da NF: ${issueDateStr}
+- Fornecedor: ${invoiceContext.counterparty_name || 'Fornecedor'}
+- Data Atual de Hoje: ${todayStr}${knownContextNotes}
+
+DIRETRIZES DE INTELIGÊNCIA TEMPORAL E CONVERSAÇÃO NATURAL:
+1. COMPRA JÁ QUITADA À VISTA:
+   - Se o usuário disser que já pagou, pagou no Pix, no débito, em dinheiro, à vista, quitou no dia da nota ou hoje:
+     - payment_condition = 'already_paid'
+     - total_installments = 1
+     - paid_installments_count = 1
+     - remaining_installments_count = 0
+     - needs_clarification = false
+     - summary_explanation = "Compra quitada integralmente."
+
+2. COMPRA PARCELADA (CARTÃO OU BOLETO):
+   - Se o usuário disser que foi parcelada (ex: "em 10x no cartão", "foi parcelado no cartão em 10 vezes a começar em janeiro"):
+     - payment_condition = 'installments'
+     - total_installments = número de parcelas informado (ex: 10)
+     - payment_method = 'credit_card' (ou 'boleto' se citado)
+
+     ⚠️ ANÁLISE CRÍTICA DE TEMPORALIDADE E DATAS PASSADAS:
+     a) Se a nota fiscal foi emitida no passado (ex: ano anterior como 2025 ou meses atrás) e o usuário disser "a começar em janeiro":
+        Note que "janeiro" pode ter sido janeiro do ano da emissão (onde parcelas já foram pagas no passado) ou janeiro do ano futuro!
+        Além disso, se ele não disse qual o dia do mês que vence a fatura do cartão:
+        -> Defina needs_clarification = true
+        -> Em clarification_question, pergunte com naturalidade e simpatia:
+           "Entendi, 10x no cartão de crédito começando em janeiro! Como essa nota fiscal é de ${issueDateStr}, me confirma dois detalhezinhos rápidos:\n1️⃣ Esse parcelamento começou lá atrás em janeiro daquele ano e você já pagou alguma (ou várias) parcelas, ou vai começar a vencer agora?\n2️⃣ Qual o melhor dia em que costuma vencer a fatura do seu cartão (ex: dia 10, dia 15)?"
+     
+     b) Se o usuário informou o parcelamento, mas NÃO informou o dia do vencimento da fatura/parcela nem se já foi paga alguma:
+        -> Defina needs_clarification = true
+        -> clarification_question = "Perfeito, ${totalAmount > 0 ? `R$ ${totalAmount.toFixed(2)}` : ''} parcelado no cartão! Qual é o melhor dia do mês em que vence a fatura do seu cartão (ex: dia 10, dia 15) e se alguma parcela já foi paga no passado?"
+
+     c) Se o usuário já esclareceu quantas parcelas já foram pagas e o dia de vencimento (ex: "começou em janeiro de 2025, já paguei 8 parcelas, vence dia 15" ou "já paguei 8, faltam 2, vence dia 15"):
+        -> paid_installments_count = quantidade já paga (ex: 8)
+        -> remaining_installments_count = total_installments - paid_installments_count (ex: 2)
+        -> first_upcoming_due_date = calcule a data exata da próxima parcela a vencer no ano corrente/futuro a partir de ${todayStr} (ex: se hoje é outubro/2026 e vence dia 15, a próxima é 2026-11-15). NUNCA GERE ANOS PASSADOS (2024, 2023)!
+        -> needs_clarification = false
+        -> summary_explanation = "Parcelamento de 10x no cartão de crédito: 8 parcelas anteriores já quitadas no histórico e 2 parcelas restantes a vencer a partir do próximo vencimento."
+
+3. COMPRA FATURADA A PRAZO (PARCELA ÚNICA):
+   - Se disser "é boleto pra 30 dias", "vence dia 25 do mês que vem", "ainda não paguei, vence dia X":
+     - payment_condition = 'future_single'
+     - total_installments = 1
+     - paid_installments_count = 0
+     - remaining_installments_count = 1
+     - Se o dia do vencimento foi informado: needs_clarification = false
+     - Se não foi informado quando vence: needs_clarification = true, perguntando o dia do vencimento.
+
+4. SE O USUÁRIO DISSER QUE JÁ QUITOU TODAS AS PARCELAS:
+   - Se disser "já paguei todas", "já foi totalmente paga":
+     - payment_condition = 'already_paid'
+     - total_installments = invoiceContext.known_total_installments || 1
+     - paid_installments_count = total_installments
+     - remaining_installments_count = 0
+     - needs_clarification = false
+
+5. Responda estritamente no JSON do schema estruturado.`,
+      });
+
+      const res = await model.generateContent(`Resposta do usuário sobre o pagamento da Nota Fiscal: "${userText}"`);
+      const txt = res.response.text();
+      const parsed = JSON.parse(txt);
+
+      const totalInsts = Math.max(1, Number(parsed.total_installments || invoiceContext.known_total_installments || 1));
+      let paidCount = Math.min(totalInsts, Math.max(0, Number(parsed.paid_installments_count || 0)));
+      let remainingCount = Math.max(0, totalInsts - paidCount);
+
+      if (parsed.payment_condition === 'already_paid') {
+        paidCount = totalInsts;
+        remainingCount = 0;
+      }
+
+      // Cálculo matemático das parcelas
+      const rawInstVal = Math.round((totalAmount / totalInsts) * 100) / 100;
+      const totalRounded = rawInstVal * totalInsts;
+      const diffCentavos = Math.round((totalAmount - totalRounded) * 100) / 100;
+
+      // Base date para cálculo de datas futuras
+      let baseUpcomingDateStr = parsed.first_upcoming_due_date;
+      if (!baseUpcomingDateStr) {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        baseUpcomingDateStr = d.toISOString().split('T')[0];
+      }
+
+      // Garante que a data futura nunca seja no passado
+      if (baseUpcomingDateStr < todayStr) {
+        const [pY, pM, pD] = baseUpcomingDateStr.split('-').map(Number);
+        const [tY, tM, tD] = todayStr.split('-').map(Number);
+        let correctedMonth = tM;
+        let correctedYear = tY;
+        if (pD <= tD) {
+          correctedMonth += 1;
+          if (correctedMonth > 12) {
+            correctedMonth = 1;
+            correctedYear += 1;
+          }
+        }
+        baseUpcomingDateStr = `${correctedYear}-${String(correctedMonth).padStart(2, '0')}-${String(pD).padStart(2, '0')}`;
+      }
+
+      const [bYear, bMonth, bDay] = baseUpcomingDateStr.split('-').map(Number);
+
+      const upcoming_installments: Array<{ installment_number: number; amount: number; due_date: string }> = [];
+      for (let i = 0; i < remainingCount; i++) {
+        const instNum = paidCount + i + 1;
+        const targetMonth = bMonth - 1 + i;
+        const dateObj = new Date(bYear, targetMonth, bDay || 1);
+        const yStr = dateObj.getFullYear();
+        const mStr = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dStr = String(dateObj.getDate()).padStart(2, '0');
+        const dueDate = `${yStr}-${mStr}-${dStr}`;
+
+        const isLastOfAll = instNum === totalInsts;
+        const thisAmount = isLastOfAll ? Math.round((rawInstVal + diffCentavos) * 100) / 100 : rawInstVal;
+
+        upcoming_installments.push({
+          installment_number: instNum,
+          amount: thisAmount,
+          due_date: dueDate,
+        });
+      }
+
+      const past_installments: Array<{ installment_number: number; amount: number; paid_date: string }> = [];
+      const pastPaidBase = parsed.paid_date || issueDateStr;
+      const [pYear, pMonth, pDay] = pastPaidBase.split('-').map(Number);
+
+      for (let i = 0; i < paidCount; i++) {
+        const instNum = i + 1;
+        const targetMonth = pMonth - 1 + i;
+        const dateObj = new Date(pYear, targetMonth, pDay || 1);
+        const yStr = dateObj.getFullYear();
+        const mStr = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dStr = String(dateObj.getDate()).padStart(2, '0');
+        const pDate = `${yStr}-${mStr}-${dStr}`;
+
+        const isLastOfAll = instNum === totalInsts;
+        const thisAmount = isLastOfAll ? Math.round((rawInstVal + diffCentavos) * 100) / 100 : rawInstVal;
+
+        past_installments.push({
+          installment_number: instNum,
+          amount: thisAmount,
+          paid_date: pDate,
+        });
+      }
+
+      const paidAmount = past_installments.reduce((acc, cur) => acc + cur.amount, 0);
+      const remainingAmount = upcoming_installments.reduce((acc, cur) => acc + cur.amount, 0);
+
+      return {
+        is_understood: Boolean(parsed.is_understood),
+        needs_clarification: Boolean(parsed.needs_clarification),
+        clarification_question: parsed.clarification_question || null,
+        payment_condition: parsed.payment_condition || 'installments',
+        payment_method: parsed.payment_method || invoiceContext.known_payment_method || 'credit_card',
+        total_amount: totalAmount,
+        total_installments: totalInsts,
+        paid_installments_count: paidCount,
+        remaining_installments_count: remainingCount,
+        installment_amount: rawInstVal,
+        paid_amount: Math.round(paidAmount * 100) / 100,
+        remaining_amount: Math.round(remainingAmount * 100) / 100,
+        first_upcoming_due_date: upcoming_installments[0]?.due_date || parsed.first_upcoming_due_date || null,
+        paid_date: parsed.paid_date || issueDateStr,
+        upcoming_installments,
+        past_installments,
+        summary_explanation: parsed.summary_explanation || 'Condição de pagamento interpretada com sucesso.',
+        category_override: parsed.category_override || null,
+      };
+    } catch (err) {
+      console.warn(`[parseInvoicePaymentResolution] Erro no modelo ${modelName}:`, err);
+    }
+  }
+
+  // Fallback padrão se todos os modelos falharem
+  return {
+    is_understood: false,
+    needs_clarification: true,
+    clarification_question: `Entendi que você enviou informações sobre a compra de R$ ${totalAmount.toFixed(2)}, mas não consegui identificar todos os detalhes. Poderia me confirmar se foi à vista ou parcelada, e para quando é o vencimento?`,
+    payment_condition: 'installments',
+    payment_method: 'other',
+    total_amount: totalAmount,
+    total_installments: 1,
+    paid_installments_count: 0,
+    remaining_installments_count: 1,
+    installment_amount: totalAmount,
+    paid_amount: 0,
+    remaining_amount: totalAmount,
+    upcoming_installments: [{ installment_number: 1, amount: totalAmount, due_date: todayStr }],
+    past_installments: [],
+    summary_explanation: 'Não foi possível interpretar a resposta automaticamente.',
+  };
+}
+

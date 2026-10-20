@@ -19,26 +19,118 @@ export interface TaxRevenueStatus {
   miniBadge: string;
 }
 
+interface CachedRegimeLimit {
+  code: 'mei' | 'simples_me' | 'simples_epp';
+  name: string;
+  annualLimit: number;
+  toleranceLimit: number;
+  monthlyAverageMax: number;
+  maxEmployees: number;
+}
+
+let cachedLimits: Record<string, CachedRegimeLimit> | null = null;
+let lastCacheFetchTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memória
+
+/**
+ * Busca os limites tributários parametrizados na tabela tax_regime_limits com cache em memória
+ * e suporte a fallback configurável via variável de ambiente (MEI_ANNUAL_LIMIT)
+ */
+export async function getParametrizedTaxRegimeLimits(
+  regimeCode: 'mei' | 'simples_me' | 'simples_epp' = 'mei'
+): Promise<CachedRegimeLimit> {
+  const now = Date.now();
+  if (cachedLimits && now - lastCacheFetchTime < CACHE_TTL_MS && cachedLimits[regimeCode]) {
+    return cachedLimits[regimeCode];
+  }
+
+  const fallbackMeiLimit = Number(process.env.MEI_ANNUAL_LIMIT) || 140000;
+
+  const defaultConfigs: Record<string, CachedRegimeLimit> = {
+    mei: {
+      code: 'mei',
+      name: 'MEI (Microempreendedor Individual)',
+      annualLimit: fallbackMeiLimit,
+      toleranceLimit: Math.round(fallbackMeiLimit * 1.2),
+      monthlyAverageMax: Math.round(fallbackMeiLimit / 12),
+      maxEmployees: 2,
+    },
+    simples_me: {
+      code: 'simples_me',
+      name: 'Simples Nacional — ME (Microempresa)',
+      annualLimit: 360000,
+      toleranceLimit: 432000,
+      monthlyAverageMax: 30000,
+      maxEmployees: 999,
+    },
+    simples_epp: {
+      code: 'simples_epp',
+      name: 'Simples Nacional — EPP (Pequeno Porte)',
+      annualLimit: 4800000,
+      toleranceLimit: 5760000,
+      monthlyAverageMax: 400000,
+      maxEmployees: 999,
+    },
+  };
+
+  try {
+    const supabase = createServiceRoleClient();
+    const { data: dbLimits, error } = await supabase
+      .from('tax_regime_limits')
+      .select('regime, annual_limit, tolerance_limit, max_employees, description');
+
+    if (!error && Array.isArray(dbLimits) && dbLimits.length > 0) {
+      const parsed: Record<string, CachedRegimeLimit> = { ...defaultConfigs };
+
+      for (const row of dbLimits) {
+        const key = (row.regime || '').toLowerCase();
+        const baseKey = key.includes('mei') ? 'mei' : key.includes('epp') ? 'simples_epp' : 'simples_me';
+        const annLim = Number(row.annual_limit) || defaultConfigs[baseKey].annualLimit;
+        const tolLim = Number(row.tolerance_limit) || Math.round(annLim * 1.2);
+
+        parsed[baseKey] = {
+          code: baseKey as any,
+          name: defaultConfigs[baseKey].name,
+          annualLimit: annLim,
+          toleranceLimit: tolLim,
+          monthlyAverageMax: Math.round(annLim / 12),
+          maxEmployees: Number(row.max_employees) || defaultConfigs[baseKey].maxEmployees,
+        };
+      }
+
+      cachedLimits = parsed;
+      lastCacheFetchTime = now;
+      return parsed[regimeCode] || parsed.mei;
+    }
+  } catch (err) {
+    console.warn('[Tax Meter] Erro ao buscar tax_regime_limits, usando fallbacks:', err);
+  }
+
+  cachedLimits = defaultConfigs;
+  lastCacheFetchTime = now;
+  return defaultConfigs[regimeCode] || defaultConfigs.mei;
+}
+
 export const TAX_CONFIGS = {
   mei: {
     code: 'mei' as const,
     name: 'MEI (Microempreendedor Individual)',
-    annualLimit: 81000, // R$ 81.000,00 anuais
-    toleranceLimit: 97200, // Tolerância de até 20% (R$ 97.200,00)
-    monthlyAverageMax: 6750, // Média mensal esperada
+    annualLimit: Number(process.env.MEI_ANNUAL_LIMIT) || 140000,
+    toleranceLimit: Math.round((Number(process.env.MEI_ANNUAL_LIMIT) || 140000) * 1.2),
+    monthlyAverageMax: Math.round((Number(process.env.MEI_ANNUAL_LIMIT) || 140000) / 12),
   },
   simples_me: {
     code: 'simples_me' as const,
     name: 'Simples Nacional — ME (Microempresa)',
-    annualLimit: 360000, // R$ 360.000,00 anuais
-    toleranceLimit: 432000, // Tolerância de até 20% (R$ 432.000,00)
+    annualLimit: 360000,
+    toleranceLimit: 432000,
     monthlyAverageMax: 30000,
   },
   simples_epp: {
     code: 'simples_epp' as const,
     name: 'Simples Nacional — EPP (Pequeno Porte)',
-    annualLimit: 4800000, // R$ 4.800.000,00 anuais
-    toleranceLimit: 4800000,
+    annualLimit: 4800000,
+    toleranceLimit: 5760000,
     monthlyAverageMax: 400000,
   },
 };
@@ -133,7 +225,7 @@ export async function getTaxRevenueTracking(params: {
     }
   }
 
-  const config = TAX_CONFIGS[taxRegimeCode] || TAX_CONFIGS.mei;
+  const config = await getParametrizedTaxRegimeLimits(taxRegimeCode);
   const totalRevenue = baselineRevenue + systemRevenue;
   const percentage = Math.min(150, Math.round((totalRevenue / config.annualLimit) * 100));
   const remaining = Math.max(0, config.annualLimit - totalRevenue);

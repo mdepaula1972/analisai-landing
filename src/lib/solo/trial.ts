@@ -382,6 +382,17 @@ export async function recordMultipleTrialUsage(
 ): Promise<void> {
   if (!entries || entries.length === 0) return;
 
+  // BARREIRA DE CONFIABILIDADE: NUNCA grava lançamentos sem valor monetário positivo (> 0)
+  const validEntries = entries.filter((e) => {
+    const val = Number(e?.amount);
+    return !isNaN(val) && val > 0 && e?.due_date;
+  });
+
+  if (validEntries.length === 0) {
+    console.warn('[Trial Leads Protection] Tentativa de gravar entradas sem valor monetário positivo bloqueada:', entries);
+    return;
+  }
+
   const supabase = createServiceRoleClient();
   const cleanPhone = phone.replace(/\D/g, '');
   const current = await checkTrialStatus(cleanPhone);
@@ -394,11 +405,11 @@ export async function recordMultipleTrialUsage(
 
   const billsList: any[] = Array.isArray(leadRecord?.bills_list) ? [...leadRecord.bills_list] : [];
 
-  for (const entry of entries) {
+  for (const entry of validEntries) {
     const supplier = (entry.supplier_or_customer || entry.supplier_name || 'Fornecedor').trim();
     const isProvision = Boolean(entry.is_provision);
-    const amountVal = entry.amount ? Number(entry.amount) : null;
-    const dueDateVal = entry.due_date || null;
+    const amountVal = Number(entry.amount);
+    const dueDateVal = entry.due_date;
 
     // Tenta conciliar com provisão anterior se houver
     let reconciled = false;
@@ -455,9 +466,9 @@ export async function recordMultipleTrialUsage(
     }
   }
 
-  const newCount = (leadRecord?.trial_docs_count || current.docsCount || 0) + entries.length;
+  const newCount = (leadRecord?.trial_docs_count || current.docsCount || 0) + validEntries.length;
   const newLimit = grantedLimit || leadRecord?.trial_docs_limit || current.docsLimit || 10;
-  const lastEntry = entries[entries.length - 1];
+  const lastEntry = validEntries[validEntries.length - 1];
 
   await supabase
     .from('trial_leads')
@@ -467,8 +478,8 @@ export async function recordMultipleTrialUsage(
         doc_processed: true,
         doc_data: lastEntry,
         supplier_name: lastEntry.supplier_or_customer || lastEntry.supplier_name || null,
-        amount: lastEntry.amount ? Number(lastEntry.amount) : null,
-        due_date: lastEntry.due_date || null,
+        amount: Number(lastEntry.amount),
+        due_date: lastEntry.due_date,
         barcode_or_pix: lastEntry.barcode_or_pix || null,
         trial_docs_count: newCount,
         trial_docs_limit: newLimit,
@@ -524,38 +535,6 @@ Ficou com alguma dúvida ou quer saber o que mais posso fazer pela sua empresa? 
 
 👉 *Para começar agora mesmo:*
 Envie uma foto de um **boleto** ou mande um áudio/texto dizendo suas contas. Em segundos eu organizo tudo para você! 🚀`;
-    }
-
-    // 2. Verifica se o lead veio por indicação pré-cadastrada de cliente
-    const { data: lead } = await supabase
-      .from('trial_leads')
-      .select('referrer_phone')
-      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
-      .limit(1)
-      .maybeSingle();
-
-    if (lead?.referrer_phone) {
-      const { data: referrerClient } = await supabase
-        .from('clients')
-        .select('name')
-        .eq('whatsapp_number', lead.referrer_phone)
-        .maybeSingle();
-
-      const referrerName = referrerClient?.name || 'um amigo parceiro';
-      return `👋 *Olá! Que prazer ter você por aqui!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *${referrerName}* indicou o **AnalisAí** para você!
-
-Eu sou o assistente de inteligência financeira no WhatsApp que simplifica a gestão do seu negócio:
-• 📸 *Praticidade total:* Envie fotos de boletos, notas fiscais, áudios ou textos com suas contas a pagar e receber do jeito que preferir.
-• ⏰ *Lembretes na véspera:* Te aviso com antecedência para te ajudar a evitar juros e multas por atraso ou esquecimento.
-• 📊 *Fluxo de Caixa Descomplicado:* Veja o saldo futuro e receba relatórios de Livro Caixa direto no celular.
-
-🎁 *Presente de Indicação:*
-Pela indicação do *${referrerName}*, liberamos uma **Degustação VIP Gratuita** para você experimentar na prática, sem compromisso e sem precisar cadastrar cartão!
-
-👉 *Para começar agora mesmo:*
-Envie uma foto de um **boleto** ou mande um áudio/texto com uma conta sua (ex: *"Pagar internet R$ 90 dia 21"*). Em instantes eu organizo tudo para você! 🚀`;
     }
   }
 

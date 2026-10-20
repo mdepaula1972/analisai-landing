@@ -5,13 +5,6 @@ import { escalateToHumanConsultant } from './consultant-escalation';
 import { formatDueDateDetails } from './date-utils';
 import { getEveReminderMessage, getDueReminderMessage } from './trial';
 import { getWaitlistAdminReport } from './waitlist';
-import {
-  getReferralShareMessage,
-  solicitarAlteracaoPix,
-  confirmarAlteracaoPix,
-  cancelarAlteracaoPix,
-  getReferralStatus,
-} from './referral';
 import { getMonthlyDividendTracking } from './dividend-tracker';
 import { addDays } from 'date-fns';
 import { ADMIN_PERSONAL_WHATSAPP } from './constants';
@@ -156,8 +149,6 @@ Comandos disponíveis para você testar todas as opções:
 • *!simular lembrete vespera* → Dispara o aviso de véspera da degustação (10h)
 • *!simular lembrete vencimento* → Dispara o aviso com análise de caixa (10h)
 • *!waitlist* ou *!demanda* → Exibe estatísticas de demanda da lista de espera (Pro/Super)
-• *!analisador* ou *!indicar* → Painel do Analisador Oficial, saldo no Pix e meta de gratuidade Solo
-• *!pix [chave]* → Cadastra ou consulta a chave Pix para repasse mensal de comissões
 • *!setemail <tel/cnpj> <email>* → Recuperação soberana de e-mail de cliente (adicione 'bypass' para dispensar 24h)
 • *!qa add <cpf/cnpj/tel> [desc]* → Libera CPF/CNPJ/Tel para atuar livremente no app como QA
 • *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
@@ -748,76 +739,6 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
     };
   }
 
-  // ── !analisador / !indicar / !comissao / !pix ────────────────────────────────
-  if (
-    action === 'analisador' ||
-    action === 'analisar' ||
-    action === 'indicar' ||
-    action === 'indicacao' ||
-    action === 'indicação' ||
-    action === 'comissao' ||
-    action === 'comissão' ||
-    action === 'parceiro'
-  ) {
-    const shareMsg = await getReferralShareMessage(clientId, client.name);
-    return {
-      handled: true,
-      message: shareMsg,
-    };
-  }
-
-  if (action === 'confirmarpix') {
-    const rawCode = commandText.replace(/^[!/](confirmarpix)\s*/i, '').trim();
-    const result = await confirmarAlteracaoPix(clientId, rawCode);
-    return {
-      handled: true,
-      message: result.message,
-    };
-  }
-
-  if (action === 'cancelarpix') {
-    const cancelMsg = await cancelarAlteracaoPix(clientId);
-    return {
-      handled: true,
-      message: cancelMsg,
-    };
-  }
-
-  if (action === 'pix') {
-    const rawPix = commandText.replace(/^[!/](pix)\s*/i, '').trim();
-    if (!rawPix) {
-      const status = await getReferralStatus(clientId);
-      if (status.pixKey) {
-        return {
-          handled: true,
-          message: `🔑 *Sua Chave Pix para Repasses de Analisador:*
-👉 \`${status.pixKey}\` ${status.isDocumentPixKey ? '🛡️ *(CNPJ/CPF Oficial do Titular)*' : '✅'}
-
-🛡️ *Segurança Ativa (Abordagem 2):*
-Qualquer alteração para chaves alternativas requer validação obrigatória por código de segurança (2FA) enviado ao seu e-mail cadastrado.
-
-Para alterar sua chave Pix, envie:
-👉 *!pix nova_chave*`,
-        };
-      } else {
-        return {
-          handled: true,
-          message: `⚠️ *Nenhuma Chave Pix Cadastrada!*
-
-Para receber suas comissões mensais como Analisador direto no Pix, cadastre sua chave agora enviando:
-👉 *!pix sua_chave*
-_(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
-        };
-      }
-    }
-
-    const result = await solicitarAlteracaoPix(clientId, rawPix);
-    return {
-      handled: true,
-      message: result.message,
-    };
-  }
-
   // ── !dividendos / !lucros ───────────────────────────────────────────────────
   if (action === 'dividendos' || action === 'lucros' || action === 'dividendo' || action === 'prolabore' || action === 'pró-labore') {
     const tracking = await getMonthlyDividendTracking(clientId);
@@ -1403,6 +1324,33 @@ export async function inviteContactVip(
 
   // 1. Cadastra na QA Whitelist para que ele tenha acesso 100% livre quando interagir
   await addQaWhitelist(cleanDigits, targetName, inviterName);
+
+  // Sincroniza identificadores adicionais do cliente se já existir cadastro
+  try {
+    const { createServiceRoleClient } = await import('@/lib/supabase-server');
+    const supabase = createServiceRoleClient();
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('id, tax_id, whatsapp_number, whatsapp_lid')
+      .in('whatsapp_number', targetVariations)
+      .maybeSingle();
+
+    if (existingClient) {
+      if (existingClient.tax_id) {
+        await addQaWhitelist(existingClient.tax_id, `${targetName} (Documento)`, inviterName);
+      }
+      if (existingClient.whatsapp_lid) {
+        await addQaWhitelist(existingClient.whatsapp_lid, `${targetName} (LID)`, inviterName);
+      }
+      // Desbloqueia eventuais travas no ciclo de uso
+      await supabase
+        .from('usage_cycles')
+        .update({ hit_doc_limit: false, hit_bot_limit: false, hit_analysis_limit: false })
+        .eq('client_id', existingClient.id);
+    }
+  } catch (syncErr) {
+    console.warn('[inviteContactVip] Aviso ao sincronizar dados do cliente:', syncErr);
+  }
 
   const formattedTarget = formatIdentifierDisplay(cleanDigits);
 

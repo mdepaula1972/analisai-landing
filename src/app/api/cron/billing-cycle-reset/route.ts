@@ -61,9 +61,6 @@ export async function GET(req: NextRequest) {
 
       resetCount++;
 
-      // Avalia Programa de Indicação no fechamento do ciclo
-      await supabase.rpc('evaluate_referral_exemption', { p_client_id: client.id });
-
       // Avalia Gatilho de Upsell Proativo (2 ciclos consecutivos no limite)
       const sixtyDaysAgo = subDays(new Date(), 65).toISOString().split('T')[0];
       const { data: pastCycles } = await supabase

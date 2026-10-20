@@ -215,20 +215,6 @@ export async function POST(req: NextRequest) {
             .from('subscriptions')
             .update({ status: event === 'PAYMENT_OVERDUE' ? 'past_due' : 'canceled' })
             .eq('client_id', clientWithRef.id);
-
-          // Verifica se esse cliente foi indicado por alguém
-          const { data: refRow } = await supabase
-            .from('referrals')
-            .select('referrer_client_id')
-            .eq('referred_client_id', clientWithRef.id)
-            .maybeSingle();
-
-          if (refRow?.referrer_client_id) {
-            // Reavalia se o indicador ainda mantém os 3 pagantes ativos
-            await supabase.rpc('evaluate_referral_exemption', {
-              p_client_id: refRow.referrer_client_id,
-            });
-          }
         }
       } catch (overdueErr) {
         console.error('[Asaas Webhook Overdue Reevaluation Error]:', overdueErr);
@@ -617,17 +603,7 @@ Parabéns, ${firstName}! O seu plano *${plan.name}* está 100% ativo.
 2. Tirar dúvidas sobre contas a pagar e receber direto no WhatsApp.
 3. Consultar o saldo e o resumo financeiro com o comando *!status*.
 4. Pedir seu relatório oficial DRE com gráficos em PDF digitando *relatório*.
-5. Usar o Consultor Estratégico de Caixa perguntando *"qual conta devo adiar?"*.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ *Clube do Analisador — Renda no Pix & Mensalidade Zero:*
-Indique o AnalisAí para amigos empresários e receba até R$ 120,00/mês no Pix por cada assinatura ativa!
-Com 3 amigos indicados, você conquista o **Selo Analisador Oficial** e sua própria assinatura Solo fica **100% GRATUITA** todo mês!
-
-👉 *Seu Link Exclusivo de Analisador:*
-${inviteLink}
-
-💡 Digite *!analisador* a qualquer momento para ver seu painel completo ou *!pix sua_chave* para cadastrar sua chave Pix!`,
+5. Usar o Consultor Estratégico de Caixa perguntando *"qual conta devo adiar?"*.`,
         });
 
         // Se o usuário possuía contas de teste durante a degustação, pergunta proativamente se deseja mantê-las ou zerar
@@ -664,14 +640,6 @@ Como você prefere iniciar seu Livro Caixa oficial?
 👉 *Toque na opção da enquete acima ou responda com 1 para COMEÇAR DO ZERO ou 2 para MANTER.*`,
           });
         }
-      }
-
-      // Qualifica indicação automaticamente se o novo cliente veio de uma indicação
-      try {
-        const { qualifyReferralOnPayment } = await import('@/lib/solo/referral');
-        await qualifyReferralOnPayment(clientId);
-      } catch (refErr) {
-        console.error('[Asaas Webhook] Erro ao qualificar indicação:', refErr);
       }
     }
 

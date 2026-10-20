@@ -1,5 +1,6 @@
 import { SchemaType } from '@google/generative-ai';
 import { getGeminiClient } from './gemini';
+import { validateOperatorPermissions } from './team-guard';
 
 export interface UserConversationalContext {
   userId: string;
@@ -21,6 +22,7 @@ export type ConversationalIntentType =
   | 'DELETE_BILL'
   | 'RECORD_FINANCIAL_ENTRY'
   | 'REQUEST_PDF_REPORT'
+  | 'REQUEST_ACCOUNTING_CLOSING'
   | 'CASH_FLOW_ADVICE'
   | 'VIEW_PLANS_PRICING'
   | 'ADMIN_SIMULATION'
@@ -34,7 +36,7 @@ export interface RoutedDecision {
   invite_params?: {
     phone?: string;
     name?: string;
-    target_role?: 'qa_test' | 'team_operator' | 'referral';
+    target_role?: 'qa_test' | 'team_operator';
   };
   team_params?: {
     action?: 'list' | 'add' | 'remove' | 'silence' | 'unsilence';
@@ -65,6 +67,10 @@ export interface RoutedDecision {
   }>;
   report_params?: {
     report_type: 'cash_ledger' | 'dre' | 'xray';
+  };
+  closing_params?: {
+    period?: string;
+    send_to_accountant?: boolean;
   };
   simulation_params?: {
     action: string;
@@ -116,6 +122,7 @@ DADOS DO USUÁRIO:
                   'DELETE_BILL',
                   'RECORD_FINANCIAL_ENTRY',
                   'REQUEST_PDF_REPORT',
+                  'REQUEST_ACCOUNTING_CLOSING',
                   'CASH_FLOW_ADVICE',
                   'VIEW_PLANS_PRICING',
                   'ADMIN_SIMULATION',
@@ -142,7 +149,7 @@ DADOS DO USUÁRIO:
                   name: { type: SchemaType.STRING, nullable: true },
                   target_role: {
                     type: SchemaType.STRING,
-                    enum: ['qa_test', 'team_operator', 'referral'],
+                    enum: ['qa_test', 'team_operator'],
                     nullable: true,
                   },
                 },
@@ -254,6 +261,22 @@ DADOS DO USUÁRIO:
                 },
                 nullable: true,
               },
+              closing_params: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  period: {
+                    type: SchemaType.STRING,
+                    description: 'Mês e ano da competência no formato MM/AAAA (ex: 09/2026)',
+                    nullable: true,
+                  },
+                  send_to_accountant: {
+                    type: SchemaType.BOOLEAN,
+                    description: 'True se o usuário pediu para enviar direto ao contador',
+                    nullable: true,
+                  },
+                },
+                nullable: true,
+              },
               simulation_params: {
                 type: SchemaType.OBJECT,
                 properties: {
@@ -276,8 +299,7 @@ Sua missão é entender com perfeição o que o usuário quer fazer, a partir de
 
 Categorias de Intenção:
 - INVITE_GUEST: Convidar alguém para testar, enviar convite VIP, liberar acesso livre para amigo/parceiro (ex: "convidar o Luizão no zap 14 99894-7271", "manda um convite pro Luizão testar", "libera o zap do meu amigo").
-  ↳ Extraia o telefone limpo ou formatado e o nome da pessoa.
-  ↳ Se o usuário for Administrador, o target_role deve ser 'qa_test'. Se for cliente normal, 'referral'.
+  ↳ Se o usuário for Administrador, o target_role deve ser 'qa_test'. Se for para operador da empresa, 'team_operator'.
 - TEAM_MANAGEMENT: Gestão de operadores da empresa (ex: "quem tá na minha equipe?", "adiciona o Luizão na minha equipe", "remover operador", "silencia os avisos da Maria").
 - QUERY_BILLS: Consultar contas agendadas (ex: "ver minhas contas", "o que tenho que pagar essa semana?", "contas de hoje", "quais boletos vencem esse mês?", "minhas contas", "1", "um").
 - GET_PAYMENT_CODE: Pedir linha digitável, código de barras ou Pix para pagar/antecipar (ex: "pagar sabesp", "código da vivo", "passa o pix do aluguel", "2", "dois").
@@ -285,11 +307,22 @@ Categorias de Intenção:
 - DELETE_BILL: Excluir ou cancelar uma conta (ex: "excluir conta da Sabesp", "apagar boleto do fornecedor").
 - RECORD_FINANCIAL_ENTRY: Lançar despesa ou receita nova (ex: "gastei 45 de gasolina", "recebi 800 do cliente Pedro", "anota pagar Vivo 120 dia 22", "aluguel 1500 dia 5").
 - REQUEST_PDF_REPORT: Solicitar relatório, Livro Caixa ou DRE em PDF (ex: "me manda o relatório", "quero o livro caixa em PDF", "gerar PDF").
+- REQUEST_ACCOUNTING_CLOSING: Solicitar pacote de fechamento contábil para o contador ou apuração mensal (ex: "fechamento do mês passado", "gerar arquivo pro meu contador", "pacote fiscal de setembro", "!fechamento", "extrato contábil em csv", "fechamento de 09/2026").
 - CASH_FLOW_ADVICE: Dúvidas financeiras e de caixa (ex: "qual conta devo atrasar?", "meu caixa fecha positivo?", "o que fazer se faltar dinheiro?").
 - VIEW_PLANS_PRICING: Consultar planos, valores, upgrade, assinar (ex: "quanto custa?", "quais os planos?", "como assinar?").
 - ADMIN_SIMULATION: Exclusivo para administradores testando cenários (ex: "simular plano start", "resetar meus contadores", "gerar contas de teste", "estourar limite").
   ↳ Se o usuário NÃO for Admin, is_applicable = false, e explique educadamente.
 - GENERAL_CONVERSATION: Saudações ("oi", "olá", "bom dia"), perguntas sobre como o AnalisAí funciona, ou bate-papo informal.
+
+DIRETRIZES CRÍTICAS SOBRE NOTAS FISCAIS, BOLETOS E IMAGENS:
+- O AnalisAí POSSUI PROCESSAMENTO E LEITURA AUTOMÁTICA DE IMAGENS E PDFS DE NOTAS FISCAIS (NF-e, NFC-e, NFS-e, DANFE), BOLETOS, RECIBOS E EXTRATOS BANCÁRIOS 100% ATIVO, OPERACIONAL E EM PRODUÇÃO!
+- É EXPRESSAMENTE PROIBIDO dizer que o processamento de imagens de NF ou documentos "não está ativo", "não é suportado" ou "está desativado".
+- Se o usuário perguntar se pode enviar foto/PDF de Nota Fiscal, se o robô lê NF, ou avisar que vai mandar uma nota (ex: "posso mandar nota fiscal?", "você lê foto de NF?", "segue nota fiscal", "processar nota fiscal"):
+  ↳ Responda em conversational_reply com entusiasmo acolhedor orientando o envio imediato:
+  "O processamento automático de Notas Fiscais e boletos está 100% ativo! 📄✨ Pode me enviar a foto ou arquivo PDF da sua Nota Fiscal aqui que nossa IA lê o fornecedor, valores e datas na hora e já organiza no seu fluxo de caixa!"
+
+REGRAS DE PERMISSÃO POR PAPEL:
+- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos (RECORD_FINANCIAL_ENTRY). Para relatórios (REQUEST_PDF_REPORT), fechamento contábil (REQUEST_ACCOUNTING_CLOSING), consultas de contas (QUERY_BILLS), exclusões (DELETE_BILL), edições (EDIT_BILL) ou conselhos (CASH_FLOW_ADVICE), defina is_applicable = false.
 
 Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
       });
@@ -298,11 +331,24 @@ Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
       const text = res.response.text();
       const parsed = JSON.parse(text);
 
+      const intent = (parsed.intent || 'GENERAL_CONVERSATION') as ConversationalIntentType;
+      let isApplicable = Boolean(parsed.is_applicable);
+      let inapplicableMessage = parsed.inapplicable_message || undefined;
+
+      // FASE 3: Interceptor de permissões rígido para operadores
+      if (context.userType === 'operator') {
+        const permCheck = validateOperatorPermissions('operator', intent);
+        if (!permCheck.allowed) {
+          isApplicable = false;
+          inapplicableMessage = permCheck.refusalMessage;
+        }
+      }
+
       return {
-        intent: parsed.intent || 'GENERAL_CONVERSATION',
+        intent,
         confidence: Number(parsed.confidence) || 0.9,
-        is_applicable: Boolean(parsed.is_applicable),
-        inapplicable_message: parsed.inapplicable_message || undefined,
+        is_applicable: isApplicable,
+        inapplicable_message: inapplicableMessage,
         invite_params: parsed.invite_params || undefined,
         team_params: parsed.team_params || undefined,
         bills_query_params: parsed.bills_query_params || undefined,
@@ -311,6 +357,7 @@ Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
         delete_params: parsed.delete_params || undefined,
         financial_entries: parsed.financial_entries || undefined,
         report_params: parsed.report_params || undefined,
+        closing_params: parsed.closing_params || undefined,
         simulation_params: parsed.simulation_params || undefined,
         conversational_reply: parsed.conversational_reply || undefined,
       };

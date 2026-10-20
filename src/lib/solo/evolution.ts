@@ -85,6 +85,8 @@ export interface SendEvolutionMediaParams {
   mediaType: 'image' | 'document' | 'video' | 'audio';
   fileName?: string;
   caption?: string;
+  mimeType?: string;
+  mimetype?: string;
 }
 
 export async function sendEvolutionText({ phone, text }: SendEvolutionTextParams) {
@@ -129,15 +131,17 @@ export async function sendEvolutionMedia({
   mediaType,
   fileName,
   caption,
+  mimeType,
+  mimetype,
 }: SendEvolutionMediaParams) {
   const formattedPhone = formatWhatsAppNumber(phone);
   const resolvedFileName = fileName || (mediaType === 'document' ? 'documento.pdf' : 'arquivo');
-  const mimeType = mediaType === 'document' ? 'application/pdf' : (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream');
+  const resolvedMime = mimeType || mimetype || (mediaType === 'document' ? 'application/pdf' : (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream'));
   const { apiUrl, apiKey, instance } = await getEvolutionConfig();
 
   let cleanMedia = mediaUrl || mediaBase64 || '';
   if (cleanMedia && !cleanMedia.startsWith('http') && !cleanMedia.startsWith('data:')) {
-    cleanMedia = `data:${mimeType};base64,${cleanMedia}`;
+    cleanMedia = `data:${resolvedMime};base64,${cleanMedia}`;
   }
 
   try {
@@ -150,13 +154,13 @@ export async function sendEvolutionMedia({
       body: JSON.stringify({
         number: formattedPhone,
         mediatype: mediaType,
-        mimetype: mimeType,
+        mimetype: resolvedMime,
         caption: caption || '',
         media: cleanMedia,
         fileName: resolvedFileName,
         mediaMessage: {
           mediatype: mediaType,
-          mimetype: mimeType,
+          mimetype: resolvedMime,
           fileName: resolvedFileName,
           caption: caption || '',
           media: cleanMedia,

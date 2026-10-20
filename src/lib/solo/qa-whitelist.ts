@@ -102,6 +102,56 @@ export async function isQaWhitelisted(rawIdentifier?: string | null): Promise<bo
 }
 
 /**
+ * Validação unificada e à prova de falhas para determinar se o remetente
+ * ou o cliente vinculado possui privilégios de QA / Testes ou Administrador.
+ * Verifica:
+ * - Admin flag (client.is_admin ou número de Marcos)
+ * - cleanPhone e altPhone (com/sem 55, com/sem 9º dígito)
+ * - Telefone registrado no cadastro do cliente (client.whatsapp_number)
+ * - Identificador de dispositivo (client.whatsapp_lid)
+ * - CPF/CNPJ (client.tax_id)
+ */
+export async function isClientOrSenderQa(params: {
+  client?: any;
+  cleanPhone?: string | null;
+  altPhone?: string | null;
+  rawPhone?: string | null;
+}): Promise<boolean> {
+  const { client, cleanPhone, altPhone, rawPhone } = params;
+
+  // 1. Bypass explícito de Administrador
+  if (client?.is_admin) return true;
+  const adminPhones = ['5514930855878', '14930855878', '55149930855878', '149930855878'];
+  if (
+    (cleanPhone && adminPhones.some((p) => cleanPhone.includes(p) || p.includes(cleanPhone))) ||
+    (altPhone && adminPhones.some((p) => altPhone.includes(p) || p.includes(altPhone))) ||
+    (rawPhone && adminPhones.some((p) => rawPhone.includes(p)))
+  ) {
+    return true;
+  }
+
+  // 2. Coleta todos os identificadores possíveis do usuário
+  const candidateIds = new Set<string>();
+  if (cleanPhone) candidateIds.add(cleanPhone);
+  if (altPhone) candidateIds.add(altPhone);
+  if (rawPhone) candidateIds.add(rawPhone);
+
+  if (client) {
+    if (client.whatsapp_number) candidateIds.add(client.whatsapp_number);
+    if (client.whatsapp_lid) candidateIds.add(client.whatsapp_lid);
+    if (client.tax_id) candidateIds.add(client.tax_id);
+  }
+
+  for (const id of candidateIds) {
+    if (await isQaWhitelisted(id)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Adiciona um CPF, CNPJ ou telefone à Whitelist de QA
  * Normaliza automaticamente o telefone brasileiro com e sem 55 para garantir compatibilidade total
  */

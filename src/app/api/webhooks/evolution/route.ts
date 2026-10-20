@@ -6,11 +6,12 @@ import {
   processVoiceCommandWithGemini,
   parseConversationalFinancialEntry,
   parseConversationalCorrections,
+  parseInvoicePaymentResolution,
 } from '@/lib/solo/gemini';
 import { routeConversationalIntent, UserConversationalContext } from '@/lib/solo/conversational-router';
 import { recordAuditLog } from '@/lib/solo/audit';
 import { resolveUserAndClient, addTeamMember, listTeamMembers, removeTeamMember, updateTeamMember, handleNaturalLanguageTeamCommand, markTeamMemberActivated } from '@/lib/solo/team';
-import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary } from '@/lib/solo/quota';
+import { checkAndIncrementQuota, getClientPlanAndCurrentCycle, formatConsumptionSummary, CheckUsageResult } from '@/lib/solo/quota';
 import { handleAdminCommands, inviteContactVip } from '@/lib/solo/admin';
 import {
   generateCashFlowPostponeAdvice,
@@ -45,17 +46,11 @@ import { isFeedbackMessage, recordClientFeedback } from '@/lib/solo/feedback';
 import { sendTrialPdfToWhatsApp, sendCashLedgerPdfToWhatsApp } from '@/lib/solo/cash-ledger-pdf';
 import { recordWaitlistLead } from '@/lib/solo/waitlist';
 import {
-  linkReferralLead,
-  getReferralShareMessage,
-  solicitarAlteracaoPix,
-  confirmarAlteracaoPix,
-  cancelarAlteracaoPix,
   solicitarAlteracaoEmail,
   confirmarAlteracaoEmail,
   cancelarAlteracaoEmail,
   cadastrarEmailCliente,
-  getReferralStatus,
-} from '@/lib/solo/referral';
+} from '@/lib/solo/client-email';
 import { analyzePatrimonialExpense, analyzeBeneficiaryAndExpense, syncPartnersFromQsa } from '@/lib/solo/patrimonial-advisor';
 import { getMonthlyDividendTracking } from '@/lib/solo/dividend-tracker';
 import {
@@ -64,13 +59,24 @@ import {
   getOpenReceivables,
 } from '@/lib/solo/friendly-collection';
 import { getTaxRevenueTracking, updateTaxRegime, addTrialLeadRevenue } from '@/lib/solo/tax-meter';
-import { isQaWhitelisted } from '@/lib/solo/qa-whitelist';
+import { isQaWhitelisted, isClientOrSenderQa } from '@/lib/solo/qa-whitelist';
 import {
   iniciarDesafioRecuperacaoEmail,
   processarRespostaDesafioEmail,
 } from '@/lib/solo/email-recovery';
 import { escalateToHumanConsultant } from '@/lib/solo/consultant-escalation';
 import { reconcileBankTransactions } from '@/lib/solo/bank-reconciliation';
+import {
+  createPendingConfirmation,
+  handlePendingConfirmation,
+  checkAndApplyLegalOptIn,
+  formatCategoryName,
+} from '@/lib/solo/confirmation-engine';
+import {
+  validateOperatorPermissions,
+  isRestrictedOperatorText,
+  OPERATOR_REFUSAL_MESSAGE,
+} from '@/lib/solo/team-guard';
 import { addMinutes } from 'date-fns';
 
 export const runtime = 'nodejs';
@@ -140,264 +146,90 @@ async function processConversationalEntry(
       });
     }
 
-    const validEntries = entries.filter((e: any) => (e.amount || e.is_provision) && (e.due_date || e.is_provision));
+    const validEntries = entries.filter((e: any) => {
+      const amt = Number(e.amount);
+      return !isNaN(amt) && amt > 0 && e.due_date;
+    });
+
+    if (validEntries.length === 0) {
+      await sendEvolutionText({
+        phone,
+        text:
+          conv.clarification_prompt ||
+          'Entendi a sua intenção! Para registrar certinho no seu fluxo de caixa, por favor me informe o valor e a data de vencimento.',
+      });
+      return true;
+    }
 
     if (validEntries.length > 1) {
-      const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', validEntries.length);
-      const cleanNumber = phone.replace(/\D/g, '');
-      const isEntryQa = client.is_admin || await isQaWhitelisted(cleanNumber) || await isQaWhitelisted(client.tax_id);
+      // Cria confirmação pendente para múltiplos lançamentos
+      const primaryEntry = validEntries[0];
+      const isIncome = primaryEntry.entry_type === 'receivable';
+      const entity = primaryEntry.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+      const dreGroup = primaryEntry.category_suggestion || (isIncome ? 'receita_operacional' : 'despesa_administrativa');
 
-      if (!quotaCheck.allowed && !isEntryQa) {
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Limite de Lançamentos do Mês Atingido!*
-Você tentou registrar ${validEntries.length} lançamentos, mas ultrapassou a cota mensal disponível do seu plano.
-Para contratar lançamentos extras válidos por 60 dias:
-👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}`,
-        });
-        return true;
-      }
+      const installments = validEntries.map((it: any, idx: number) => ({
+        installment_number: idx + 1,
+        amount: Math.abs(Number(it.amount)),
+        due_date: it.due_date,
+        barcode_or_pix: it.barcode_or_pix || null,
+      }));
 
-      const supabase = createServiceRoleClient();
-      for (const item of validEntries) {
-        const isInc = item.entry_type === 'receivable';
-        const ent = item.supplier_or_customer || (isInc ? 'Cliente' : 'Fornecedor');
-        const grp = item.category_suggestion || (isInc ? 'receita_operacional' : 'despesa_administrativa');
-        const isProv = Boolean(item.is_provision);
-
-        await supabase.from('cash_ledger_entries').insert({
-          client_id: client.id,
-          entry_date: item.due_date,
-          description: `${isInc ? 'RECEITA' : 'DESPESA'} - ${ent} (via ${origin})`,
-          amount: isInc ? Math.abs(item.amount) : -Math.abs(item.amount),
-          entry_type: isInc ? 'income' : 'expense',
-          dre_group: grp,
-          status: 'previsto',
-        });
-
-        await supabase.from('payables_receivables').insert({
-          client_id: client.id,
-          counterparty_name: ent,
-          type: isInc ? 'receivable' : 'payable',
-          amount: Math.abs(item.amount),
-          original_due_date: item.due_date,
-          current_due_date: item.due_date,
-          status: 'open',
-          is_provision: isProv,
-          barcode_or_pix: item.barcode_or_pix || null,
-          notes: isProv ? '[PROVISÃO] Valor estimado a confirmar' : null,
-        });
-      }
-
-      const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-      let msg = `✅ *${validEntries.length} lançamentos registrados no seu Livro Caixa (via ${origin})!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      validEntries.forEach((it: any, idx: number) => {
-        const num = emojis[idx] || '•';
-        const valFmt = Number(it.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const dueFmt = it.due_date ? formatDueDateDetails(it.due_date) : 'A definir';
-        msg += `${num} *${it.supplier_or_customer}*: ${valFmt} | ${dueFmt}\n`;
+      await createPendingConfirmation({
+        clientId: client?.id || null,
+        phoneNumber: phone,
+        actionType: isIncome ? 'RECEIVABLE_BILL' : 'PAYABLE_BILL',
+        payload: {
+          amount: Math.abs(Number(primaryEntry.amount)),
+          counterparty_name: entity,
+          description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity} (${validEntries.length} itens)`,
+          due_date: primaryEntry.due_date,
+          entry_date: primaryEntry.due_date,
+          entry_type: isIncome ? 'receivable' : 'payable',
+          category_name: dreGroup,
+          dre_group: dreGroup,
+          entity_scope: 'PJ',
+          installments,
+          origin,
+          rawText,
+          isTrial: !client?.id,
+        },
+        sendWhatsAppCard: true,
       });
-      msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nO AnalisAí vai te lembrar às 10h da véspera de cada vencimento! Digite *relatório* para gerar o PDF ou *contas* para ver seus agendamentos.`;
 
-      await sendEvolutionText({ phone, text: msg });
-
-      for (const it of validEntries) {
-        if (it.barcode_or_pix) {
-          await sendPaymentCodeMessage(phone, { barcode_or_pix: it.barcode_or_pix });
-        }
-      }
       return true;
     }
 
     if (conv.amount && conv.due_date) {
-      const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
-      const cleanNumber = phone.replace(/\D/g, '');
-      const isEntryQa = client.is_admin || await isQaWhitelisted(cleanNumber) || await isQaWhitelisted(client.tax_id);
-
-      if (!quotaCheck.allowed && !isEntryQa) {
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Limite de Lançamentos do Mês Atingido!*
-Você já processou todos os ${quotaCheck.limit} lançamentos inclusos no seu plano este mês.
-
-As informações enviadas via ${origin} são computadas no seu limite mensal contratual. Para registrar essa conta sem travar sua rotina:
-
-1️⃣ *Pacote Extra (+20 Lançamentos) por R$ 14,90:*
-Válido por 60 dias para qualquer canal (texto, áudio, fotos ou PDFs):
-👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}
-
-2️⃣ *Upgrade para o próximo plano:*
-👉 ${getUpgradeCheckoutUrl(plan?.code)}`,
-        });
-        return true;
-      }
-
-      const supabase = createServiceRoleClient();
       const isIncome = conv.entry_type === 'receivable';
       const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
       const dreGroup =
         conv.category_suggestion || (isIncome ? 'receita_operacional' : 'despesa_administrativa');
-
-      await supabase.from('cash_ledger_entries').insert({
-        client_id: client.id,
-        entry_date: conv.due_date,
-        description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity} (via ${origin})`,
-        amount: isIncome ? Math.abs(conv.amount) : -Math.abs(conv.amount),
-        entry_type: isIncome ? 'income' : 'expense',
-        dre_group: dreGroup,
-        status: 'previsto',
-      });
-
       const isProvision = Boolean(conv.is_provision);
 
-      // Se for conta definitiva e existir uma provisão prévia em aberto para o mesmo fornecedor, concilia!
-      let provisionReconciled = false;
-      if (!isIncome && !isProvision && client?.id) {
-        const { data: openProvisions } = await supabase
-          .from('payables_receivables')
-          .select('*')
-          .eq('client_id', client.id)
-          .eq('type', 'payable')
-          .eq('is_provision', true)
-          .in('status', ['open', 'postponed']);
-
-        const matchedProv = openProvisions?.find((p: any) => {
-          const pName = (p.counterparty_name || '').toLowerCase();
-          const candName = entity.toLowerCase();
-          return pName.includes(candName) || candName.includes(pName) || pName.slice(0, 4) === candName.slice(0, 4);
-        });
-
-        if (matchedProv) {
-          const oldAmtFmt = Number(matchedProv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-          const newAmtFmt = Number(conv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-          const newDueFmt = formatDueDateDetails(conv.due_date);
-
-          await supabase
-            .from('payables_receivables')
-            .update({
-              amount: Math.abs(conv.amount),
-              current_due_date: conv.due_date,
-              is_provision: false,
-              notes: `Provisão conciliada com a fatura real em ${new Date().toLocaleDateString('pt-BR')}`,
-            })
-            .eq('id', matchedProv.id);
-
-          if (matchedProv.document_id) {
-            await supabase
-              .from('cash_ledger_entries')
-              .update({
-                amount: -Math.abs(conv.amount),
-                entry_date: conv.due_date,
-                description: `DESPESA - ${entity} (Fatura Real Conciliada)`,
-              })
-              .eq('document_id', matchedProv.document_id);
-          }
-
-          await sendEvolutionText({
-            phone,
-            text: `🎯 *Provisão Conciliada com a Fatura Real!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${entity}
-• *Estimativa Anterior:* ${oldAmtFmt} ➔ *Valor Real:* *${newAmtFmt}*
-• *Vencimento Atualizado:* *${newDueFmt}*
-• *Status:* Conta a Pagar Definitiva (Provisão Baixada)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Seu fluxo de caixa e relatórios foram ajustados para o valor exato da fatura!`,
-          });
-          return true;
-        }
-      }
-
-      await supabase.from('payables_receivables').insert({
-        client_id: client.id,
-        counterparty_name: entity,
-        type: isIncome ? 'receivable' : 'payable',
-        amount: Math.abs(conv.amount),
-        original_due_date: conv.due_date,
-        current_due_date: conv.due_date,
-        status: 'open',
-        barcode_or_pix: conv.barcode_or_pix || null,
-        is_provision: isProvision,
-        notes: isProvision ? '[PROVISÃO / COMPROMISSO VARIÁVEL] Valor estimado a confirmar' : null,
+      await createPendingConfirmation({
+        clientId: client?.id || null,
+        phoneNumber: phone,
+        actionType: isIncome ? 'RECEIVABLE_BILL' : 'PAYABLE_BILL',
+        payload: {
+          amount: Math.abs(Number(conv.amount)),
+          counterparty_name: entity,
+          description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity} (via ${origin})`,
+          due_date: conv.due_date,
+          entry_date: conv.due_date,
+          entry_type: isIncome ? 'receivable' : 'payable',
+          category_name: dreGroup,
+          dre_group: dreGroup,
+          entity_scope: 'PJ',
+          barcode_or_pix: (conv as any).barcode_or_pix || null,
+          is_provision: isProvision,
+          origin,
+          rawText,
+          isTrial: !client?.id,
+        },
+        sendWhatsAppCard: true,
       });
 
-      const formattedDate = formatDueDateDetails(conv.due_date);
-      const valFmt = Number(conv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-      const quotaFootnote = client.is_admin
-        ? '👑 _Modo Admin Irrestrito_'
-        : quotaCheck.consumed_from_extra
-          ? `🎁 _Lançado utilizando sua carteira de lançamentos extras (restam ${quotaCheck.extra_credits_remaining} extras válidos)._`
-          : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
-
-      if (isIncome) {
-        let taxBadge = '';
-        try {
-          const taxStatus = await getTaxRevenueTracking({ clientId: client.id });
-          taxBadge = `\n${taxStatus.miniBadge}`;
-        } catch (tErr) {
-          console.warn('[Tax Meter Badge Warning]:', tErr);
-        }
-
-        await sendEvolutionText({
-          phone,
-          text: `✅ *Previsão de Recebimento Registrada (via ${origin})!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Cliente/Origem:* ${entity}
-• *Valor:* ${valFmt}
-• *Data Prevista:* ${formattedDate}
-• *Classificação:* Receita Operacional
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${quotaFootnote}${taxBadge}
-Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *relatório* para ver o PDF atualizado!`,
-        });
-      } else {
-        if (isProvision) {
-          await sendEvolutionText({
-            phone,
-            text: `📌 *Provisão Financeira Registrada (via ${origin})!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Compromisso:* ${entity}
-• *Valor Estimado:* ${valFmt} *(Provisão a Confirmar)*
-• *Vencimento Previsto:* ${formattedDate}
-• *Classificação:* ${dreGroup}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${quotaFootnote}
-💡 *Compromisso seguro na sua agenda!*
-Assim que a fatura real chegar, basta me enviar a foto do boleto ou avisar por voz/texto (ex: _"Chegou a ${entity}, deu R$ 238,40"_) que eu concilio automaticamente sem duplicar!`,
-          });
-        } else {
-          await sendEvolutionText({
-            phone,
-            text: `✅ *Conta a Pagar Registrada (via ${origin})!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${entity}
-• *Valor:* ${valFmt}
-• *Vencimento:* ${formattedDate}
-• *Classificação:* ${dreGroup}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${quotaFootnote}
-O AnalisAí vai te lembrar às 10h da véspera e no dia do vencimento para manter seu caixa impecável!`,
-          });
-        }
-
-        if (conv.barcode_or_pix) {
-          await sendPaymentCodeMessage(phone, { barcode_or_pix: conv.barcode_or_pix });
-        }
-
-        // Consultoria Pedagógica de Blindagem Patrimonial (Separação PJ x PF)
-        const patrimonial = analyzePatrimonialExpense({
-          supplier_name: entity,
-          category: dreGroup,
-          amount: Math.abs(conv.amount),
-        });
-        if (patrimonial.isPersonalExpense && patrimonial.adviceMessage) {
-          await sendEvolutionText({
-            phone,
-            text: patrimonial.adviceMessage,
-          });
-        }
-      }
       return true;
     }
   } catch (convErr) {
@@ -599,8 +431,17 @@ async function handleDeleteBill(
   client: any,
   phone: string,
   cleanPhone: string,
-  supplierQuery: string
+  supplierQuery: string,
+  isOperator?: boolean
 ) {
+  if (isOperator) {
+    await sendEvolutionText({
+      phone,
+      text: OPERATOR_REFUSAL_MESSAGE,
+    });
+    return false;
+  }
+
   const supabase = createServiceRoleClient();
   const cleanQuery = supplierQuery ? supplierQuery.toLowerCase().trim() : '';
 
@@ -2088,6 +1929,17 @@ async function handleConversationalNaturalLanguageRouter(params: {
     const decision = await routeConversationalIntent(text, context);
     console.log(`[Conversational Router] Intent: ${decision.intent}, Confidence: ${decision.confidence}, Applicable: ${decision.is_applicable}`);
 
+    // FASE 3: Matriz de Permissões por Papel (Guarda de Sigilo Multi-Operador)
+    const userRole = isOperator ? 'operator' : 'admin';
+    const permCheck = validateOperatorPermissions(userRole, decision.intent);
+    if (!permCheck.allowed) {
+      await sendEvolutionText({
+        phone,
+        text: permCheck.refusalMessage || OPERATOR_REFUSAL_MESSAGE,
+      });
+      return true;
+    }
+
     // Se a IA determinou que não é aplicável ao perfil do usuário
     if (!decision.is_applicable) {
       const msg = decision.inapplicable_message || 'Essa funcionalidade não está habilitada para o seu perfil no momento.';
@@ -2146,11 +1998,11 @@ ${guestName} agora pode testar comandos por voz, fotos de boletos e relatórios 
           });
           return true;
         } else {
-          const shareMsg = await getReferralShareMessage(client?.id || cleanPhone, client?.name);
           await sendEvolutionText({
             phone,
-            text: `🎁 *Que ótimo que você quer convidar o ${guestName}!*
-Aqui está o seu link de convite exclusivo para compartilhar com ele:\n\n${shareMsg}`,
+            text: `💡 *Adicionar ${guestName} à sua equipe:*
+Para cadastrar ${guestName} como operadora/operador para lançar despesas na sua empresa, diga:
+👉 *"Adiciona o ${guestName} ${cleanDigits} na minha equipe"*`,
           });
           return true;
         }
@@ -2236,43 +2088,62 @@ ${resultLines.join('\n')}
 
     // 6. Exclusão de Conta
     if (decision.intent === 'DELETE_BILL' && decision.delete_params?.supplier_query) {
-      await handleDeleteBill(client, phone, cleanPhone, decision.delete_params.supplier_query);
+      await handleDeleteBill(client, phone, cleanPhone, decision.delete_params.supplier_query, isOperator);
       return true;
     }
 
     // 7. Lançamento Financeiro Identificado
     if (decision.intent === 'RECORD_FINANCIAL_ENTRY' && Array.isArray(decision.financial_entries) && decision.financial_entries.length > 0) {
-      const validEntries = decision.financial_entries.filter((e) => (e.amount && e.amount > 0) || e.is_provision);
+      // Exige estritamente valor monetário positivo (> 0). NUNCA permite lançamentos de R$ 0,00!
+      const validEntries = decision.financial_entries.filter((e) => e.amount && Number(e.amount) > 0);
       if (validEntries.length > 0) {
-        if (!client) {
-          // Degustação (trial)
-          await recordMultipleTrialUsage(cleanPhone, validEntries);
-          const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - validEntries.length);
-          const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, remainingAfter);
-          await sendEvolutionText({ phone, text: confirmationText });
-          return true;
-        } else {
-          // Cliente cadastrado
-          for (const ent of validEntries) {
-            const isIncome = ent.entry_type === 'receivable';
-            const entity = ent.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
-            const targetDue = ent.due_date || new Date().toISOString().split('T')[0];
+        const primary = validEntries[0];
+        const isIncome = primary.entry_type === 'receivable';
+        const entity = primary.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
+        const targetDue = primary.due_date || new Date().toISOString().split('T')[0];
+        const dreGroup = isIncome ? 'receita_operacional' : 'despesa_administrativa';
 
-            await supabase.from('payables_receivables').insert({
-              client_id: client.id,
-              counterparty_name: entity,
-              type: isIncome ? 'receivable' : 'payable',
-              amount: ent.amount ? Math.abs(ent.amount) : 0,
-              original_due_date: targetDue,
-              current_due_date: targetDue,
-              status: 'open',
-            });
-          }
+        const installments =
+          validEntries.length > 1
+            ? validEntries.map((it, idx) => ({
+                installment_number: idx + 1,
+                amount: Math.abs(Number(it.amount)),
+                due_date: it.due_date || targetDue,
+              }))
+            : undefined;
 
-          const confirmationText = formatMultipleTrialEntriesConfirmation(validEntries, 99);
-          await sendEvolutionText({ phone, text: confirmationText });
-          return true;
-        }
+        await createPendingConfirmation({
+          clientId: client?.id || null,
+          phoneNumber: phone,
+          actionType: isIncome ? 'RECEIVABLE_BILL' : 'PAYABLE_BILL',
+          payload: {
+            amount: Math.abs(Number(primary.amount)),
+            counterparty_name: entity,
+            description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity}`,
+            due_date: targetDue,
+            entry_date: targetDue,
+            entry_type: isIncome ? 'receivable' : 'payable',
+            category_name: dreGroup,
+            dre_group: dreGroup,
+            entity_scope: 'PJ',
+            installments,
+            origin: 'texto',
+            rawText,
+            isTrial: !client?.id,
+          },
+          sendWhatsAppCard: true,
+        });
+
+        return true;
+      } else {
+        // Se a intenção foi classificada como lançamento mas não há valor monetário real informado:
+        const firstCandidate = decision.financial_entries[0];
+        const entityName = firstCandidate?.supplier_or_customer || 'sua conta';
+        await sendEvolutionText({
+          phone,
+          text: `💡 *Entendi sua intenção!* Para registrar no seu Livro Caixa, por favor me informe o **valor em reais** e a **data de vencimento** referente a *${entityName}*.\n\n_Ex: "Pagar ${entityName} R$ 150 dia 25"_`,
+        });
+        return true;
       }
     }
 
@@ -2283,6 +2154,31 @@ ${resultLines.join('\n')}
         return true;
       } else {
         await sendTrialPdfToWhatsApp(cleanPhone, phone);
+        return true;
+      }
+    }
+
+    // 8.1. Pacote de Fechamento Contábil (CSV, Relatório e ZIP para o Contador)
+    if (decision.intent === 'REQUEST_ACCOUNTING_CLOSING') {
+      if (client?.id) {
+        await sendEvolutionText({
+          phone,
+          text: '📦 *Preparando o pacote de fechamento contábil...*\nLocalizando extratos estruturados, relatórios e comprovantes fiscais...',
+        });
+
+        const { generateAndSendAccountingClosing } = await import('@/lib/solo/accountant-export');
+        await generateAndSendAccountingClosing({
+          clientId: client.id,
+          phone,
+          requestedPeriod: decision.closing_params?.period,
+          dispatchToAccountant: decision.closing_params?.send_to_accountant,
+        });
+        return true;
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: '📦 *Pacote de Fechamento Contábil*\n\nA geração de extrato contábil CSV e empacotamento fiscal com comprovantes é um recurso exclusivo para empresas com plano ativo no AnalisAí.\n\nDigite *planos* para conhecer as opções disponíveis.',
+        });
         return true;
       }
     }
@@ -2316,12 +2212,165 @@ ${resultLines.join('\n')}
 }
 
 function unwrapMessage(msg: any): any {
-  if (!msg) return {};
+  if (!msg || typeof msg !== 'object') return {};
+  if (msg.message && typeof msg.message === 'object') return unwrapMessage(msg.message);
   if (msg.ephemeralMessage?.message) return unwrapMessage(msg.ephemeralMessage.message);
   if (msg.viewOnceMessage?.message) return unwrapMessage(msg.viewOnceMessage.message);
   if (msg.viewOnceMessageV2?.message) return unwrapMessage(msg.viewOnceMessageV2.message);
   if (msg.documentWithCaptionMessage?.message) return unwrapMessage(msg.documentWithCaptionMessage.message);
+  if (msg.templateMessage?.hydratedTemplate) return unwrapMessage(msg.templateMessage.hydratedTemplate);
+  if (msg.interactiveMessage?.header) return unwrapMessage(msg.interactiveMessage.header);
+  // Desempacotamento direto caso não exista nó .message intermediário
+  if (msg.documentWithCaptionMessage?.documentMessage) return msg.documentWithCaptionMessage.documentMessage;
+  if (msg.documentWithCaptionMessage?.imageMessage) return msg.documentWithCaptionMessage.imageMessage;
+  if (msg.ephemeralMessage?.documentMessage) return msg.ephemeralMessage.documentMessage;
+  if (msg.ephemeralMessage?.imageMessage) return msg.ephemeralMessage.imageMessage;
+  if (msg.viewOnceMessage?.imageMessage) return msg.viewOnceMessage.imageMessage;
+  if (msg.viewOnceMessageV2?.imageMessage) return msg.viewOnceMessageV2.imageMessage;
   return msg;
+}
+
+export interface ExtractedMediaInfo {
+  isMedia: boolean;
+  isImage: boolean;
+  isDoc: boolean;
+  isAudio: boolean;
+  mediaCaption: string;
+  mimeType: string;
+  unwrapped: any;
+}
+
+export function extractMediaInfo(body: EvolutionWebhookBody): ExtractedMediaInfo {
+  const rawMsg = body.data?.message;
+  const unwrapped = unwrapMessage(rawMsg);
+
+  // Procura payload de imagem em qualquer nível
+  const imageMsg =
+    unwrapped?.imageMessage ||
+    rawMsg?.imageMessage ||
+    (rawMsg as any)?.message?.imageMessage ||
+    (body.data as any)?.imageMessage ||
+    (unwrapped as any)?.image ||
+    (rawMsg as any)?.image ||
+    ((body.data as any)?.messageType?.toLowerCase?.().includes('image') ? unwrapped : null) ||
+    ((body.data as any)?.mediaType?.toLowerCase?.().includes('image') ? unwrapped : null);
+
+  // Procura payload de documento em qualquer nível
+  const docMsg =
+    unwrapped?.documentMessage ||
+    rawMsg?.documentMessage ||
+    (rawMsg as any)?.message?.documentMessage ||
+    (body.data as any)?.documentMessage ||
+    (unwrapped as any)?.document ||
+    (rawMsg as any)?.document ||
+    ((body.data as any)?.messageType?.toLowerCase?.().includes('document') ? unwrapped : null) ||
+    ((body.data as any)?.mediaType?.toLowerCase?.().includes('document') ? unwrapped : null);
+
+  // Procura payload de áudio em qualquer nível
+  const audioMsg =
+    unwrapped?.audioMessage ||
+    rawMsg?.audioMessage ||
+    (rawMsg as any)?.message?.audioMessage ||
+    (body.data as any)?.audioMessage ||
+    (unwrapped as any)?.audio ||
+    (rawMsg as any)?.audio ||
+    ((body.data as any)?.messageType?.toLowerCase?.().includes('audio') ? unwrapped : null) ||
+    ((body.data as any)?.mediaType?.toLowerCase?.().includes('audio') ? unwrapped : null);
+
+  const msgType = String(body.data?.messageType || (body.data as any)?.type || unwrapped?.type || '').toLowerCase();
+  const mediaType = String((body.data as any)?.mediaType || '').toLowerCase();
+  const rawMime = String(
+    imageMsg?.mimetype ||
+    docMsg?.mimetype ||
+    audioMsg?.mimetype ||
+    (body.data as any)?.mimetype ||
+    (body.data as any)?.mimeType ||
+    (unwrapped as any)?.mimetype ||
+    (rawMsg as any)?.mimetype ||
+    ''
+  ).toLowerCase();
+
+  const fileName = String(
+    docMsg?.fileName ||
+    (unwrapped as any)?.fileName ||
+    (body.data as any)?.fileName ||
+    ''
+  ).toLowerCase();
+
+  const hasMediaKey = Boolean(
+    imageMsg?.mediaKey ||
+    docMsg?.mediaKey ||
+    audioMsg?.mediaKey ||
+    (unwrapped as any)?.mediaKey ||
+    (rawMsg as any)?.mediaKey ||
+    (body.data as any)?.mediaKey ||
+    (unwrapped as any)?.fileSha256 ||
+    (rawMsg as any)?.fileSha256 ||
+    body.data?.base64 ||
+    (body as any)?.base64
+  );
+
+  const isImg =
+    Boolean(imageMsg?.url || imageMsg?.mediaKey || (imageMsg as any)?.directPath) ||
+    msgType.includes('image') ||
+    mediaType.includes('image') ||
+    rawMime.startsWith('image/') ||
+    fileName.endsWith('.jpg') ||
+    fileName.endsWith('.jpeg') ||
+    fileName.endsWith('.png') ||
+    fileName.endsWith('.webp') ||
+    fileName.endsWith('.heic') ||
+    (hasMediaKey && !audioMsg && !docMsg && !rawMime.includes('pdf') && !rawMime.startsWith('audio/'));
+
+  const isDc =
+    Boolean(docMsg?.url || docMsg?.mediaKey || (docMsg as any)?.directPath) ||
+    msgType.includes('document') ||
+    mediaType.includes('document') ||
+    rawMime.includes('pdf') ||
+    rawMime.includes('application/') ||
+    fileName.endsWith('.pdf');
+
+  const isAud =
+    Boolean(audioMsg?.url || audioMsg?.mediaKey) ||
+    Boolean(unwrapped?.ptt) ||
+    msgType.includes('audio') ||
+    mediaType.includes('audio') ||
+    rawMime.startsWith('audio/');
+
+  // Se o documento for na verdade uma imagem (ex: foto_nf.jpeg enviada como anexo de documento)
+  const isImageFinal = (isImg || (isDc && rawMime.startsWith('image/'))) && !isAud;
+  const isDocFinal = (isDc || rawMime.includes('pdf')) && !isAud && !isImageFinal;
+  const isAudioFinal = isAud;
+  const isMediaFinal = isImageFinal || isDocFinal;
+
+  const mediaCaption = String(
+    imageMsg?.caption ||
+    docMsg?.caption ||
+    unwrapped?.caption ||
+    (unwrapped as any)?.text ||
+    (body.data as any)?.caption ||
+    (body.data as any)?.body ||
+    (body.data as any)?.message?.conversation ||
+    ''
+  ).trim();
+
+  const finalMimeType =
+    imageMsg?.mimetype ||
+    docMsg?.mimetype ||
+    audioMsg?.mimetype ||
+    (body.data as any)?.mimetype ||
+    (body.data as any)?.mimeType ||
+    (isImageFinal ? 'image/jpeg' : isDocFinal ? 'application/pdf' : 'image/jpeg');
+
+  return {
+    isMedia: isMediaFinal,
+    isImage: isImageFinal,
+    isDoc: isDocFinal,
+    isAudio: isAudioFinal,
+    mediaCaption,
+    mimeType: finalMimeType,
+    unwrapped,
+  };
 }
 
 function extractTextFromMessage(msg: any, fullData?: any): string {
@@ -2340,6 +2389,7 @@ function extractTextFromMessage(msg: any, fullData?: any): string {
     unwrapped?.imageMessage?.caption ||
     unwrapped?.videoMessage?.caption ||
     unwrapped?.documentMessage?.caption ||
+    (unwrapped as any)?.caption ||
     ''
   );
 
@@ -2349,6 +2399,7 @@ function extractTextFromMessage(msg: any, fullData?: any): string {
 
   if (fullData) {
     if (fullData.body && typeof fullData.body === 'string') return fullData.body.trim();
+    if (fullData.caption && typeof fullData.caption === 'string') return fullData.caption.trim();
     if (fullData.selectedRowId) return String(fullData.selectedRowId).trim();
     if (fullData.selectedButtonId) return String(fullData.selectedButtonId).trim();
   }
@@ -2423,13 +2474,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
 
-    const message = unwrapMessage(body.data?.message);
+    const mediaInfo = extractMediaInfo(body);
+    const message = mediaInfo.unwrapped;
     const rawText = extractTextFromMessage(body.data?.message, body.data);
     const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
-    const isAudio =
-      body.data?.messageType === 'audioMessage' ||
-      !!message?.audioMessage ||
-      !!body.data?.message?.audioMessage;
+    const isAudio = mediaInfo.isAudio;
     const isContact =
       body.data?.messageType === 'contactMessage' ||
       body.data?.messageType === 'contactsArrayMessage' ||
@@ -2477,6 +2526,699 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     console.error('[Evolution Webhook] Erro ao decodificar webhook:', error);
     return NextResponse.json({ error: 'invalid_payload' }, { status: 400 });
+  }
+}
+
+// ── INGESTÃO MULTIMODAL DE DOCUMENTOS E IMAGENS COM LEGENDA ──────────────
+async function processTrialDocumentMedia(params: {
+  phone: string;
+  cleanPhone: string;
+  body: EvolutionWebhookBody;
+  mediaInfo: ExtractedMediaInfo;
+  mediaCaption: string;
+  rawText: string;
+  supabase: any;
+}): Promise<void> {
+  const { phone, cleanPhone, body, mediaInfo, mediaCaption, rawText } = params;
+  const message = mediaInfo.unwrapped;
+
+  const trialStatus = await checkTrialStatus(cleanPhone);
+  if (trialStatus.hasUsedTrial) {
+    await sendEvolutionText({
+      phone,
+      text: getTrialLimitReachedMessage(trialStatus.docsLimit, trialStatus.docsCount),
+    });
+    return;
+  }
+
+  // Processa o 1º documento na DEGUSTAÇÃO GRATUITA
+  await sendEvolutionText({
+    phone,
+    text: `⏳ *Recebido! Analisando seu documento em tempo real na degustação gratuita do AnalisAí...*\nAguarde alguns segundos enquanto nossa inteligência artificial faz a leitura completa dos dados.`,
+  });
+
+  let base64 =
+    body.data?.base64 ||
+    (body as any)?.base64 ||
+    mediaInfo.unwrapped?.base64 ||
+    mediaInfo.unwrapped?.imageMessage?.base64 ||
+    mediaInfo.unwrapped?.documentMessage?.base64 ||
+    message?.imageMessage?.base64 ||
+    message?.documentMessage?.base64 ||
+    '';
+
+  if (!base64) {
+    base64 = (await fetchMediaBase64FromEvolution(body.data)) || '';
+  }
+  if (!base64) {
+    base64 = (await fetchMediaBase64FromEvolution(body)) || '';
+  }
+
+  if (!base64) {
+    await sendEvolutionText({
+      phone,
+      text: `⚠️ Não foi possível baixar a imagem para a degustação. Por favor, envie o arquivo novamente ou tire uma foto mais nítida.`,
+    });
+    return;
+  }
+
+  const mimeType = mediaInfo.mimeType || (body.data as any)?.mimetype || message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
+  // Envia conjuntamente o binário e a instrução/legenda do usuário para o Gemini Vision
+  const extraction = await extractDocumentWithGemini(base64, mimeType, mediaCaption || undefined);
+
+  // Suporte a Conciliação de Extratos Bancários (PDF / Imagem)
+  if (extraction.is_bank_statement && Array.isArray(extraction.bank_transactions) && extraction.bank_transactions.length > 0) {
+    const reconRes = await reconcileBankTransactions({
+      clientId: null,
+      phone,
+      cleanPhone,
+      transactions: extraction.bank_transactions,
+      bankName: extraction.counterparty_name !== 'Desconhecido' ? extraction.counterparty_name : undefined,
+    });
+
+    await sendEvolutionText({
+      phone,
+      text: reconRes.summaryMessage,
+    });
+    await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+    return;
+  }
+
+  const isFinancial =
+    extraction.is_financial_doc !== false &&
+    (Boolean(extraction.is_bank_statement) || extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
+
+  if (!isFinancial) {
+    await sendEvolutionText({
+      phone,
+      text: `⚠️ *Documento não identificado como financeiro.*\nO arquivo enviado não parece ser um boleto, conta de consumo, nota fiscal ou extrato bancário.\n\nNa nossa degustação gratuita, envie uma foto nítida de um boleto, NF ou extrato para ver o robô funcionando em tempo real!`,
+    });
+    return;
+  }
+
+  // Normaliza os campos para compatibilidade total entre extratores e formatadores
+  const normalizedDoc = {
+    ...extraction,
+    supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || (extraction.entry_type === 'receivable' ? 'Cliente' : 'Fornecedor'),
+    amount: extraction.total_amount !== undefined && extraction.total_amount !== null ? extraction.total_amount : (extraction as any).amount,
+    document_type: extraction.doc_type || (extraction as any).document_type || 'Boleto/Conta',
+    category: extraction.category_suggestion || (extraction as any).category || (extraction.entry_type === 'receivable' ? 'receita_operacional' : null),
+    entry_type: extraction.entry_type || 'payable',
+  };
+
+  const isInvoiceDoc =
+    normalizedDoc.document_type === 'nfe' ||
+    normalizedDoc.document_type === 'nfse' ||
+    normalizedDoc.document_type === 'cupom' ||
+    (normalizedDoc.document_type === 'recibo' && !extraction.barcode_or_pix) ||
+    (!extraction.barcode_or_pix && !extraction.is_bank_statement && extraction.doc_type !== 'das_mei' && !extraction.is_rent && !extraction.is_insurance);
+
+  const captionLower = (mediaCaption || '').toLowerCase().trim();
+  const captionHasPaymentDetails =
+    captionLower.includes('parcel') ||
+    captionLower.includes(' vezes') ||
+    captionLower.includes('x') ||
+    captionLower.includes('cartao') ||
+    captionLower.includes('cartão') ||
+    captionLower.includes('pix') ||
+    captionLower.includes('avista') ||
+    captionLower.includes('à vista') ||
+    captionLower.includes('a vista') ||
+    captionLower.includes('quitad') ||
+    captionLower.includes('paguei') ||
+    captionLower.includes('boleto');
+
+  // ABORDAGEM CONSULTIVA PREDITIVA PARA NOTA FISCAL (DEGUSTAÇÃO):
+  // Se for NF e não houver código de barras/parcelas explícitas na imagem, verifica a legenda com inteligência.
+  if (isInvoiceDoc && (!extraction.installments || extraction.installments.length <= 1) && !extraction.barcode_or_pix) {
+    let captionFullyResolved = false;
+
+    if (mediaCaption && mediaCaption.length >= 4) {
+      try {
+        const resolution = await parseInvoicePaymentResolution(mediaCaption, {
+          total_amount: Number(normalizedDoc.amount || 0),
+          issue_date: normalizedDoc.issue_date,
+          counterparty_name: normalizedDoc.supplier_name,
+          category_suggestion: normalizedDoc.category,
+        });
+
+        // Se a legenda informou dados completos com dia exato ou quitação inequívoca:
+        if (
+          resolution.is_understood &&
+          (resolution.payment_condition === 'already_paid' ||
+            (resolution.upcoming_installments && resolution.upcoming_installments.length > 0 && resolution.first_upcoming_due_date))
+        ) {
+          captionFullyResolved = true;
+          extraction.installments = resolution.upcoming_installments?.map((inst: any) => ({
+            installment_number: inst.installment_number,
+            amount: Number(inst.amount),
+            due_date: inst.due_date,
+          }));
+          extraction.installments_count = resolution.total_installments;
+          extraction.is_installment = resolution.total_installments > 1;
+          if (resolution.first_upcoming_due_date) {
+            normalizedDoc.due_date = resolution.first_upcoming_due_date;
+          }
+        }
+      } catch (capErr) {
+        console.warn('[Trial Invoice Caption Resolution Warning]:', capErr);
+      }
+    }
+
+    // Se a legenda não resolveu 100% (ex: faltou dia da fatura do cartão, ou se parcelas de 2025 já foram pagas):
+    if (!captionFullyResolved) {
+      await createPendingConfirmation({
+        clientId: null,
+        phoneNumber: phone,
+        actionType: 'INVOICE_CONSULTATIVE_PROMPT',
+        initialStatus: 'AWAITING_INVOICE_DETAILS',
+        payload: {
+          amount: Math.abs(Number(normalizedDoc.amount)),
+          counterparty_name: normalizedDoc.supplier_name,
+          description: `${normalizedDoc.document_type} - ${normalizedDoc.supplier_name}`,
+          due_date: normalizedDoc.due_date || normalizedDoc.issue_date || new Date().toISOString().split('T')[0],
+          entry_date: normalizedDoc.issue_date || new Date().toISOString().split('T')[0],
+          issue_date: normalizedDoc.issue_date || null,
+          entry_type: normalizedDoc.entry_type || 'payable',
+          category_name: normalizedDoc.category,
+          dre_group: normalizedDoc.category,
+          entity_scope: normalizedDoc.payer_tax_type === 'cpf' ? 'PF' : 'PJ',
+          origin: 'documento',
+          rawText: mediaCaption || rawText,
+          isTrial: true,
+        },
+        sendWhatsAppCard: false,
+      });
+
+      const valFmt = Number(normalizedDoc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const emissaoFmt = normalizedDoc.issue_date ? formatDueDateDetails(normalizedDoc.issue_date) : 'Data da Nota';
+      const categoriaFmt = formatCategoryName(normalizedDoc.category);
+
+      let captionPromptContext = '';
+      if (mediaCaption) {
+        captionPromptContext = `\n_Li sua observação: "${mediaCaption}"_\n`;
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: `📄 *Li sua Nota Fiscal de ${normalizedDoc.supplier_name}!*
+• *Valor Total:* ${valFmt}
+• *Data de Emissão:* ${emissaoFmt}
+• *Categoria Prevista:* ${categoriaFmt}
+${captionPromptContext}
+💡 *Para organizar seu fluxo de caixa com precisão, me tira uma dúvida rápida:*
+1️⃣ **Essa compra já foi quitada** (à vista no Pix, débito ou dinheiro)?
+2️⃣ **Foi parcelada no cartão?** Se sim, qual o dia de vencimento da fatura do seu cartão e se o pagamento começou na data da nota (${emissaoFmt}) ou vai começar agora? _(Se alguma parcela já foi paga, me avisa que só agendo as próximas a vencer!)_
+3️⃣ **Ou é faturada para pagamento futuro em boleto?**
+
+🎙️ _Pode me responder por áudio ou texto do seu jeito:_
+_Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no Pix hoje"._`,
+      });
+      return;
+    }
+  }
+
+  const installmentsCount = extraction.installments_count || (extraction.installments && extraction.installments.length > 1 ? extraction.installments.length : null);
+  const isInstallment = Boolean(extraction.is_installment || (installmentsCount && installmentsCount > 1));
+
+  // ── MÁQUINA ANTI-ALUCINAÇÃO: CRIA CONFIRMAÇÃO PENDENTE (ESPELHO DE CONFERÊNCIA) ──
+  await createPendingConfirmation({
+    clientId: null,
+    phoneNumber: phone,
+    actionType: normalizedDoc.entry_type === 'receivable' ? 'RECEIVABLE_BILL' : 'PAYABLE_BILL',
+    payload: {
+      amount: Math.abs(Number(normalizedDoc.amount)),
+      counterparty_name: normalizedDoc.supplier_name,
+      description: `${normalizedDoc.document_type} - ${normalizedDoc.supplier_name}`,
+      due_date: normalizedDoc.due_date,
+      entry_date: normalizedDoc.due_date || new Date().toISOString().split('T')[0],
+      entry_type: normalizedDoc.entry_type || 'payable',
+      category_name: normalizedDoc.category,
+      dre_group: normalizedDoc.category,
+      entity_scope: normalizedDoc.payer_tax_type === 'cpf' ? 'PF' : 'PJ',
+      barcode_or_pix: normalizedDoc.barcode_or_pix || null,
+      pix_key: normalizedDoc.pix_key || null,
+      pix_key_type: normalizedDoc.pix_key_type || null,
+      installments_count: installmentsCount,
+      is_installment: isInstallment,
+      installments: extraction.installments?.map((inst) => ({
+        installment_number: inst.installment_number,
+        amount: Number(inst.amount),
+        due_date: inst.due_date,
+        barcode_or_pix: (inst as any).barcode_or_pix || null,
+      })),
+      origin: 'documento',
+      rawText: mediaCaption || rawText,
+      isTrial: true,
+    },
+    sendWhatsAppCard: true,
+  });
+
+  if (extraction.barcode_or_pix) {
+    await sendPaymentCodeMessage(phone, {
+      barcode_or_pix: extraction.barcode_or_pix,
+      pix_key: extraction.pix_key,
+      pix_key_type: extraction.pix_key_type,
+    });
+  }
+}
+
+async function processSubscriberDocumentMedia(params: {
+  client: any;
+  phone: string;
+  cleanPhone: string;
+  body: EvolutionWebhookBody;
+  mediaInfo: ExtractedMediaInfo;
+  mediaCaption: string;
+  rawText: string;
+  isOperator: boolean;
+  operatorName: string;
+  operatorRecord: any;
+  supabase: any;
+}): Promise<void> {
+  const { client, phone, cleanPhone, body, mediaInfo, mediaCaption, rawText, isOperator, operatorName, operatorRecord, supabase } = params;
+  const message = mediaInfo.unwrapped;
+
+  // 4. Obtém Plano e Consumo do Ciclo
+  const { plan } = await getClientPlanAndCurrentCycle(client.id);
+
+  // 5. Ingestão de Documentos (Imagem ou PDF)
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const isDocQa = await isClientOrSenderQa({
+    client,
+    cleanPhone,
+    altPhone,
+    rawPhone: phone,
+  });
+
+  let quotaCheck: CheckUsageResult = { allowed: true, current: 0, limit: 999999, remaining: 999999 };
+  if (!isDocQa) {
+    quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
+  }
+
+  if (!quotaCheck.allowed && !isDocQa) {
+    // Se for inactive_subscription (cliente recém-cadastrado / sem pagamento formal no Asaas ainda)
+    if (quotaCheck.reason === 'inactive_subscription') {
+      const trialCheck = await checkTrialStatus(cleanPhone);
+      if (trialCheck.hasUsedTrial) {
+        await sendEvolutionText({
+          phone,
+          text: getTrialLimitReachedMessage(trialCheck.docsLimit, trialCheck.docsCount),
+        });
+        return;
+      }
+    } else {
+      await sendEvolutionText({
+        phone,
+        text: `⚠️ *Limite de Documentos do Mês Atingido!*\nVocê já processou todos os ${quotaCheck.limit} documentos inclusos no seu plano este mês.\n\nPara continuar lançando sem travar sua rotina, escolha a melhor alternativa para você:\n\n1️⃣ *Pacote Extra (+20 Documentos) por R$ 14,90:*\nIdeal para eventualidades ou compras sazonais. Validade de 60 dias e não se mistura com a mensalidade:\n👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}\n\n2️⃣ *Upgrade para o próximo plano:*\nSe o volume da sua empresa aumentou e você deseja uma cota maior todo mês:\n👉 ${plan?.code === 'start' ? ASAAS_PLANS.monthly.solo.checkoutUrl : ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
+      });
+      return;
+    }
+  }
+
+  await sendEvolutionText({
+    phone,
+    text: `📄 *Recebi seu documento!* Estou processando a leitura contábil com inteligência artificial, aguarde um instante...`,
+  });
+
+  let base64Media =
+    body.data?.base64 ||
+    (body as any)?.base64 ||
+    mediaInfo.unwrapped?.base64 ||
+    mediaInfo.unwrapped?.imageMessage?.base64 ||
+    mediaInfo.unwrapped?.documentMessage?.base64 ||
+    message?.imageMessage?.base64 ||
+    message?.documentMessage?.base64 ||
+    '';
+
+  if (!base64Media) {
+    base64Media = (await fetchMediaBase64FromEvolution(body.data)) || '';
+  }
+  if (!base64Media) {
+    base64Media = (await fetchMediaBase64FromEvolution(body)) || '';
+  }
+
+  if (!base64Media) {
+    await sendEvolutionText({
+      phone,
+      text: `⚠️ Não foi possível carregar a imagem ou documento enviado. Por favor, envie novamente o arquivo ou tire uma foto mais nítida.`,
+    });
+    return;
+  }
+
+  const mimeType = mediaInfo.mimeType || (body.data as any)?.mimetype || message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
+
+  try {
+    // Envia conjuntamente o binário e a instrução/legenda do usuário para o Gemini Vision
+    const extracted = await extractDocumentWithGemini(base64Media, mimeType, mediaCaption || undefined);
+
+    const { data: docRecord } = await supabase
+      .from('documents')
+      .insert({
+        client_id: client.id,
+        storage_path: `docs/${client.id}/${Date.now()}_doc`,
+        file_name: message?.documentMessage?.fileName || 'comprovante.jpg',
+        mime_type: mimeType,
+        doc_type: extracted.doc_type,
+        extracted_data: extracted,
+        confidence_score: extracted.confidence_score,
+        status: extracted.confidence_score < 0.7 ? 'awaiting_user_confirmation' : 'processed',
+      })
+      .select()
+      .single();
+
+    // Suporte a Conciliação de Extratos Bancários (PDF / Imagem) para Assinantes
+    if (extracted.is_bank_statement && Array.isArray(extracted.bank_transactions) && extracted.bank_transactions.length > 0) {
+      const reconRes = await reconcileBankTransactions({
+        clientId: client.id,
+        phone,
+        cleanPhone,
+        transactions: extracted.bank_transactions,
+        bankName: extracted.counterparty_name !== 'Desconhecido' ? extracted.counterparty_name : undefined,
+      });
+
+      await sendEvolutionText({
+        phone,
+        text: reconRes.summaryMessage,
+      });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+      return;
+    }
+
+    if (extracted.confidence_score < 0.7) {
+      await supabase.from('bot_action_confirmations').insert({
+        client_id: client.id,
+        action_type: 'confirm_low_confidence_doc',
+        target_entity_id: docRecord?.id,
+        proposed_payload: {
+          ...extracted,
+          document_id: docRecord?.id,
+        },
+        status: 'pending',
+        expires_at: addMinutes(new Date(), 10).toISOString(),
+      });
+
+      await sendEvolutionText({
+        phone,
+        text: `⚠️ *Confirmação de Leitura Necessária*\nIdentifiquei os seguintes dados, mas recomendo conferir antes de salvar:\n\n• *Fornecedor:* ${extracted.counterparty_name}\n• *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}\n• *Vencimento:* ${extracted.due_date || 'Não identificado'}\n• *Tipo:* ${extracted.doc_type?.toUpperCase()}\n\nOs dados estão corretos?\n👉 Responda *Sim* para aprovar ou *Não* para cancelar.`,
+      });
+      return;
+    }
+
+    // ── MECANISMO ANTI-DUPLICAÇÃO INTELIGENTE ──────────────────────────────
+    // 1. Checagem por Código de Barras / Linha Digitável Exato Já Cadastrado
+    if (extracted.barcode_or_pix) {
+      const cleanExtractedBarcode = String(extracted.barcode_or_pix).replace(/\D/g, '');
+      if (cleanExtractedBarcode.length >= 20) {
+        const { data: alreadySavedBill } = await supabase
+          .from('payables_receivables')
+          .select('id, counterparty_name, amount, current_due_date, barcode_or_pix')
+          .eq('client_id', client.id)
+          .eq('barcode_or_pix', extracted.barcode_or_pix)
+          .limit(1)
+          .maybeSingle();
+
+        if (alreadySavedBill) {
+          const valFmt = Number(alreadySavedBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          const dueFmt = formatDueDateDetails(alreadySavedBill.current_due_date);
+          await sendEvolutionText({
+            phone,
+            text: `⚠️ *Boleto Já Cadastrado Anteriormente!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nIdentificamos que este boleto de *${alreadySavedBill.counterparty_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está registrado e guardado** na sua agenda financeira!\n\n💡 *Fique tranquilo(a):* Nós já estamos monitorando esta conta e vamos te avisar na véspera do vencimento às 10h com o código prontinho para pagar. Não geramos despesa duplicada no seu fluxo de caixa nem consumimos novos créditos!`,
+          });
+
+          await sendPaymentCodeMessage(phone, {
+            barcode_or_pix: extracted.barcode_or_pix,
+            pix_key: extracted.pix_key,
+            pix_key_type: extracted.pix_key_type,
+          });
+
+          return;
+        }
+      }
+    }
+
+    // 2. Se o documento tiver código de barras, verifica se existe parcela prévia sem código (ex: NF prévia)
+    if (extracted.barcode_or_pix && extracted.due_date) {
+      const { data: duplicateCandidate } = await supabase
+        .from('payables_receivables')
+        .select('id, counterparty_name, amount, current_due_date, barcode_or_pix')
+        .eq('client_id', client.id)
+        .eq('status', 'open')
+        .eq('current_due_date', extracted.due_date)
+        .is('barcode_or_pix', null)
+        .gte('amount', Number(extracted.total_amount) - 0.05)
+        .lte('amount', Number(extracted.total_amount) + 0.05)
+        .limit(1)
+        .maybeSingle();
+
+      if (duplicateCandidate) {
+        await supabase
+          .from('payables_receivables')
+          .update({
+            barcode_or_pix: extracted.barcode_or_pix,
+            document_id: docRecord?.id,
+          })
+          .eq('id', duplicateCandidate.id);
+
+        await sendEvolutionText({
+          phone,
+          text: `🔗 *Boleto vinculado à parcela existente sem duplicar!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nIdentificamos que este boleto corresponde ao lançamento de *${duplicateCandidate.counterparty_name}* (R$ ${Number(duplicateCandidate.amount).toFixed(2)}) que vence em *${formatDueDateDetails(duplicateCandidate.current_due_date)}*.\n\nO código de barras foi anexado com sucesso para pagamento e lembretes sem gerar despesa duplicada no seu fluxo de caixa!`,
+        });
+
+        await sendPaymentCodeMessage(phone, {
+          barcode_or_pix: extracted.barcode_or_pix,
+          pix_key: extracted.pix_key,
+          pix_key_type: extracted.pix_key_type,
+        });
+
+        return;
+      }
+    }
+
+    // 3. Checagem de Conta Idêntica (Mesmo Fornecedor + Mesmo Valor + Mesmo Vencimento)
+    if (extracted.due_date && extracted.total_amount && Number(extracted.total_amount) > 0) {
+      const candSupName = (extracted.counterparty_name || '').toLowerCase().trim();
+      const { data: sameBillCandidates } = await supabase
+        .from('payables_receivables')
+        .select('id, counterparty_name, amount, current_due_date, barcode_or_pix, is_provision')
+        .eq('client_id', client.id)
+        .eq('current_due_date', extracted.due_date)
+        .gte('amount', Number(extracted.total_amount) - 0.05)
+        .lte('amount', Number(extracted.total_amount) + 0.05)
+        .limit(5);
+
+      const exactMatch = sameBillCandidates?.find((b: any) => {
+        if (b.is_provision) return false;
+        const bName = (b.counterparty_name || '').toLowerCase().trim();
+        return bName.length >= 3 && candSupName.length >= 3 && (bName.includes(candSupName) || candSupName.includes(bName));
+      });
+
+      if (exactMatch) {
+        const valFmt = Number(exactMatch.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const dueFmt = formatDueDateDetails(exactMatch.current_due_date);
+
+        if (extracted.barcode_or_pix && !exactMatch.barcode_or_pix) {
+          await supabase
+            .from('payables_receivables')
+            .update({ barcode_or_pix: extracted.barcode_or_pix, document_id: docRecord?.id })
+            .eq('id', exactMatch.id);
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Lançamento Já Registrado Anteriormente!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nIdentificamos que esta conta de *${exactMatch.counterparty_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está cadastrada no seu Livro Caixa**.\n\nMantivemos seu registro original ativo para evitar duplicidade de despesas e proteger a exatidão do seu fluxo de caixa!`,
+        });
+
+        if (extracted.barcode_or_pix) {
+          await sendPaymentCodeMessage(phone, {
+            barcode_or_pix: extracted.barcode_or_pix,
+            pix_key: extracted.pix_key,
+            pix_key_type: extracted.pix_key_type,
+          });
+        }
+
+        return;
+      }
+    }
+
+    const isInvoiceDoc =
+      extracted.doc_type === 'nfe' ||
+      extracted.doc_type === 'nfse' ||
+      extracted.doc_type === 'cupom' ||
+      (extracted.doc_type === 'recibo' && !extracted.barcode_or_pix) ||
+      (!extracted.barcode_or_pix && !extracted.is_bank_statement && extracted.doc_type !== 'das_mei' && !extracted.is_rent && !extracted.is_insurance);
+
+    const captionLower = (mediaCaption || '').toLowerCase().trim();
+    const captionHasPaymentDetails =
+      captionLower.includes('parcel') ||
+      captionLower.includes(' vezes') ||
+      captionLower.includes('x') ||
+      captionLower.includes('cartao') ||
+      captionLower.includes('cartão') ||
+      captionLower.includes('pix') ||
+      captionLower.includes('avista') ||
+      captionLower.includes('à vista') ||
+      captionLower.includes('a vista') ||
+      captionLower.includes('quitad') ||
+      captionLower.includes('paguei') ||
+      captionLower.includes('boleto');
+
+    // ABORDAGEM CONSULTIVA PREDITIVA PARA NOTA FISCAL (ASSINANTES):
+    // Se for NF e não houver código de barras/parcelas explícitas na imagem, verifica a legenda com inteligência.
+    if (isInvoiceDoc && (!extracted.installments || extracted.installments.length <= 1) && !extracted.barcode_or_pix) {
+      let captionFullyResolved = false;
+
+      if (mediaCaption && mediaCaption.length >= 4) {
+        try {
+          const resolution = await parseInvoicePaymentResolution(mediaCaption, {
+            total_amount: Number(extracted.total_amount || 0),
+            issue_date: extracted.issue_date,
+            counterparty_name: extracted.counterparty_name,
+            category_suggestion: extracted.category_suggestion,
+          });
+
+          // Se a legenda informou dados completos com dia exato ou quitação inequívoca:
+          if (
+            resolution.is_understood &&
+            (resolution.payment_condition === 'already_paid' ||
+              (resolution.upcoming_installments && resolution.upcoming_installments.length > 0 && resolution.first_upcoming_due_date))
+          ) {
+            captionFullyResolved = true;
+            extracted.installments = resolution.upcoming_installments?.map((inst: any) => ({
+              installment_number: inst.installment_number,
+              amount: Number(inst.amount),
+              due_date: inst.due_date,
+            }));
+            extracted.installments_count = resolution.total_installments;
+            extracted.is_installment = resolution.total_installments > 1;
+            if (resolution.first_upcoming_due_date) {
+              extracted.due_date = resolution.first_upcoming_due_date;
+            }
+          }
+        } catch (capErr) {
+          console.warn('[Subscriber Invoice Caption Resolution Warning]:', capErr);
+        }
+      }
+
+      // Se a legenda não resolveu 100% (ex: faltou dia da fatura do cartão, ou se parcelas de 2025 já foram pagas):
+      if (!captionFullyResolved) {
+        await createPendingConfirmation({
+          clientId: client.id,
+          phoneNumber: phone,
+          actionType: 'INVOICE_CONSULTATIVE_PROMPT',
+          initialStatus: 'AWAITING_INVOICE_DETAILS',
+          payload: {
+            amount: Math.abs(Number(extracted.total_amount)),
+            counterparty_name: extracted.counterparty_name,
+            description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}`,
+            due_date: extracted.due_date || extracted.issue_date || new Date().toISOString().split('T')[0],
+            entry_date: extracted.issue_date || new Date().toISOString().split('T')[0],
+            issue_date: extracted.issue_date || null,
+            entry_type: extracted.entry_type || 'payable',
+            category_name: extracted.category_suggestion || 'despesa_administrativa',
+            dre_group: extracted.category_suggestion || 'despesa_administrativa',
+            entity_scope: extracted.payer_tax_type === 'cpf' ? 'PF' : 'PJ',
+            document_id: docRecord?.id || null,
+            origin: 'documento',
+            rawText: mediaCaption || rawText,
+            isTrial: false,
+          },
+          sendWhatsAppCard: false,
+        });
+
+        const valFmt = Number(extracted.total_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const emissaoFmt = extracted.issue_date ? formatDueDateDetails(extracted.issue_date) : 'Data da Nota';
+        const categoriaFmt = formatCategoryName(extracted.category_suggestion);
+
+        let captionPromptContext = '';
+        if (mediaCaption) {
+          captionPromptContext = `\n_Li sua observação: "${mediaCaption}"_\n`;
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `📄 *Li sua Nota Fiscal de ${extracted.counterparty_name}!*
+• *Valor Total:* ${valFmt}
+• *Data de Emissão:* ${emissaoFmt}
+• *Categoria Prevista:* ${categoriaFmt}
+${captionPromptContext}
+💡 *Para organizar seu fluxo de caixa com precisão, me tira uma dúvida rápida:*
+1️⃣ **Essa compra já foi quitada** (à vista no Pix, débito ou dinheiro)?
+2️⃣ **Foi parcelada no cartão?** Se sim, qual o dia de vencimento da fatura do seu cartão e se o pagamento começou na data da nota (${emissaoFmt}) ou vai começar agora? _(Se alguma parcela já foi paga, me avisa que só provisiono as próximas a vencer!)_
+3️⃣ **Ou é faturada para pagamento futuro em boleto?**
+
+🎙️ _Pode me responder por áudio ou texto do jeito que preferir!_
+_Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no Pix hoje"._`,
+        });
+        return;
+      }
+    }
+
+    const isReceivable = extracted.entry_type === 'receivable';
+    const installmentsCount = extracted.installments_count || (extracted.installments && extracted.installments.length > 1 ? extracted.installments.length : null);
+    const isInstallment = Boolean(extracted.is_installment || (installmentsCount && installmentsCount > 1));
+
+    await createPendingConfirmation({
+      clientId: client.id,
+      phoneNumber: phone,
+      actionType: isReceivable ? 'RECEIVABLE_BILL' : 'PAYABLE_BILL',
+      payload: {
+        amount: Math.abs(Number(extracted.total_amount)),
+        counterparty_name: extracted.counterparty_name,
+        description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}${isReceivable ? ' (RECEBÍVEL)' : ''}`,
+        due_date: extracted.due_date,
+        entry_date: extracted.due_date || new Date().toISOString().split('T')[0],
+        entry_type: isReceivable ? 'receivable' : 'payable',
+        category_name: extracted.category_suggestion || (isReceivable ? 'receita_operacional' : 'despesa_administrativa'),
+        dre_group: extracted.category_suggestion || (isReceivable ? 'receita_operacional' : 'despesa_administrativa'),
+        entity_scope: extracted.payer_tax_type === 'cpf' ? 'PF' : 'PJ',
+        barcode_or_pix: extracted.barcode_or_pix || null,
+        document_id: docRecord?.id || null,
+        installments_count: installmentsCount,
+        is_installment: isInstallment,
+        installments: extracted.installments?.map((inst) => ({
+          installment_number: inst.installment_number,
+          amount: Number(inst.amount),
+          due_date: inst.due_date,
+          barcode_or_pix: inst.barcode_or_pix || null,
+        })),
+        origin: 'documento',
+        rawText: mediaCaption || rawText,
+        isTrial: false,
+      },
+      sendWhatsAppCard: true,
+    });
+
+    if (extracted.barcode_or_pix) {
+      await sendPaymentCodeMessage(phone, {
+        barcode_or_pix: extracted.barcode_or_pix,
+        pix_key: extracted.pix_key,
+        pix_key_type: extracted.pix_key_type,
+      });
+    }
+
+    // PONTO 2: Modo Onisciência - Notifica o Dono em tempo real sobre ação da equipe se aplicável
+    if (isOperator && operatorRecord?.notify_owner_on_action !== false && client.whatsapp_number && client.whatsapp_number !== phone) {
+      await sendEvolutionText({
+        phone: client.whatsapp_number,
+        text: `🔔 *Ação da Equipe — ${client.name || 'Sua Empresa'}*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nA operadora *${operatorName}* acabou de registrar um novo lançamento:\n• *Fornecedor:* ${extracted.counterparty_name}\n• *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}\n• *Vencimento:* ${extracted.due_date || 'A definir'}\n• *Classificação:* ${extracted.category_suggestion}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n_Lançamento auditado e integrado ao seu Livro Caixa no piloto automático._`,
+      });
+    }
+
+    return;
+  } catch (err) {
+    console.error('[Gemini Document OCR Error]:', err);
+    await sendEvolutionText({
+      phone,
+      text: `Não consegui decodificar nitidamente o documento enviado. Por favor, envie uma foto com melhor iluminação ou o arquivo PDF original.`,
+    });
+    return;
   }
 }
 
@@ -2557,8 +3299,14 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     phone = cleanPhone;
   }
 
-  const message = unwrapMessage(body.data?.message);
-  const rawText = extractTextFromMessage(body.data?.message);
+  const mediaInfo = extractMediaInfo(body);
+  const message = mediaInfo.unwrapped;
+  const isImage = mediaInfo.isImage;
+  const isDoc = mediaInfo.isDoc;
+  const isAudio = mediaInfo.isAudio;
+  const isMedia = mediaInfo.isMedia;
+  const rawText = extractTextFromMessage(body.data?.message, body.data);
+  const mediaCaption = (mediaInfo.mediaCaption || rawText).trim();
   const cleanText = rawText.trim().toLowerCase();
   const digitsOnly = rawText.replace(/\D/g, '');
   const isCommand = rawText.trim().startsWith('!') || rawText.trim().startsWith('/');
@@ -2581,7 +3329,86 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     client = null;
   }
 
-  // ── 0. INTERCEPTADOR DE CONFIRMAÇÕES PENDENTES (AÇÕES QUE MEXEM EM LANÇAMENTOS) ──
+  // ── 0. MÁQUINA DE ESTADOS ANTI-ALUCINAÇÃO (FASE 2) ──
+  // Apenas processa respostas de confirmação de texto (ex: [1], [2], [3]).
+  // Se o usuário enviou uma nova foto/documento (isMedia), não deve ser tratado como resposta de texto.
+  if (!isMedia) {
+    const pendingCheck = await handlePendingConfirmation({
+      phone,
+      cleanPhone,
+      altPhone,
+      rawText,
+      client,
+      isOperator,
+      operatorName,
+      operatorRecord,
+    });
+    if (pendingCheck.handled) {
+      return;
+    }
+  }
+
+  // ── 0.1 BARREIRA DE ACESSO / GUARDA DE SIGILO DO OPERADOR (FASE 3) ──
+  if (isOperator && isRestrictedOperatorText(cleanText)) {
+    await sendEvolutionText({
+      phone,
+      text: OPERATOR_REFUSAL_MESSAGE,
+    });
+    return;
+  }
+
+  // ── 0.2 OPT-IN LEGAL / TERMOS DE USO NO WHATSAPP (PRIMEIRA MENSAGEM) ──
+  const isGreetingOnly =
+    !isMedia &&
+    !isAudio &&
+    /^(oi\b|ol[aá]\b|bom dia\b|boa tarde\b|boa noite\b|ola\b|e a[ií]\b|menu\b|ajuda\b)/i.test(cleanText) &&
+    cleanText.length <= 25;
+
+  const optInResult = await checkAndApplyLegalOptIn({
+    phone,
+    cleanPhone,
+    client,
+    isGreetingOnly,
+  });
+
+  if (optInResult.shouldStopProcessing) {
+    return;
+  }
+
+  // ── 0.3 MÍDIA MULTIMODAL (FOTO DE NOTA FISCAL, BOLETO OU DOCUMENTO COM OU SEM LEGENDA) ──
+  // A presença de texto na legenda (caption) NUNCA deve desviar para rotas de texto puro.
+  // Baixa o binário e passa conjuntamente imagem + legenda instrutiva para o Gemini Vision.
+  if (isMedia) {
+    if (!client) {
+      await processTrialDocumentMedia({
+        phone,
+        cleanPhone,
+        body,
+        mediaInfo,
+        mediaCaption,
+        rawText,
+        supabase,
+      });
+      return;
+    } else {
+      await processSubscriberDocumentMedia({
+        client,
+        phone,
+        cleanPhone,
+        body,
+        mediaInfo,
+        mediaCaption,
+        rawText,
+        isOperator,
+        operatorName,
+        operatorRecord,
+        supabase,
+      });
+      return;
+    }
+  }
+
+  // ── 0.2 DEMAIS INTERCEPTADORES ESPECIAIS (2FA E RESET DE TESTES) ──
   const nowIso = new Date().toISOString();
   let confQuery = supabase
     .from('bot_action_confirmations')
@@ -3101,50 +3928,14 @@ _Caso deseje promover esta operadora ou alterar as permissões de acesso, digite
       return;
     }
 
-    // Se for cliente comum compartilhando contato (Pré-cadastro de indicação seguro)
+    // Se for cliente compartilhando contato de equipe
     const contact = attachedContacts[0];
-    const clientName = client?.name || body.data?.pushName || 'Cliente Parceiro';
-    const clientPhone = client?.whatsapp_number || phone;
-
-    // Pré-registra o lead vinculado ao cliente para atribuir comissão futura
-    const linkResult = await linkReferralLead(contact.phone, clientPhone);
-    if (!linkResult.success) {
-      await sendEvolutionText({
-        phone,
-        text:
-          linkResult.message ||
-          `⚠️ Não foi possível cadastrar o contato *${contact.name}* (${contact.phone}) como sua indicação.`,
-      });
-      return;
-    }
-
-    const refGreeting = `Olá! Recebi a indicação do ${clientName}!`;
-    const refLink = `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${encodeURIComponent(refGreeting)}`;
-    const contactFirstName = contact.name.split(' ')[0] || 'Parceiro';
-
-    const forwardShare = `👋 Olá, ${contactFirstName}!
-O *${clientName}* recomendou o **AnalisAí** para você!
-
-É o assistente de inteligência financeira no WhatsApp que organiza notas fiscais, boletos e fluxo de caixa automaticamente. Você ganha uma degustação gratuita para testar!
-
-👉 *Clica aqui para falar com o AnalisAí:*
-${refLink}`;
-
     await sendEvolutionText({
       phone,
-      text: `Recebi o contato de *${contact.name}* (${contact.phone})! 😊
+      text: `Recebi o contato de *${contact.name}* (${contact.phone})! 👋
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ **Pré-cadastro de Indicação Realizado!**
-🛡️ *Segurança Anti-Spam:* O robô **NÃO** enviou mensagem fria para ele. O vínculo de indicação já foi registrado no seu nome!
-
-📲 *Mensagem pronta para você encaminhar para ele no WhatsApp:*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${forwardShare}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Sua Recompensa:* Assim que ele assinar qualquer plano, você ganha **1 Mês Grátis de AnalisAí** abatido na sua assinatura! 🎁
-
-👉 *Obs:* Se você queria adicioná-lo como funcionário/operador da sua própria empresa, digite:
-*!equipe add ${contact.phone} ${contact.name}*`,
+💡 Para cadastrá-lo(a) como operador(a) da sua empresa para lançar notas e despesas no Livro Caixa, digite:
+👉 *!equipe add ${contact.phone} ${contact.name}*`,
     });
     return;
   }
@@ -3163,6 +3954,31 @@ ${forwardShare}
     const teamResponse = await handleNaturalLanguageTeamCommand(client.id, rawText);
     if (teamResponse.handled && teamResponse.message) {
       await sendEvolutionText({ phone, text: teamResponse.message });
+      return;
+    }
+  }
+
+  // ── Interceptação 0.25: Comando Direto de Fechamento Contábil (!fechamento) ──
+  if (cleanText === '!fechamento' || cleanText.startsWith('!fechamento ') || cleanText === 'fechamento') {
+    if (isOperator) {
+      await sendEvolutionText({ phone, text: OPERATOR_REFUSAL_MESSAGE });
+      return;
+    }
+    if (client?.id) {
+      const parts = cleanText.split(/\s+/);
+      const requestedPeriod = parts[1] && parts[1].includes('/') ? parts[1] : undefined;
+
+      await sendEvolutionText({
+        phone,
+        text: '📦 *Preparando o pacote de fechamento contábil...*\nLocalizando extratos estruturados, relatórios e comprovantes fiscais...',
+      });
+
+      const { generateAndSendAccountingClosing } = await import('@/lib/solo/accountant-export');
+      await generateAndSendAccountingClosing({
+        clientId: client.id,
+        phone,
+        requestedPeriod,
+      });
       return;
     }
   }
@@ -3269,36 +4085,7 @@ Seus relatórios e Livro Caixa já foram sincronizados com essa separação.`,
     }
   }
 
-  // ── Interceptação 1: Comandos do Analisador Oficial, Indicação & Parcerias ────
-  const isAnalisadorCommand =
-    cleanText === '!analisador' || cleanText === 'analisador' || cleanText === '/analisador' ||
-    cleanText === '!analisar' || cleanText === 'analisar' || cleanText === '/analisar' ||
-    cleanText === '!indicar' || cleanText === 'indicar' || cleanText === '/indicar' ||
-    cleanText === '!indicação' || cleanText === 'indicação' || cleanText === '!indicacao' || cleanText === 'indicacao' ||
-    cleanText === '!comissao' || cleanText === 'comissao' || cleanText === '!comissão' || cleanText === 'comissão' || cleanText === '/comissao' ||
-    cleanText === '!parceiro' || cleanText === 'parceiro' || cleanText === '/parceiro' ||
-    cleanText === '!vip' || cleanText === 'vip' ||
-    cleanText === '!pioneiro' || cleanText === 'pioneiro';
 
-  if (isAnalisadorCommand) {
-    const shareMsg = await getReferralShareMessage(client?.id || cleanPhone, body.data?.pushName);
-    await sendEvolutionText({ phone, text: shareMsg });
-    return;
-  }
-
-  // ── Interceptação 1.04: Confirmação e Cancelamento de 2FA do Pix ──────────
-  if (cleanText.startsWith('!confirmarpix') || cleanText.startsWith('/confirmarpix')) {
-    const rawCode = rawText.replace(/^[!/](confirmarpix)\s*/i, '').trim();
-    const result = await confirmarAlteracaoPix(client?.id || cleanPhone, rawCode);
-    await sendEvolutionText({ phone, text: result.message });
-    return;
-  }
-
-  if (cleanText === '!cancelarpix' || cleanText === '/cancelarpix') {
-    const cancelMsg = await cancelarAlteracaoPix(client?.id || cleanPhone);
-    await sendEvolutionText({ phone, text: cancelMsg });
-    return;
-  }
 
   // ── Interceptação 1.05: Confirmação e Cancelamento de 2FA do E-mail ────────
   if (cleanText.startsWith('!confirmaremail') || cleanText.startsWith('/confirmaremail')) {
@@ -3362,40 +4149,7 @@ Para habilitar validações em duas etapas (2FA) e cadastrar chaves Pix alternat
     return;
   }
 
-  // ── Interceptação 1.06: Comando de Chave Pix (!pix [chave]) ────────────────
-  if (cleanText.startsWith('!pix') || cleanText.startsWith('/pix') || cleanText === 'pix') {
-    const rawPix = rawText.replace(/^[!/](pix)\s*/i, '').replace(/^pix\s*/i, '').trim();
-    if (!rawPix) {
-      const status = await getReferralStatus(client?.id || cleanPhone);
-      if (status.pixKey) {
-        await sendEvolutionText({
-          phone,
-          text: `🔑 *Sua Chave Pix para Repasses de Analisador:*
-👉 \`${status.pixKey}\` ${status.isDocumentPixKey ? '🛡️ *(CNPJ/CPF Oficial do Titular)*' : '✅'}
 
-🛡️ *Segurança Ativa (Abordagem 2):*
-Qualquer alteração para chaves alternativas requer validação obrigatória por código de segurança (2FA) enviado ao seu e-mail cadastrado.
-
-Para alterar sua chave Pix, envie:
-👉 *!pix nova_chave*`,
-        });
-      } else {
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Nenhuma Chave Pix Cadastrada!*
-
-Para receber suas comissões mensais como Analisador direto no Pix, cadastre sua chave agora enviando:
-👉 *!pix sua_chave*
-_(Ex: !pix 12.345.678/0001-90 ou !pix financeiro@empresa.com)_`,
-        });
-      }
-      return;
-    }
-
-    const result = await solicitarAlteracaoPix(client?.id || cleanPhone, rawPix);
-    await sendEvolutionText({ phone, text: result.message });
-    return;
-  }
 
   // ── Interceptação 1.1: Comando de Dividendos e Retiradas de Lucro (!dividendos) ─
   if (cleanText === '!dividendos' || cleanText === 'dividendos' || cleanText === '!lucros' || cleanText === 'lucros' || cleanText === '/dividendos') {
@@ -3542,22 +4296,7 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
-  // ── Interceptação 2: Lead vindo de Link de Indicação de Amigo ou Analisador ───
-  const referralMatch = rawText.match(/(?:indica[çc][ãa]o do (?:cliente|analisador|parceiro)|indicado por)\s*(\d{10,14})/i);
-  if (referralMatch && referralMatch[1]) {
-    const referrerPhone = referralMatch[1];
-    await linkReferralLead(cleanPhone, referrerPhone);
-    await sendEvolutionText({
-      phone,
-      text: `🎉 *Bem-vindo ao AnalisAí!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que você veio por indicação de um de nossos **Analisadores Oficiais**!
-Você tem direito à nossa **Degustação Gratuita Imediata**!
 
-📸 Envie uma foto ou PDF de um boleto ou conta a pagar agora mesmo para ver como nossa inteligência artificial organiza seu fluxo de caixa em segundos!`,
-    });
-    return;
-  }
 
   // ── Interceptação 3: Fila de Espera dos Planos Pro e Super (Sob Demanda) ───
   const isProOrSuperInterest =
@@ -3681,178 +4420,16 @@ Verifique se digitou corretamente ou escolha um dos nossos planos para começar 
     }
 
     // 1.3 Degustação Gratuita (Trial) - Verifica se o usuário enviou uma MÍDIA (imagem ou documento PDF)
-    const isMedia = Boolean(message?.imageMessage || message?.documentMessage);
     if (isMedia) {
-      const trialStatus = await checkTrialStatus(cleanPhone);
-      if (trialStatus.hasUsedTrial) {
-        await sendEvolutionText({
-          phone,
-          text: getTrialLimitReachedMessage(trialStatus.docsLimit, trialStatus.docsCount),
-        });
-        return;
-      }
-
-      // Processa o 1º documento na DEGUSTAÇÃO GRATUITA
-      await sendEvolutionText({
+      await processTrialDocumentMedia({
         phone,
-        text: `⏳ *Recebido! Analisando seu documento em tempo real na degustação gratuita do AnalisAí...*
-Aguarde alguns segundos enquanto nossa inteligência artificial faz a leitura completa dos dados.`,
+        cleanPhone,
+        body,
+        message,
+        mediaCaption,
+        rawText,
+        supabase,
       });
-
-      let base64 =
-        body.data?.base64 ||
-        message?.imageMessage?.base64 ||
-        message?.documentMessage?.base64 ||
-        '';
-
-      if (!base64) {
-        base64 = (await fetchMediaBase64FromEvolution(body.data)) || '';
-      }
-
-      if (!base64) {
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ Não foi possível baixar a imagem para a degustação. Por favor, envie o arquivo novamente ou tire uma foto mais nítida.`,
-        });
-        return;
-      }
-
-      const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
-      const extraction = await extractDocumentWithGemini(base64, mimeType);
-
-      // Suporte a Conciliação de Extratos Bancários (PDF / Imagem)
-      if (extraction.is_bank_statement && Array.isArray(extraction.bank_transactions) && extraction.bank_transactions.length > 0) {
-        const reconRes = await reconcileBankTransactions({
-          clientId: null,
-          phone,
-          cleanPhone,
-          transactions: extraction.bank_transactions,
-          bankName: extraction.counterparty_name !== 'Desconhecido' ? extraction.counterparty_name : undefined,
-        });
-
-        await sendEvolutionText({
-          phone,
-          text: reconRes.summaryMessage,
-        });
-        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
-        return;
-      }
-
-      const isFinancial =
-        extraction.is_financial_doc !== false &&
-        (Boolean(extraction.is_bank_statement) || extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
-
-      if (!isFinancial) {
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Documento não identificado como financeiro.*
-O arquivo enviado não parece ser um boleto, conta de consumo, nota fiscal ou extrato bancário.
-
-Na nossa degustação gratuita, envie uma foto nítida de um boleto, NF ou extrato para ver o robô funcionando em tempo real!`,
-        });
-        return;
-      }
-
-      // Normaliza os campos para compatibilidade total entre extratores e formatadores
-      const normalizedDoc = {
-        ...extraction,
-        supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || (extraction.entry_type === 'receivable' ? 'Cliente' : 'Fornecedor'),
-        amount: extraction.total_amount !== undefined && extraction.total_amount !== null ? extraction.total_amount : (extraction as any).amount,
-        document_type: extraction.doc_type || (extraction as any).document_type || 'Boleto/Conta',
-        category: extraction.category_suggestion || (extraction as any).category || (extraction.entry_type === 'receivable' ? 'receita_operacional' : null),
-        entry_type: extraction.entry_type || 'payable',
-      };
-
-      // Registra que a degustação foi realizada
-      const trialResult = await recordTrialUsage(cleanPhone, normalizedDoc);
-
-      if (trialResult?.isDuplicate) {
-        const existing = trialResult.existingBill || normalizedDoc;
-        const valFmt = Number(existing.amount || normalizedDoc.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const dueFmt = formatDueDateDetails(existing.due_date || normalizedDoc.due_date);
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Boleto/Conta Já Cadastrado Anteriormente!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este lançamento de *${existing.supplier_name || normalizedDoc.supplier_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está cadastrado e guardado** na sua agenda financeira!
-
-💡 *Fique tranquilo(a):* Nós já estamos monitorando esta conta e vamos te avisar na véspera. Mantivemos seu registro original para evitar cobranças duplicadas e sem consumir sua cota de testes!`,
-        });
-
-        await sendPaymentCodeMessage(phone, {
-          barcode_or_pix: extraction.barcode_or_pix,
-          pix_key: extraction.pix_key,
-          pix_key_type: extraction.pix_key_type,
-        });
-
-        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
-        return;
-      }
-
-      // 1. Envia resumo executivo do documento informando a cota restante
-      const remainingAfter = Math.max(0, (trialStatus.remainingDocs || 1) - 1);
-      const summaryText = formatTrialDocSummary(normalizedDoc, remainingAfter);
-      await sendEvolutionText({ phone, text: summaryText });
-
-      // 2. Se houver código de barras / Pix / linha digitável, envia com rotulagem inteligente
-      await sendPaymentCodeMessage(phone, {
-        barcode_or_pix: extraction.barcode_or_pix,
-        pix_key: extraction.pix_key,
-        pix_key_type: extraction.pix_key_type,
-      });
-
-      // 3. Identificação de Titularidade e Consultoria de Blindagem Patrimonial
-      if (extraction.payer_tax_id) {
-        const isCpfTit = extraction.payer_tax_type === 'cpf' || extraction.payer_tax_id.replace(/\D/g, '').length === 11;
-        const payerTypeLabel = isCpfTit ? 'CPF' : 'CNPJ';
-        const titQuestion = isCpfTit
-          ? `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos este documento emitido para o CPF *${extraction.payer_tax_id}* (${extraction.payer_name || 'Pessoa Física'}).
-
-Para organizarmos seus relatórios contábeis, folha e fiscal:
-A quem pertence esta conta?
-1️⃣ *Sócio / Meu CPF* — Despesa particular dos sócios
-2️⃣ *Funcionário* — Adiantamento, bônus ou benefício de colaborador
-3️⃣ *Terceiro* — Parente, amigo ou terceiro sem vínculo
-4️⃣ *Empresa* — Despesa operacional da PJ emitida em CPF
-
-👉 _Responda com o nome: *Sócio*, *Funcionário*, *Terceiro* ou *Empresa*_`
-          : `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos o CNPJ *${extraction.payer_tax_id}* emitido para *${extraction.payer_name || 'Pessoa Jurídica'}*.
-
-Para organizarmos seus relatórios:
-Este documento pertence à sua:
-1️⃣ *Minha Empresa* — Empresa principal
-2️⃣ *Filial / Outro CNPJ* — Outra empresa ou unidade do grupo
-3️⃣ *Sócio* — PJ particular de sócio
-
-👉 _Responda: *Minha Empresa*, *Outro CNPJ* ou *Sócio*_`;
-
-        await sendEvolutionText({ phone, text: titQuestion });
-      }
-
-      const patrimonialTrial = analyzePatrimonialExpense({
-        supplier_name: extraction.counterparty_name,
-        counterparty_name: extraction.counterparty_name,
-        category: extraction.category_suggestion,
-        amount: Number(extraction.total_amount),
-        payer_name: extraction.payer_name,
-        payer_tax_id: extraction.payer_tax_id,
-        payer_tax_type: extraction.payer_tax_type,
-      });
-      if (patrimonialTrial.adviceMessage) {
-        await sendEvolutionText({
-          phone,
-          text: patrimonialTrial.adviceMessage,
-        });
-      }
-
-      // 4. Oferece menu de ações de sequência profissional (sem "Mostrar Votos")
-      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
-
-      // 5. Documento registrado na degustação
       return;
     }
 
@@ -3893,8 +4470,18 @@ Este documento pertence à sua:
         }
 
         const conv = await parseConversationalFinancialEntry(rawText);
+
+        // Se o Gemini indicou que precisa de esclarecimento (ex: faltou valor ou data), PERGUNTA ao usuário antes de gravar!
+        if (conv.is_financial_entry && conv.needs_clarification) {
+          await sendEvolutionText({
+            phone,
+            text: `💬 ${conv.clarification_prompt || 'Entendi que você deseja registrar um lançamento! Pode me informar o valor e a data de vencimento?'}`,
+          });
+          return;
+        }
+
         const entries = Array.isArray(conv.entries) && conv.entries.length > 0 ? conv.entries : [];
-        if (entries.length === 0 && conv.is_financial_entry && (conv.amount || conv.is_provision)) {
+        if (entries.length === 0 && conv.is_financial_entry && conv.amount && conv.due_date) {
           entries.push({
             supplier_or_customer: conv.supplier_or_customer || 'Fornecedor',
             amount: conv.amount,
@@ -3907,7 +4494,21 @@ Este documento pertence à sua:
           });
         }
 
-        const validEntries = entries.filter((e: any) => (e.amount || e.is_provision) && (e.due_date || e.is_provision));
+        // BARREIRA DE SEGURANÇA: NUNCA permite lançamentos com amount nulo, <= 0 ou sem vencimento
+        const validEntries = entries.filter((e: any) => {
+          const amt = Number(e.amount);
+          return !isNaN(amt) && amt > 0 && e.due_date;
+        });
+
+        // Se o usuário teve intenção financeira mas faltam dados essenciais em qualquer das entradas:
+        if (conv.is_financial_entry && validEntries.length === 0) {
+          const entity = entries[0]?.supplier_or_customer || conv.supplier_or_customer || 'sua compra';
+          await sendEvolutionText({
+            phone,
+            text: `💬 ${conv.clarification_prompt || `Identifiquei o parcelamento de *${entity}*, mas ainda não tenho o valor da compra.\n\n👉 *Qual é o valor total ou das parcelas?*`}`,
+          });
+          return;
+        }
 
         if (conv.is_financial_entry && validEntries.length > 0) {
           await recordMultipleTrialUsage(cleanPhone, validEntries);
@@ -3952,12 +4553,6 @@ Este documento pertence à sua:
               break;
             }
           }
-          return;
-        } else if (conv.is_financial_entry && conv.needs_clarification) {
-          await sendEvolutionText({
-            phone,
-            text: `💬 ${conv.clarification_prompt || 'Entendi que você deseja agendar um lançamento! Pode me informar o valor e a data de vencimento?'}`,
-          });
           return;
         }
       } catch (trialTextErr) {
@@ -4060,8 +4655,18 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo pr
 
         // Tenta interpretar o áudio como lançamento financeiro (1 ou múltiplos lançamentos)
         const conv = await parseConversationalFinancialEntry(cleanTranscribed);
+
+        // Se o Gemini indicou que precisa de esclarecimento (ex: faltou valor ou data), PERGUNTA ao usuário antes de gravar!
+        if (conv.is_financial_entry && conv.needs_clarification) {
+          await sendEvolutionText({
+            phone,
+            text: `🎙️ _Áudio: "${cleanTranscribed}"_\n\n💬 ${conv.clarification_prompt || 'Entendi seu áudio! Pode me confirmar o valor e a data de vencimento?'}`,
+          });
+          return;
+        }
+
         const entries = Array.isArray(conv.entries) && conv.entries.length > 0 ? conv.entries : [];
-        if (entries.length === 0 && conv.is_financial_entry && (conv.amount || conv.is_provision)) {
+        if (entries.length === 0 && conv.is_financial_entry && conv.amount && conv.due_date) {
           entries.push({
             supplier_or_customer: conv.supplier_or_customer || 'Fornecedor',
             amount: conv.amount,
@@ -4074,7 +4679,21 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo pr
           });
         }
 
-        const validEntries = entries.filter((e: any) => (e.amount || e.is_provision) && (e.due_date || e.is_provision));
+        // BARREIRA DE SEGURANÇA: NUNCA permite lançamentos com amount nulo, <= 0 ou sem vencimento
+        const validEntries = entries.filter((e: any) => {
+          const amt = Number(e.amount);
+          return !isNaN(amt) && amt > 0 && e.due_date;
+        });
+
+        // Se o usuário teve intenção financeira mas faltam dados essenciais:
+        if (conv.is_financial_entry && validEntries.length === 0) {
+          const entity = entries[0]?.supplier_or_customer || conv.supplier_or_customer || 'sua compra';
+          await sendEvolutionText({
+            phone,
+            text: `🎙️ _Áudio: "${cleanTranscribed}"_\n\n💬 ${conv.clarification_prompt || `Identifiquei o parcelamento de *${entity}*, mas ainda não tenho o valor da compra.\n\n👉 *Qual é o valor total ou das parcelas?*`}`,
+          });
+          return;
+        }
 
         if (conv.is_financial_entry && validEntries.length > 0) {
           await recordMultipleTrialUsage(cleanPhone, validEntries);
@@ -4123,13 +4742,6 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo pr
               break;
             }
           }
-          return;
-        } else if (conv.is_financial_entry && conv.needs_clarification) {
-          // Bate-bola conversacional: usuário pediu para registrar mas faltaram dados essenciais
-          await sendEvolutionText({
-            phone,
-            text: `🎙️ _Áudio transcrito: "${cleanTranscribed}"_\n\n💬 ${conv.clarification_prompt || 'Entendi que você deseja registrar um lançamento! Para eu agendar no seu Livro Caixa, por favor me informe o valor e a data de vencimento.'}`,
-          });
           return;
         } else {
           // O áudio foi reconhecido, mas não contém dados de conta a pagar/receber (ex: bate-papo informal ou teste)
@@ -4276,553 +4888,24 @@ Como posso te ajudar agora?`,
   const { plan, cycle } = await getClientPlanAndCurrentCycle(client.id);
 
   // 5. Ingestão de Documentos (Imagem ou PDF)
-  const isImage = !!message?.imageMessage;
-  const isDoc = !!message?.documentMessage;
-
   if (isImage || isDoc) {
-    const quotaCheck = await checkAndIncrementQuota(client.id, 'doc', 1);
-
-    const isDocQa = client.is_admin || await isQaWhitelisted(cleanPhone) || await isQaWhitelisted(client.tax_id);
-    if (!quotaCheck.allowed && !isDocQa) {
-      await sendEvolutionText({
-        phone,
-        text: `⚠️ *Limite de Documentos do Mês Atingido!*
-Você já processou todos os ${quotaCheck.limit} documentos inclusos no seu plano este mês.
-
-Para continuar lançando sem travar sua rotina, escolha a melhor alternativa para você:
-
-1️⃣ *Pacote Extra (+20 Documentos) por R$ 14,90:*
-Ideal para eventualidades ou compras sazonais. Validade de 60 dias e não se mistura com a mensalidade:
-👉 ${ASAAS_ONE_OFF.extraDocsPackage.checkoutUrl}
-
-2️⃣ *Upgrade para o próximo plano:*
-Se o volume da sua empresa aumentou e você deseja uma cota maior todo mês:
-👉 ${plan?.code === 'start' ? ASAAS_PLANS.monthly.solo.checkoutUrl : ASAAS_PLANS.monthly.solo_plus.checkoutUrl}`,
-      });
-      return;
-    }
-
-    await sendEvolutionText({
+    await processSubscriberDocumentMedia({
+      client,
       phone,
-      text: `📄 *Recebi seu documento!* Estou processando a leitura contábil com inteligência artificial, aguarde um instante...`,
+      cleanPhone,
+      body,
+      mediaInfo,
+      mediaCaption,
+      rawText,
+      isOperator,
+      operatorName,
+      operatorRecord,
+      supabase,
     });
-
-    let base64Media = body.data?.base64 || '';
-    if (!base64Media) {
-      base64Media = (await fetchMediaBase64FromEvolution(body.data)) || '';
-    }
-    const mimeType = message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
-
-    try {
-      const extracted = await extractDocumentWithGemini(base64Media, mimeType);
-
-      const { data: docRecord } = await supabase
-        .from('documents')
-        .insert({
-          client_id: client.id,
-          storage_path: `docs/${client.id}/${Date.now()}_doc`,
-          file_name: message?.documentMessage?.fileName || 'comprovante.jpg',
-          mime_type: mimeType,
-          doc_type: extracted.doc_type,
-          extracted_data: extracted,
-          confidence_score: extracted.confidence_score,
-          status: extracted.confidence_score < 0.7 ? 'awaiting_user_confirmation' : 'processed',
-        })
-        .select()
-        .single();
-
-      // Suporte a Conciliação de Extratos Bancários (PDF / Imagem) para Assinantes
-      if (extracted.is_bank_statement && Array.isArray(extracted.bank_transactions) && extracted.bank_transactions.length > 0) {
-        const reconRes = await reconcileBankTransactions({
-          clientId: client.id,
-          phone,
-          cleanPhone,
-          transactions: extracted.bank_transactions,
-          bankName: extracted.counterparty_name !== 'Desconhecido' ? extracted.counterparty_name : undefined,
-        });
-
-        await sendEvolutionText({
-          phone,
-          text: reconRes.summaryMessage,
-        });
-        await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
-        return;
-      }
-
-      if (extracted.confidence_score < 0.7) {
-        await supabase.from('bot_action_confirmations').insert({
-          client_id: client.id,
-          action_type: 'confirm_low_confidence_doc',
-          target_entity_id: docRecord?.id,
-          proposed_payload: {
-            ...extracted,
-            document_id: docRecord?.id,
-          },
-          status: 'pending',
-          expires_at: addMinutes(new Date(), 10).toISOString(),
-        });
-
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Confirmação de Leitura Necessária*
-Identifiquei os seguintes dados, mas recomendo conferir antes de salvar:
-
-• *Fornecedor:* ${extracted.counterparty_name}
-• *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
-• *Vencimento:* ${extracted.due_date || 'Não identificado'}
-• *Tipo:* ${extracted.doc_type?.toUpperCase()}
-
-Os dados estão corretos?
-👉 Responda *Sim* para aprovar ou *Não* para cancelar.`,
-        });
-        return;
-      }
-
-      // ── MECANISMO ANTI-DUPLICAÇÃO INTELIGENTE ──────────────────────────────
-      // 1. Checagem por Código de Barras / Linha Digitável Exato Já Cadastrado
-      if (extracted.barcode_or_pix) {
-        const cleanExtractedBarcode = String(extracted.barcode_or_pix).replace(/\D/g, '');
-        if (cleanExtractedBarcode.length >= 20) {
-          const { data: alreadySavedBill } = await supabase
-            .from('payables_receivables')
-            .select('id, counterparty_name, amount, current_due_date, barcode_or_pix')
-            .eq('client_id', client.id)
-            .eq('barcode_or_pix', extracted.barcode_or_pix)
-            .limit(1)
-            .maybeSingle();
-
-          if (alreadySavedBill) {
-            const valFmt = Number(alreadySavedBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            const dueFmt = formatDueDateDetails(alreadySavedBill.current_due_date);
-            await sendEvolutionText({
-              phone,
-              text: `⚠️ *Boleto Já Cadastrado Anteriormente!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este boleto de *${alreadySavedBill.counterparty_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está registrado e guardado** na sua agenda financeira!
-
-💡 *Fique tranquilo(a):* Nós já estamos monitorando esta conta e vamos te avisar na véspera do vencimento às 10h com o código prontinho para pagar. Não geramos despesa duplicada no seu fluxo de caixa nem consumimos novos créditos!`,
-            });
-
-            await sendPaymentCodeMessage(phone, {
-              barcode_or_pix: extracted.barcode_or_pix,
-              pix_key: extracted.pix_key,
-              pix_key_type: extracted.pix_key_type,
-            });
-
-            return;
-          }
-        }
-      }
-
-      // 2. Se o documento tiver código de barras, verifica se existe parcela prévia sem código (ex: NF prévia)
-      if (extracted.barcode_or_pix && extracted.due_date) {
-        const { data: duplicateCandidate } = await supabase
-          .from('payables_receivables')
-          .select('id, counterparty_name, amount, current_due_date, barcode_or_pix')
-          .eq('client_id', client.id)
-          .eq('status', 'open')
-          .eq('current_due_date', extracted.due_date)
-          .is('barcode_or_pix', null)
-          .gte('amount', Number(extracted.total_amount) - 0.05)
-          .lte('amount', Number(extracted.total_amount) + 0.05)
-          .limit(1)
-          .maybeSingle();
-
-        if (duplicateCandidate) {
-          // Vincula o código de barras à parcela existente sem duplicar o contas a pagar!
-          await supabase
-            .from('payables_receivables')
-            .update({
-              barcode_or_pix: extracted.barcode_or_pix,
-              document_id: docRecord?.id,
-            })
-            .eq('id', duplicateCandidate.id);
-
-          await sendEvolutionText({
-            phone,
-            text: `🔗 *Boleto vinculado à parcela existente sem duplicar!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que este boleto corresponde ao lançamento de *${duplicateCandidate.counterparty_name}* (R$ ${Number(duplicateCandidate.amount).toFixed(2)}) que vence em *${formatDueDateDetails(duplicateCandidate.current_due_date)}*.
-
-O código de barras foi anexado com sucesso para pagamento e lembretes sem gerar despesa duplicada no seu fluxo de caixa!`,
-          });
-
-          await sendPaymentCodeMessage(phone, {
-            barcode_or_pix: extracted.barcode_or_pix,
-            pix_key: extracted.pix_key,
-            pix_key_type: extracted.pix_key_type,
-          });
-
-          return;
-        }
-      }
-
-      // 3. Checagem de Conta Idêntica (Mesmo Fornecedor + Mesmo Valor + Mesmo Vencimento)
-      if (extracted.due_date && extracted.total_amount && Number(extracted.total_amount) > 0) {
-        const candSupName = (extracted.counterparty_name || '').toLowerCase().trim();
-        const { data: sameBillCandidates } = await supabase
-          .from('payables_receivables')
-          .select('id, counterparty_name, amount, current_due_date, barcode_or_pix, is_provision')
-          .eq('client_id', client.id)
-          .eq('current_due_date', extracted.due_date)
-          .gte('amount', Number(extracted.total_amount) - 0.05)
-          .lte('amount', Number(extracted.total_amount) + 0.05)
-          .limit(5);
-
-        const exactMatch = sameBillCandidates?.find((b: any) => {
-          if (b.is_provision) return false;
-          const bName = (b.counterparty_name || '').toLowerCase().trim();
-          return bName.length >= 3 && candSupName.length >= 3 && (bName.includes(candSupName) || candSupName.includes(bName));
-        });
-
-        if (exactMatch) {
-          const valFmt = Number(exactMatch.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-          const dueFmt = formatDueDateDetails(exactMatch.current_due_date);
-
-          // Se a conta existente não tinha código e agora veio código, anexa
-          if (extracted.barcode_or_pix && !exactMatch.barcode_or_pix) {
-            await supabase
-              .from('payables_receivables')
-              .update({ barcode_or_pix: extracted.barcode_or_pix, document_id: docRecord?.id })
-              .eq('id', exactMatch.id);
-          }
-
-          await sendEvolutionText({
-            phone,
-            text: `⚠️ *Lançamento Já Registrado Anteriormente!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos que esta conta de *${exactMatch.counterparty_name}* (${valFmt}, vencimento em *${dueFmt}*) **já está cadastrada no seu Livro Caixa**.
-
-Mantivemos seu registro original ativo para evitar duplicidade de despesas e proteger a exatidão do seu fluxo de caixa!`,
-          });
-
-          if (extracted.barcode_or_pix) {
-            await sendPaymentCodeMessage(phone, {
-              barcode_or_pix: extracted.barcode_or_pix,
-              pix_key: extracted.pix_key,
-              pix_key_type: extracted.pix_key_type,
-            });
-          }
-
-          return;
-        }
-      }
-
-      const isReceivable = extracted.entry_type === 'receivable';
-
-      await supabase.from('cash_ledger_entries').insert({
-        client_id: client.id,
-        document_id: docRecord?.id,
-        entry_date: extracted.due_date || new Date().toISOString().split('T')[0],
-        description: `${extracted.doc_type?.toUpperCase()} - ${extracted.counterparty_name}${isReceivable ? ' (RECEBÍVEL)' : ''}`,
-        amount: isReceivable ? Math.abs(Number(extracted.total_amount)) : -Math.abs(Number(extracted.total_amount)),
-        entry_type: isReceivable ? 'income' : 'expense',
-        dre_group: extracted.category_suggestion || (isReceivable ? 'receita_operacional' : 'despesa_administrativa'),
-        status: 'realizado',
-      });
-
-      // ── SUPORTE A NOTA FISCAL / CARNÊ COM MÚLTIPLAS PARCELAS ──────────
-      if (extracted.installments && extracted.installments.length > 0) {
-        for (const inst of extracted.installments) {
-          await supabase.from('payables_receivables').insert({
-            client_id: client.id,
-            document_id: docRecord?.id,
-            counterparty_name: `${extracted.counterparty_name} (Parc. ${inst.installment_number}/${extracted.installments.length})`,
-            type: 'payable',
-            amount: Number(inst.amount),
-            original_due_date: inst.due_date,
-            current_due_date: inst.due_date,
-            status: 'open',
-            barcode_or_pix: inst.barcode_or_pix || null,
-          });
-        }
-
-        const parcelasDesc = extracted.installments
-          .map((inst) => `• *Parc. ${inst.installment_number}:* R$ ${Number(inst.amount).toFixed(2)} — Vence ${formatDueDateDetails(inst.due_date)}`)
-          .join('\n');
-
-        const isInsuranceDoc = extracted.is_insurance || /seguro|seguradora/i.test(extracted.counterparty_name);
-        const docHeader = isInsuranceDoc ? 'Carnê de Seguro' : 'Documento Faturado';
-
-        const quotaFootnote = client.is_admin
-          ? '👑 _Modo Admin Irrestrito_'
-          : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
-
-        await sendEvolutionText({
-          phone,
-          text: `📑 *${docHeader} — ${extracted.installments.length} Parcelas Registradas!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${extracted.counterparty_name}
-• *Valor Total:* R$ ${Number(extracted.total_amount).toFixed(2)}
-
-📅 *Cronograma de Vencimentos:*
-${parcelasDesc}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 O AnalisAí vai te avisar na véspera e no dia de cada parcela! Quando os boletos chegarem, basta enviá-los aqui que vinculamos automaticamente ao pagamento.
-${quotaFootnote}`,
-        });
-
-        if (isInsuranceDoc) {
-          await sendEvolutionText({
-            phone,
-            text: `🛡️ *Auditoria de Apólice AnalisAí:*
-Identificamos que este carnê é da *${extracted.counterparty_name}*.
-Que tal me enviar aqui a **Apólice Completa** em PDF? Nós auditamos todas as coberturas contratadas, valores de franquia e vigência para garantir sua total proteção patrimonial!`,
-          });
-        }
-
-        await sendEvolutionText({
-          phone,
-          text: `💛 *Fique tranquilo(a), todas as parcelas estão registradas no seu Livro Caixa!*
-Na véspera de cada uma delas (às 10h em ponto) eu vou te avisar aqui para você não esquecer.
-
-💡 Digite *Semana* a qualquer momento para acompanhar seus compromissos imediatos!`,
-        });
-
-        return;
-      }
-
-      // Lançamento de Parcela Única com Conciliação de Provisão Prévia
-      if (extracted.due_date) {
-        // Verifica se existia uma provisão em aberto para esta mesma conta
-        const { data: openProvisions } = await supabase
-          .from('payables_receivables')
-          .select('*')
-          .eq('client_id', client.id)
-          .eq('type', 'payable')
-          .eq('is_provision', true)
-          .in('status', ['open', 'postponed']);
-
-        const candName = (extracted.counterparty_name || '').toLowerCase();
-        const matchedProv = openProvisions?.find((p: any) => {
-          const pName = (p.counterparty_name || '').toLowerCase();
-          return pName.includes(candName) || candName.includes(pName) || pName.slice(0, 4) === candName.slice(0, 4);
-        });
-
-        if (matchedProv) {
-          const oldAmtFmt = Number(matchedProv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-          const newAmtFmt = Number(extracted.total_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-          await supabase
-            .from('payables_receivables')
-            .update({
-              amount: Number(extracted.total_amount),
-              current_due_date: extracted.due_date,
-              barcode_or_pix: extracted.barcode_or_pix,
-              document_id: docRecord?.id,
-              is_provision: false,
-              notes: `Provisão conciliada com boleto/fatura real em ${new Date().toLocaleDateString('pt-BR')}`,
-            })
-            .eq('id', matchedProv.id);
-
-          await sendEvolutionText({
-            phone,
-            text: `🎯 *Boleto Conciliado com a sua Provisão!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${extracted.counterparty_name}
-• *Estimativa Anterior:* ${oldAmtFmt} ➔ *Valor Real:* *${newAmtFmt}*
-• *Vencimento Confirmado:* *${formatDueDateDetails(extracted.due_date)}*
-• *Status:* Conta a Pagar Definitiva (Provisão Baixada)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Seu fluxo de caixa foi ajustado para o valor exato da fatura!`,
-          });
-        } else {
-          await supabase.from('payables_receivables').insert({
-            client_id: client.id,
-            document_id: docRecord?.id,
-            counterparty_name: extracted.counterparty_name,
-            type: isReceivable ? 'receivable' : 'payable',
-            amount: Number(extracted.total_amount),
-            original_due_date: extracted.due_date,
-            current_due_date: extracted.due_date,
-            status: 'open',
-            barcode_or_pix: extracted.barcode_or_pix,
-          });
-        }
-      }
-
-      const formattedDueDate = extracted.due_date ? formatDueDateDetails(extracted.due_date) : 'À vista';
-      const quotaFootnote = client.is_admin
-        ? '👑 _Modo Admin Irrestrito_'
-        : quotaCheck.consumed_from_extra
-          ? `🎁 _Lançado utilizando sua carteira de documentos extras (restam ${quotaCheck.extra_credits_remaining} extras válidos)._`
-          : `Você ainda tem *${quotaCheck.remaining}* lançamento(s) disponível(is) neste mês.`;
-
-      if (isReceivable) {
-        await sendEvolutionText({
-          phone,
-          text: `✅ *Recebimento registrado no Livro Caixa!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Cliente / Pagador:* ${extracted.counterparty_name}
-• *Valor a Receber:* R$ ${Number(extracted.total_amount).toFixed(2)}
-• *Previsão de Recebimento:* ${formattedDueDate}
-• *Classificação:* ${extracted.category_suggestion || 'Receita Operacional'}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 O AnalisAí vai acompanhar esta entrada na sua agenda de recebíveis!
-${quotaFootnote}`,
-        });
-      } else {
-        await sendEvolutionText({
-          phone,
-          text: `✅ *Lançamento registrado no Livro Caixa!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${extracted.counterparty_name}
-• *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
-• *Vencimento:* ${formattedDueDate}
-• *Classificação:* ${extracted.category_suggestion}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${quotaFootnote}`,
-        });
-      }
-
-      // PONTO 2: Modo Onisciência - Notifica o Dono em tempo real sobre ação da equipe
-      if (isOperator && operatorRecord?.notify_owner_on_action !== false && client.whatsapp_number && client.whatsapp_number !== phone) {
-        await sendEvolutionText({
-          phone: client.whatsapp_number,
-          text: `🔔 *Ação da Equipe — ${client.name || 'Sua Empresa'}*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-A operadora *${operatorName}* acabou de registrar um novo lançamento:
-• *Fornecedor:* ${extracted.counterparty_name}
-• *Valor:* R$ ${Number(extracted.total_amount).toFixed(2)}
-• *Vencimento:* ${formattedDueDate}
-• *Classificação:* ${extracted.category_suggestion}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-_Lançamento auditado e integrado ao seu Livro Caixa no piloto automático._`,
-        });
-      }
-
-      // Sincroniza QSA de sócios automaticamente se houver CNPJ da empresa
-      const detectedCnpj = (extracted as any).cnpj || (extracted as any).company_tax_id;
-      if (detectedCnpj && client.id) {
-        syncPartnersFromQsa(client.id, detectedCnpj).catch((qsaErr) => {
-          console.warn('[Evolution Webhook QSA Sync Warning]:', qsaErr);
-        });
-      }
-
-      // Identificação de Titularidade e Consultoria Pedagógica de Blindagem Patrimonial
-      if (extracted.payer_tax_id) {
-        const isCpfTit = extracted.payer_tax_type === 'cpf' || extracted.payer_tax_id.replace(/\D/g, '').length === 11;
-        const payerTypeLabel = isCpfTit ? 'CPF' : 'CNPJ';
-        const titQuestion = isCpfTit
-          ? `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos este documento emitido para o CPF *${extracted.payer_tax_id}* (${extracted.payer_name || 'Pessoa Física'}).
-
-Para organizarmos seus relatórios contábeis, folha e fiscal:
-A quem pertence esta conta?
-1️⃣ *Sócio / Meu CPF* — Despesa particular dos sócios
-2️⃣ *Funcionário* — Adiantamento, bônus ou benefício de colaborador
-3️⃣ *Terceiro* — Parente, amigo ou terceiro sem vínculo
-4️⃣ *Empresa* — Despesa operacional da PJ emitida em CPF
-
-👉 _Responda com o nome: *Sócio*, *Funcionário*, *Terceiro* ou *Empresa*_`
-          : `🔍 *Identificação de Titularidade (${payerTypeLabel} Detectado)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Identificamos o CNPJ *${extracted.payer_tax_id}* emitido para *${extracted.payer_name || 'Pessoa Jurídica'}*.
-
-Para organizarmos seus relatórios:
-Este documento pertence à sua:
-1️⃣ *Minha Empresa* — Empresa principal
-2️⃣ *Filial / Outro CNPJ* — Outra empresa ou unidade do grupo
-3️⃣ *Sócio* — PJ particular de sócio
-
-👉 _Responda: *Minha Empresa*, *Outro CNPJ* ou *Sócio*_`;
-
-        await sendEvolutionText({ phone, text: titQuestion });
-      }
-
-      const patrimonialDoc = await analyzeBeneficiaryAndExpense(client.id, {
-        supplier_name: extracted.counterparty_name,
-        counterparty_name: extracted.counterparty_name,
-        payer_name: extracted.payer_name,
-        payer_tax_id: extracted.payer_tax_id,
-        payer_tax_type: extracted.payer_tax_type,
-        category: extracted.category_suggestion,
-        amount: Number(extracted.total_amount),
-        known_company_tax_id: client.tax_id,
-        known_company_name: client.name,
-      });
-      if (patrimonialDoc.adviceMessage) {
-        await sendEvolutionText({
-          phone,
-          text: patrimonialDoc.adviceMessage,
-        });
-      }
-
-      // Se identificou código de barras / linha digitável / Pix, envia em mensagem destacada
-      await sendPaymentCodeMessage(phone, {
-        barcode_or_pix: extracted.barcode_or_pix,
-        pix_key: extracted.pix_key,
-        pix_key_type: extracted.pix_key_type,
-      });
-
-      // 1. Tratamento de Vencimento Ausente (Ponto 1 e Ponto 4)
-      if (!extracted.due_date) {
-        await sendEvolutionText({
-          phone,
-          text: `⚠️ *Atenção:* Como este documento não possui data de vencimento expressa, *para quando é o pagamento?*
-👉 *Responda com a data* (ex: *25/10* ou *dia 25*) para eu agendar seu lembrete na véspera!`,
-        });
-      } else {
-        // Acolhimento Afetivo & Menu de Superpoderes
-        const hasFullCode = extracted.barcode_or_pix || extracted.pix_key;
-        const codeHint = hasFullCode ? ' com o código prontinho para pagar sem estresse e sem multas.' : ' para você não esquecer da obrigação e manter seus pagamentos em dia!';
-        await sendEvolutionText({
-          phone,
-          text: `💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
-Na véspera do vencimento (às 10h em ponto) eu te lembro aqui${codeHint}
-
-✨ *Dicas rápidas do seu AnalisAí:*
-• Digite *Semana* para ver suas contas dos próximos 7 dias;
-• Digite *Relatório* ou *PDF* para receber seu Livro Caixa atualizado;
-• Pergunte _"qual conta devo atrasar?"_ se o caixa apertar (incluso no Solo e Solo Plus);
-• Digite *Indicar* para compartilhar seu link e zerar sua mensalidade com 3 indicações ativas!`,
-        });
-      }
-
-      // 2. Tratamento de Boleto sem Código de Barras (Ponto 2)
-      const hasAnyPayCode = Boolean(extracted.barcode_or_pix || extracted.pix_key);
-      if (extracted.doc_type === 'boleto' && !hasAnyPayCode && !extracted.is_rent && !extracted.is_insurance) {
-        await sendEvolutionText({
-          phone,
-          text: `💡 *Não identifiquei o código de barras/linha digitável nesta foto do boleto.*
-Se você tiver a linha digitável, envie os números aqui (ou tire uma foto mais aberta) para eu já deixar o código pronto para você pagar quando vencer!`,
-        });
-      }
-
-      // 3. Tratamento de Aluguel (Ponto 4)
-      if (extracted.is_rent || /aluguel|loca[cç][aã]o|administradora de bens/i.test(extracted.counterparty_name)) {
-        await sendEvolutionText({
-          phone,
-          text: `🏠 *Dica de Aluguel Recorrente:*
-Identificamos que este lançamento é um pagamento de aluguel. Deseja cadastrar como uma *despesa recorrente mensal* no mesmo dia de cada mês? Em qual dia de cada mês costuma vencer?`,
-        });
-      }
-
-      // 4. Tratamento de Seguro / Apólice Completa (Ponto 5)
-      if (extracted.is_insurance || /seguro|seguradora/i.test(extracted.counterparty_name)) {
-        await sendEvolutionText({
-          phone,
-          text: `🛡️ *Auditoria de Seguros AnalisAí:*
-Identificamos que este documento é uma cobrança da *${extracted.counterparty_name}*.
-Que tal me enviar a **Apólice Completa** em PDF para o AnalisAí auditar suas coberturas, franquias e vigência? 📄`,
-        });
-      }
-
-      return;
-    } catch (err) {
-      console.error('[Gemini Document OCR Error]:', err);
-      await sendEvolutionText({
-        phone,
-        text: `Não consegui decodificar nitidamente o documento enviado. Por favor, envie uma foto com melhor iluminação ou o arquivo PDF original.`,
-      });
-      return;
-    }
+    return;
   }
 
   // 6. Ingestão de Áudio (Comandos por Voz)
-  const isAudio = !!message?.audioMessage || body.data?.messageType === 'audioMessage';
-
   if (isAudio) {
     if (plan && !plan.has_voice_commands) {
       await sendEvolutionText({
@@ -4860,8 +4943,12 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo ou
       return;
     }
 
-    const quotaCheck = await checkAndIncrementQuota(client.id, 'bot', 1);
-    if (!quotaCheck.allowed && !client.is_admin) {
+    const isBotQa = await isClientOrSenderQa({ client, cleanPhone, altPhone, rawPhone: phone });
+    let quotaCheck: CheckUsageResult = { allowed: true, current: 0, limit: 999999, remaining: 999999 };
+    if (!isBotQa) {
+      quotaCheck = await checkAndIncrementQuota(client.id, 'bot', 1);
+    }
+    if (!quotaCheck.allowed && !isBotQa) {
       await sendEvolutionText({
         phone,
         text: `⚠️ *Limite de interações atingido!* Você utilizou todas as ${quotaCheck.limit} interações de bot do mês. Seu ciclo reseta em breve.`,
@@ -4916,6 +5003,14 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo ou
       }
 
       if (audioResult.functionCalls.length > 0) {
+        if (isOperator) {
+          await sendEvolutionText({
+            phone,
+            text: OPERATOR_REFUSAL_MESSAGE,
+          });
+          return;
+        }
+
         const call = audioResult.functionCalls[0];
 
         // -1) Function Call: Termômetro Tributário MEI / Simples por Voz
@@ -5038,9 +5133,13 @@ Deseja digitar o nome correto ou consultar seu livro caixa?`,
 
         // B) Function Call: Consultor de Fluxo de Caixa (Qual conta atrasar)
         if (call.name === 'request_cash_flow_postpone_advice') {
-          const analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
+          const isAnalysisQa = await isClientOrSenderQa({ client, cleanPhone, altPhone, rawPhone: phone });
+          let analysisCheck: CheckUsageResult = { allowed: true, current: 0, limit: 999999, remaining: 999999 };
+          if (!isAnalysisQa) {
+            analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
+          }
 
-          if (!analysisCheck.allowed && !client.is_admin) {
+          if (!analysisCheck.allowed && !isAnalysisQa) {
             await sendEvolutionText({
               phone,
               text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
@@ -5277,9 +5376,13 @@ Garante 2 análises de caixa por mês, comandos por áudio e 30 documentos mensa
       return;
     }
 
-    const analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
+    const isAnalysisQa = await isClientOrSenderQa({ client, cleanPhone, altPhone, rawPhone: phone });
+    let analysisCheck: CheckUsageResult = { allowed: true, current: 0, limit: 999999, remaining: 999999 };
+    if (!isAnalysisQa) {
+      analysisCheck = await checkAndIncrementQuota(client.id, 'analysis', 1);
+    }
 
-    if (!analysisCheck.allowed && !client.is_admin) {
+    if (!analysisCheck.allowed && !isAnalysisQa) {
       await sendEvolutionText({
         phone,
         text: `💡 *Você utilizou suas análises de fluxo de caixa incluídas no mês (${analysisCheck.limit}/${analysisCheck.limit}).*
@@ -5322,14 +5425,7 @@ Identifiquei suas contas agendadas no Livro Caixa. Para proteger sua empresa e e
     return;
   }
 
-  if (cleanText.includes('amigo') || cleanText.includes('indicar') || cleanText.includes('indica') || cleanText.includes('analisador') || cleanText.includes('comissao') || cleanText.includes('comissão')) {
-    const shareMsg = await getReferralShareMessage(client.id, client.name);
-    await sendEvolutionText({
-      phone,
-      text: shareMsg,
-    });
-    return;
-  }
+
 
   if (cleanText.includes('certificado') || cleanText.includes('certificado digital')) {
     await sendEvolutionText({
@@ -5371,6 +5467,14 @@ Relatório completo em PDF por apenas **${ASAAS_ONE_OFF.supplierXray.priceFormat
     cleanText.includes('livro caixa') ||
     cleanText.includes('extrato')
   ) {
+    if (isOperator) {
+      await sendEvolutionText({
+        phone,
+        text: OPERATOR_REFUSAL_MESSAGE,
+      });
+      return;
+    }
+
     await sendEvolutionText({
       phone,
       text: `📄 *Gerando seu Relatório Oficial de Livro Caixa em PDF...*
@@ -5399,70 +5503,34 @@ O documento executivo com seus dados cadastrais, contas em atraso e cronograma d
           return;
         }
 
-        if (conv.amount && conv.due_date) {
+        if (conv.amount && Number(conv.amount) > 0 && conv.due_date) {
           const isIncome = conv.entry_type === 'receivable';
           const entity = conv.supplier_or_customer || (isIncome ? 'Cliente' : 'Fornecedor');
           const dreGroup =
             conv.category_suggestion || (isIncome ? 'receita_operacional' : 'despesa_administrativa');
 
-          // Registra no Livro Caixa
-          await supabase.from('cash_ledger_entries').insert({
-            client_id: client.id,
-            entry_date: conv.due_date,
-            description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity}`,
-            amount: isIncome ? Math.abs(conv.amount) : -Math.abs(conv.amount),
-            entry_type: isIncome ? 'income' : 'expense',
-            dre_group: dreGroup,
-            status: 'previsto',
+          await createPendingConfirmation({
+            clientId: client.id,
+            phoneNumber: phone,
+            actionType: isIncome ? 'RECEIVABLE_BILL' : 'PAYABLE_BILL',
+            payload: {
+              amount: Math.abs(Number(conv.amount)),
+              counterparty_name: entity,
+              description: `${isIncome ? 'RECEITA' : 'DESPESA'} - ${entity}`,
+              due_date: conv.due_date,
+              entry_date: conv.due_date,
+              entry_type: conv.entry_type || (isIncome ? 'receivable' : 'payable'),
+              category_name: dreGroup,
+              dre_group: dreGroup,
+              entity_scope: 'PJ',
+              barcode_or_pix: (conv as any).barcode_or_pix || null,
+              origin: 'texto',
+              rawText,
+              isTrial: false,
+            },
+            sendWhatsAppCard: true,
           });
 
-          // Registra no Contas a Pagar / Receber
-          await supabase.from('payables_receivables').insert({
-            client_id: client.id,
-            counterparty_name: entity,
-            type: isIncome ? 'receivable' : 'payable',
-            amount: Math.abs(conv.amount),
-            original_due_date: conv.due_date,
-            current_due_date: conv.due_date,
-            status: 'open',
-            barcode_or_pix: (conv as any).barcode_or_pix || null,
-          });
-
-          const formattedDate = formatDueDateDetails(conv.due_date);
-          const valFmt = Number(conv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-          if (isIncome) {
-            await sendEvolutionText({
-              phone,
-              text: `✅ *Previsão de Recebimento Registrada!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Cliente/Origem:* ${entity}
-• *Valor:* ${valFmt}
-• *Data Prevista:* ${formattedDate}
-• *Classificação:* Receita Operacional
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Essa entrada já foi computada na projeção do seu Livro Caixa e DRE. Digite *relatório* para ver o PDF atualizado!`,
-            });
-          } else {
-            await sendEvolutionText({
-              phone,
-              text: `✅ *Conta a Pagar Registrada via Conversa!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Fornecedor:* ${entity}
-• *Valor:* ${valFmt}
-• *Vencimento:* ${formattedDate}
-• *Classificação:* ${dreGroup}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💛 *Pode deixar comigo, esse já está guardado a sete chaves e monitorado!*
-Na véspera do vencimento (às 10h em ponto) eu te lembro aqui para manter seus pagamentos impecáveis sem multas!
-
-💡 Digite *Semana* a qualquer momento para ver sua agenda de pagamentos atualizada.`,
-            });
-
-            if ((conv as any).barcode_or_pix) {
-              await sendPaymentCodeMessage(phone, { barcode_or_pix: (conv as any).barcode_or_pix });
-            }
-          }
           return;
         }
       }

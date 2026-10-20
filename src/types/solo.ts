@@ -40,7 +40,6 @@ export interface Subscription {
   current_period_end: string;
   infinitepay_subscription_id?: string | null;
   infinitepay_last_payment_id?: string | null;
-  is_referral_exempt: boolean;
   auto_renew: boolean;
 }
 
@@ -70,15 +69,19 @@ export interface DocumentInstallment {
 
 export interface ExtractedDocumentData {
   is_financial_doc?: boolean;
-  doc_type: 'nfe' | 'nfse' | 'boleto' | 'recibo' | 'cupom' | 'outro';
+  doc_type: 'nfe' | 'nfse' | 'boleto' | 'recibo' | 'cupom' | 'das_mei' | 'outro';
   counterparty_name: string;
   tax_id?: string | null;
   total_amount: number;
   due_date?: string | null;
   issue_date?: string | null;
   barcode_or_pix?: string | null;
+  barcode?: string | null;
+  pix_code?: string | null;
   pix_key?: string | null;
   pix_key_type?: 'cnpj' | 'cpf' | 'email' | 'telefone' | 'aleatoria' | 'copia_e_cola' | 'outro' | null;
+  tax_competence?: string | null;
+  is_government_tax?: boolean;
   is_rent?: boolean;
   is_insurance?: boolean;
   policy_number?: string | null;
@@ -90,6 +93,8 @@ export interface ExtractedDocumentData {
   criticality_hint: number;
   confidence_score: number;
   installments?: DocumentInstallment[];
+  installments_count?: number | null;
+  is_installment?: boolean;
   entry_type?: 'payable' | 'receivable' | 'other';
   is_bank_statement?: boolean;
   bank_transactions?: Array<{

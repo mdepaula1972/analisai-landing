@@ -126,6 +126,8 @@ export async function analyzeBeneficiaryAndExpense(
     counterparty_name?: string;
     payer_name?: string;
     payer_tax_id?: string;
+    payer_tax_type?: 'cpf' | 'cnpj' | string;
+    known_company_tax_id?: string;
     category?: string;
     description?: string;
     amount?: number;
