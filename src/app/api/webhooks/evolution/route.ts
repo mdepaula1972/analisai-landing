@@ -1893,6 +1893,48 @@ Exemplo: *"Excluir conta da Sabesp"*`,
     if (handledOverdue) return true;
   }
 
+  // J) Solicitação de Acesso ao PWA Dashboard / Gráficos / Painel Visual (Magic Link)
+  const isDashboardCmd =
+    clean === '!painel' ||
+    clean === 'painel' ||
+    clean === '!dashboard' ||
+    clean === 'dashboard' ||
+    clean === '!graficos' ||
+    clean === 'graficos' ||
+    clean === 'gráficos' ||
+    clean === '!app' ||
+    clean === 'app' ||
+    clean === 'pwa' ||
+    clean === '!pwa' ||
+    clean.includes('ver resumo visual') ||
+    clean.includes('ver meus graficos') ||
+    clean.includes('ver meus gráficos') ||
+    clean.includes('link do painel') ||
+    clean.includes('abrir dashboard') ||
+    clean.includes('abrir painel');
+
+  if (isDashboardCmd) {
+    const { generateDashboardAccessLink } = await import('@/lib/solo/dashboard-auth');
+    const isOp = (params as any).isOperator || false;
+
+    const linkRes = await generateDashboardAccessLink({
+      clientId: client?.id || null,
+      phoneNumber: cleanPhone,
+      role: isOp ? 'operator' : 'admin',
+    });
+
+    await sendEvolutionText({
+      phone,
+      text: `📱 *Seu Painel Financeiro AnalisAí*
+
+Acesse seus gráficos, fluxo da semana e saldos em tempo real pelo link seguro:
+👉 ${linkRes.magicUrl}
+
+💡 *Dica:* Ao abrir a página, toque em "Adicionar à tela de início" para ter o app direto no seu celular sem precisar baixar nada!`,
+    });
+    return true;
+  }
+
   return false;
 }
 
@@ -2197,6 +2239,27 @@ ${resultLines.join('\n')}
         await sendEvolutionText({ phone, text: adminRes.message });
         return true;
       }
+    }
+
+    // 10.1 Solicitação de Acesso ao PWA Dashboard / Gráficos em Linguagem Natural
+    if (decision.intent === 'REQUEST_DASHBOARD_ACCESS') {
+      const { generateDashboardAccessLink } = await import('@/lib/solo/dashboard-auth');
+      const linkRes = await generateDashboardAccessLink({
+        clientId: client?.id || null,
+        phoneNumber: cleanPhone,
+        role: isOperator ? 'operator' : 'admin',
+      });
+
+      await sendEvolutionText({
+        phone,
+        text: `📱 *Seu Painel Financeiro AnalisAí*
+
+Acesse seus gráficos, fluxo da semana e saldos em tempo real pelo link seguro:
+👉 ${linkRes.magicUrl}
+
+💡 *Dica:* Ao abrir a página, toque em "Adicionar à tela de início" para ter o app direto no seu celular sem precisar baixar nada!`,
+      });
+      return true;
     }
 
     // 11. Conversação Geral / Dúvida com resposta direta da IA
@@ -4277,6 +4340,7 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     phone,
     cleanPhone,
     client,
+    isOperator,
   });
   if (handledUserAction) {
     return;
@@ -4983,6 +5047,7 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo ou
           phone,
           cleanPhone,
           client,
+          isOperator: false,
         });
         if (handledSubscriberVoice) {
           return;

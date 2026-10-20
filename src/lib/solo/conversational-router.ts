@@ -26,6 +26,7 @@ export type ConversationalIntentType =
   | 'CASH_FLOW_ADVICE'
   | 'VIEW_PLANS_PRICING'
   | 'ADMIN_SIMULATION'
+  | 'REQUEST_DASHBOARD_ACCESS'
   | 'GENERAL_CONVERSATION';
 
 export interface RoutedDecision {
@@ -126,6 +127,7 @@ DADOS DO USUÁRIO:
                   'CASH_FLOW_ADVICE',
                   'VIEW_PLANS_PRICING',
                   'ADMIN_SIMULATION',
+                  'REQUEST_DASHBOARD_ACCESS',
                   'GENERAL_CONVERSATION',
                 ],
               },
@@ -312,6 +314,7 @@ Categorias de Intenção:
 - VIEW_PLANS_PRICING: Consultar planos, valores, upgrade, assinar (ex: "quanto custa?", "quais os planos?", "como assinar?").
 - ADMIN_SIMULATION: Exclusivo para administradores testando cenários (ex: "simular plano start", "resetar meus contadores", "gerar contas de teste", "estourar limite").
   ↳ Se o usuário NÃO for Admin, is_applicable = false, e explique educadamente.
+- REQUEST_DASHBOARD_ACCESS: Solicitar link do painel visual, gráficos, PWA ou dashboard (ex: "!painel", "painel", "dashboard", "graficos", "gráficos", "ver resumo visual", "ver meus gráficos", "link do painel", "abrir dashboard", "abrir painel", "app", "pwa").
 - GENERAL_CONVERSATION: Saudações ("oi", "olá", "bom dia"), perguntas sobre como o AnalisAí funciona, ou bate-papo informal.
 
 DIRETRIZES CRÍTICAS SOBRE NOTAS FISCAIS, BOLETOS E IMAGENS:
