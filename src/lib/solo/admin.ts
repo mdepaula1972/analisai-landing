@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
+import { APP_VERSION } from '@/lib/version';
 import { PlanCode } from '@/types/solo';
 import { executeAndSendSupplierXRay } from './supplier-xray';
 import { escalateToHumanConsultant } from './consultant-escalation';
@@ -57,8 +58,9 @@ export async function handleAdminCommands(
   if (action === 'marcos' || action === 'testes' || action === 'roteiro') {
     return {
       handled: true,
-      message: `👑 *Guia Executivo de Testes do Marcos (AnalisAí Solo)*
+      message: `👑 *Guia Executivo de Testes do Marcos (AnalisAí Solo ${APP_VERSION})*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 *Versão da Build Atual:* ${APP_VERSION}
 Use estes códigos para navegar e testar cada nível na prática:
 
 📋 *1. TESTE DA DEGUSTAÇÃO (TRIALS)*
@@ -116,11 +118,12 @@ Use estes códigos para navegar e testar cada nível na prática:
   }
 
   // ── !ajuda / !help ──────────────────────────────────────────────────────────
-  if (action === 'help' || action === 'ajuda') {
+  if (action === 'help' || action === 'ajuda' || action === 'admin') {
     return {
       handled: true,
-      message: `🛠️ *Painel de Controle Admin (Acesso Irrestrito)*
+      message: `🛠️ *Painel de Controle Admin [${APP_VERSION}] (Acesso Irrestrito)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 *Versão da Build Atual:* ${APP_VERSION}
 Comandos disponíveis para você testar todas as opções:
 
 • *!painel* ou *!metricas* → Dashboard Executivo: Clientes, MRR, Planos, Funil e link Web
@@ -423,14 +426,15 @@ Digite *!ajuda* ou *!marcos* para ver o painel executivo.`,
 
       return {
         handled: true,
-        message: `🎭 *Modo Simulação de Lead Novo (Degustação) ATIVADO!*
+        message: `🎭 *Modo Simulação de Lead Novo [${APP_VERSION}] ATIVADO!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-A partir de agora, o robô vai te tratar exatamente como um **novo visitante que clicou no seu anúncio e chegou ao WhatsApp**.
+📦 *Versão da Build Atual:* ${APP_VERSION}
+A partir de agora, o robô vai te tratar exatamente como um **novo visitante que acabou de chegar ao WhatsApp**.
 
 🧪 *O que testar agora:*
-1. Mande *"Olá, como funciona?"* para ver a saudação de boas-vindas do Lead.
-2. Envie uma **foto ou PDF de boleto** ou **áudio** de despesa para ver a IA agendando, gerando o Demonstrativo Contábil em PDF e enviando os botões de pagamento!
-3. Veja como ele calcula sua cota restante de degustação.
+1. Mande *"Oi"* ou *"Olá"* para testar o **Onboarding Didático (PF x PJ)**.
+2. Envie uma **foto ou PDF de boleto/nota** ou **áudio** de despesa para testar a leitura e agendamento!
+3. Veja o assistente categorizando e gerando os lembretes de véspera.
 
 💡 _Para sair da simulação e voltar ao Modo Administrador a qualquer momento, basta digitar:_
 👉 *!admin* ou *!sair*`,

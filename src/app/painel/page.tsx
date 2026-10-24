@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { APP_VERSION } from '@/lib/version';
 import {
   TrendingUp,
   TrendingDown,
@@ -332,7 +333,7 @@ export default function PainelPage() {
               />
             </Link>
             <span className="inline-flex whitespace-nowrap rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-[9px] sm:text-[10px] font-extrabold uppercase tracking-[.1em] text-emerald-300">
-              Painel
+              Painel {APP_VERSION}
             </span>
           </div>
 
