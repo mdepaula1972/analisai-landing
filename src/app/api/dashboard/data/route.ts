@@ -254,12 +254,30 @@ export async function GET(req: NextRequest) {
         value: b.amount,
       }));
 
+    const { data: leadInfo } = await supabase
+      .from('trial_leads')
+      .select('profile_type')
+      .eq('whatsapp_number', auth.phoneNumber || '')
+      .maybeSingle();
+
+    const profileLabel =
+      leadInfo?.profile_type === 'pj'
+        ? 'Empresa / PJ'
+        : leadInfo?.profile_type === 'pf_liberal'
+        ? 'Profissional Liberal'
+        : leadInfo?.profile_type === 'pf_individual'
+        ? 'Finanças Pessoais'
+        : leadInfo?.profile_type === 'pf_family'
+        ? 'Gestão Familiar'
+        : 'Degustação AnalisAí';
+
     return NextResponse.json({
       user: {
-        name: 'Degustação AnalisAí',
-        companyName: 'Minha Empresa (Degustação)',
+        name: profileLabel,
+        companyName: profileLabel,
         role: 'admin',
         isTrial: true,
+        profileType: leadInfo?.profile_type || null,
       },
       summary: {
         totalWeekPayable: Math.round(totalPayable * 100) / 100,

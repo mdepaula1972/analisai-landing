@@ -938,26 +938,26 @@ export async function checkAndApplyLegalOptIn(params: {
   const supabase = createServiceRoleClient();
   const nowIso = new Date().toISOString();
 
-  const welcomeLegalMessage =
-    'Olá! Sou o AnalisAí, seu assistente de gestão financeira. Ao utilizar este canal, você confirma que os lançamentos e confirmações são de sua responsabilidade e concorda com nossos Termos de Uso e Política de Privacidade. Envie o seu primeiro áudio, foto de comprovante ou boleto para começar!';
+  const { getWelcomeAndPfPjMessage } = await import('@/lib/solo/onboarding-flow');
 
   // Caso 1: Usuário é Cliente Cadastrado
   if (client?.id) {
-    if (!client.terms_accepted_at) {
+    if (!client.terms_accepted_at || !client.profile_type) {
       await supabase
         .from('clients')
         .update({ terms_accepted_at: nowIso })
         .eq('id', client.id);
 
-      await sendEvolutionText({
-        phone,
-        text: welcomeLegalMessage,
-      });
-
-      return {
-        optInSent: true,
-        shouldStopProcessing: Boolean(isGreetingOnly),
-      };
+      if (!client.profile_type) {
+        await sendEvolutionText({
+          phone,
+          text: getWelcomeAndPfPjMessage(),
+        });
+        return {
+          optInSent: true,
+          shouldStopProcessing: true,
+        };
+      }
     }
     return { optInSent: false, shouldStopProcessing: false };
   }
@@ -972,32 +972,36 @@ export async function checkAndApplyLegalOptIn(params: {
 
   const { data: lead } = await supabase
     .from('trial_leads')
-    .select('id, terms_accepted_at')
+    .select('id, terms_accepted_at, profile_type, onboarding_step')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
-  if (!lead || !lead.terms_accepted_at) {
+  if (!lead || !lead.terms_accepted_at || !lead.profile_type) {
     if (lead?.id) {
       await supabase
         .from('trial_leads')
-        .update({ terms_accepted_at: nowIso })
+        .update({
+          terms_accepted_at: nowIso,
+          onboarding_step: lead.onboarding_step || 'awaiting_pf_or_pj',
+        })
         .eq('id', lead.id);
     } else {
       await supabase.from('trial_leads').insert({
         whatsapp_number: cleanPhone,
         terms_accepted_at: nowIso,
         first_interaction_at: nowIso,
+        onboarding_step: 'awaiting_pf_or_pj',
       });
     }
 
     await sendEvolutionText({
       phone,
-      text: welcomeLegalMessage,
+      text: getWelcomeAndPfPjMessage(),
     });
 
     return {
       optInSent: true,
-      shouldStopProcessing: Boolean(isGreetingOnly),
+      shouldStopProcessing: true,
     };
   }
 

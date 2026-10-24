@@ -3420,6 +3420,38 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     return;
   }
 
+  // ── 0.15 COMANDO DE TROCA / CONSULTA DE PERFIL (!perfil) ──
+  const isProfileChangeCmd =
+    !isMedia &&
+    (cleanText === '!perfil' ||
+      cleanText === 'perfil' ||
+      cleanText === 'mudar perfil' ||
+      cleanText === 'trocar perfil' ||
+      cleanText === 'alterar perfil');
+
+  if (isProfileChangeCmd) {
+    const { startOnboarding } = await import('@/lib/solo/onboarding-flow');
+    await startOnboarding({ phone, cleanPhone, client });
+    return;
+  }
+
+  // ── 0.16 ONBOARDING DIDÁTICO DIRECIONADO (RESPOSTA DE PF x PJ OU SUBTIPO PF) ──
+  if (!isMedia && !isCommand) {
+    const { getOnboardingState, processOnboardingResponse } = await import('@/lib/solo/onboarding-flow');
+    const onbState = await getOnboardingState({ cleanPhone, client });
+    if (!onbState.isCompleted) {
+      const onbRes = await processOnboardingResponse({
+        phone,
+        cleanPhone,
+        rawText,
+        client,
+      });
+      if (onbRes.handled) {
+        return;
+      }
+    }
+  }
+
   // ── 0.2 OPT-IN LEGAL / TERMOS DE USO NO WHATSAPP (PRIMEIRA MENSAGEM) ──
   const isGreetingOnly =
     !isMedia &&
