@@ -4273,14 +4273,42 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     }
   }
 
-  // ── Interceptação 1.15: Termômetro Tributário MEI x Simples Nacional (Ideia #55) ─
+  // ── Interceptação 1.14: Declaração / Configuração Direta de Regime Tributário ─
+  const isDeclaringMei =
+    cleanText === '!regime mei' || cleanText === 'regime mei' ||
+    cleanText === 'mei' || cleanText === '!mei' || cleanText === 'sou mei' || cleanText === 'minha empresa é mei';
+
+  const isDeclaringSimples =
+    cleanText === '!regime simples' || cleanText === 'regime simples' ||
+    cleanText === 'simples' || cleanText === '!simples' || cleanText === 'simples nacional' ||
+    cleanText === 'sou simples' || cleanText === 'sou simples nacional' || cleanText === 'me' || cleanText === 'microempresa';
+
+  const isDeclaringEpp =
+    cleanText === '!regime epp' || cleanText === 'regime epp' ||
+    cleanText === 'epp' || cleanText === '!epp' || cleanText === 'sou epp' || cleanText === 'empresa de pequeno porte';
+
+  const isDeclaringOutro =
+    cleanText === '!regime outro' || cleanText === 'regime outro' ||
+    cleanText === 'outro' || cleanText === 'outros' || cleanText === 'lucro presumido' || cleanText === 'presumido' || cleanText === 'lucro real';
+
+  if (isDeclaringMei || isDeclaringSimples || isDeclaringEpp || isDeclaringOutro) {
+    const targetRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro' =
+      isDeclaringMei ? 'mei' : isDeclaringEpp ? 'simples_epp' : isDeclaringOutro ? 'outro' : 'simples_me';
+
+    const res = await updateTaxRegime({
+      phone: cleanPhone,
+      regime: targetRegime,
+    });
+    await sendEvolutionText({ phone, text: res.message });
+    return;
+  }
+
+  // ── Interceptação 1.15: Consulta ao Termômetro Tributário (Ideia #55) ─
   const isTaxMeterCommand =
     cleanText === '!termometro' || cleanText === 'termometro' ||
     cleanText === '!termômetro' || cleanText === 'termômetro' ||
     cleanText === '!tributos' || cleanText === 'tributos' ||
     cleanText === '!impostos' || cleanText === 'impostos' ||
-    cleanText === '!mei' || cleanText === 'mei' ||
-    cleanText === '!simples' || cleanText === 'simples' ||
     cleanText === '/termometro' || cleanText === '/tributos' ||
     cleanText.includes('limite mei') || cleanText.includes('limite do mei') ||
     cleanText.includes('teto mei') || cleanText.includes('teto do mei') ||
@@ -4307,11 +4335,11 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
         phone,
         text: `🏢 *Como configurar o enquadramento tributário da sua empresa:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha um dos comandos abaixo:*
-• *!regime mei* → Para MEI (teto anual de R$ 81 mil)
-• *!regime simples* → Para Simples Nacional ME (teto anual de R$ 360 mil)
-• *!regime epp* → Para Simples Nacional EPP (teto anual de R$ 4,8 milhões)
-• *!regime outro* → Gestão sem monitoramento de teto fiscal`,
+👉 *Escolha um dos comandos ou responda diretamente:*
+• *MEI* → (teto anual de até R$ 81 mil)
+• *Simples* → (teto anual de até R$ 360 mil para ME)
+• *EPP* → (teto anual de até R$ 4,8 milhões)
+• *Outro* → (gestão sem monitoramento de teto fiscal)`,
       });
       return;
     }
