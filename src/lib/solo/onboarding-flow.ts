@@ -2,12 +2,145 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 
 export type ProfileType = 'pj' | 'pf_liberal' | 'pf_individual' | 'pf_family';
-export type OnboardingStep = 'awaiting_pf_or_pj' | 'awaiting_pf_subtype' | 'awaiting_pj_regime' | 'completed';
+export type OnboardingStep = 'awaiting_pf_or_pj' | 'awaiting_pf_subtype' | 'awaiting_pj_regime' | 'awaiting_pj_regime_confirmation' | 'completed';
 
 export interface OnboardingState {
   isCompleted: boolean;
   step?: OnboardingStep;
   profileType?: ProfileType;
+}
+
+export interface RevenueInferenceResult {
+  monthlyAmount: number;
+  annualAmount: number;
+  suggestedRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro';
+  regimeName: string;
+  explanation: string;
+}
+
+/**
+ * Infere o regime tributário adequado com base na média mensal ou faturamento anual informado em texto livre.
+ */
+export function inferRevenueAndRegime(input: string): RevenueInferenceResult | null {
+  const clean = input.toLowerCase().trim();
+
+  // Opções diretas tratadas à parte
+  if (['1', '2', '3', '4', 'mei', 'simples', 'epp', 'outro', 'outros', 'presumido'].includes(clean)) {
+    return null;
+  }
+
+  const hasRevenueContext =
+    /(fatur|m[eé]dia|ganh|receb|entr|m[eê]s|mensal|ano|anual|reais|r\$|\bmil\b|\bk\b|\bmi\b|milh)/i.test(clean) ||
+    /\d+/.test(clean);
+
+  if (!hasRevenueContext) return null;
+
+  const isExplicitAnnual = /(ano|anual|ao ano|por ano|\/ano)/i.test(clean);
+  let parsedValue = 0;
+
+  // 1. Milhões
+  const millionMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:milh[oõ]es|milh[aã]o|mi\b)/i);
+  if (millionMatch) {
+    const rawNum = parseFloat(millionMatch[1].replace(',', '.'));
+    parsedValue = rawNum * 1_000_000;
+  }
+
+  // 2. Mil / K
+  if (!parsedValue) {
+    const thousandMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:mil\b|k\b)/i);
+    if (thousandMatch) {
+      const rawNum = parseFloat(thousandMatch[1].replace(',', '.'));
+      parsedValue = rawNum * 1_000;
+    }
+  }
+
+  // 3. Valor formatado em Reais ou numérico
+  if (!parsedValue) {
+    const numberMatch = clean.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:[.,]\d{2})?|\d+)/i);
+    if (numberMatch) {
+      let numStr = numberMatch[1];
+      if (numStr.includes('.') && numStr.includes(',')) {
+        numStr = numStr.replace(/\./g, '').replace(',', '.');
+      } else if (numStr.includes('.')) {
+        if (numStr.split('.')[1].length === 3) {
+          numStr = numStr.replace(/\./g, '');
+        }
+      } else if (numStr.includes(',')) {
+        numStr = numStr.replace(',', '.');
+      }
+      const val = parseFloat(numStr);
+      if (!isNaN(val) && val > 0) {
+        parsedValue = val;
+      }
+    }
+  }
+
+  if (!parsedValue || parsedValue < 100) {
+    return null;
+  }
+
+  let monthlyAmount = 0;
+  let annualAmount = 0;
+
+  if (isExplicitAnnual) {
+    annualAmount = parsedValue;
+    monthlyAmount = Math.round(annualAmount / 12);
+  } else {
+    const hasMonthContext = /(m[eê]s|mensal|por m[eê]s|\/m[eê]s)/i.test(clean);
+    if (parsedValue > 400000 && !hasMonthContext) {
+      annualAmount = parsedValue;
+      monthlyAmount = Math.round(annualAmount / 12);
+    } else {
+      monthlyAmount = parsedValue;
+      annualAmount = parsedValue * 12;
+    }
+  }
+
+  let suggestedRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro' = 'mei';
+  let regimeName = '';
+  let explanation = '';
+
+  const monthlyFmt = monthlyAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const annualFmt = annualAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  if (monthlyAmount <= 6750) {
+    suggestedRegime = 'mei';
+    regimeName = 'MEI (Microempreendedor Individual)';
+    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu negócio se enquadra perfeitamente no *MEI*, que tem teto anual de até *R$ 81 mil* (~R$ 6.750/mês).`;
+  } else if (monthlyAmount <= 30000) {
+    suggestedRegime = 'simples_me';
+    regimeName = 'Simples Nacional — ME (Microempresa)';
+    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu faturamento supera o teto do MEI (R$ 6.750/mês) e se adequa ao *Simples Nacional — ME (Microempresa)*, com limite anual de até *R$ 360 mil* (~R$ 30 mil/mês).`;
+  } else if (monthlyAmount <= 400000) {
+    suggestedRegime = 'simples_epp';
+    regimeName = 'Simples Nacional — EPP (Pequeno Porte)';
+    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu faturamento supera o teto de ME (R$ 30 mil/mês) e se adequa ao *Simples Nacional — EPP (Pequeno Porte)*, com limite de até *R$ 4,8 milhões/ano* (~R$ 400 mil/mês).`;
+  } else {
+    suggestedRegime = 'outro';
+    regimeName = 'Lucro Presumido / Outro';
+    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), o faturamento supera o teto máximo do Simples Nacional (R$ 4,8 milhões/ano), sendo mais adequado para *Lucro Presumido ou Lucro Real*.`;
+  }
+
+  return {
+    monthlyAmount,
+    annualAmount,
+    suggestedRegime,
+    regimeName,
+    explanation,
+  };
+}
+
+/**
+ * Monta a mensagem de sugestão didática para confirmação do usuário
+ */
+export function buildTaxRegimeProposalMessage(inference: RevenueInferenceResult): string {
+  return `📊 *Análise de Adequação do Enquadramento:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${inference.explanation}
+
+👉 *Podemos confirmar seu enquadramento como ${inference.regimeName}?*
+• Responda *1* ou *Sim* para confirmar e ativar seu radar fiscal.
+• Ou me diga se o enquadramento for diferente (ex: *MEI*, *Simples* ou *EPP*).`;
 }
 
 /**
@@ -33,39 +166,50 @@ _(Para controle das finanças pessoais, contas do dia a dia, orçamento e patrim
 }
 
 /**
- * 2. Mensagem Didática de Desdobramento para PJ (MEI, Simples Nacional ou Outros)
+ * 2. Mensagem Didática de Desdobramento para PJ com Média Mensal e Teto Anual
  */
 export function getPjTaxRegimeMessage(): string {
   return `Perfeito! 🏢 *Gestão Financeira para Pessoa Jurídica (PJ).*
 
-Para que eu monitore o teto fiscal do seu negócio sem surpresas na virada do ano, qual é o enquadramento tributário do seu CNPJ?
+Para que eu monitore o teto fiscal do seu negócio sem surpresas com a Receita Federal, precisamos adequar seu enquadramento tributário.
+
+Como muitos empreendedores têm dúvidas sobre os limites anuais, você pode se guiar pela sua *média mensal de faturamento*:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha uma opção:*
+👉 *Escolha uma das opções abaixo:*
 
 *1* → *MEI (Microempreendedor Individual)*
-_(Teto oficial de faturamento até R$ 81 mil/ano. O AnalisAí avisa a sua margem de segurança a cada nota ou receita recebida para evitar desenquadramento involuntário)._
+• Média de até *R$ 6.750/mês* (teto anual de até R$ 81 mil)
+• _Alerta automático de margem de segurança a cada receita._
 
-*2* → *Simples Nacional (Microempresa — ME / EPP)*
-_(Limite anual de faturamento até R$ 360 mil para ME ou até R$ 4,8 milhões para EPP, com separação de pró-labore e livro caixa contábil)._
+*2* → *Simples Nacional (Microempresa — ME)*
+• Média de *R$ 6.750 a R$ 30 mil/mês* (teto anual de até R$ 360 mil)
+• _Separação de pró-labore, livro caixa contábil e fluxo de caixa._
 
-*3* → *Lucro Presumido / Outro / Não sei informar*
-_(Gestão focada em fluxo de caixa, contas a pagar, contas a receber e DRE gerencial, sem cálculo de teto fiscal do Simples)._
+*3* → *Simples Nacional (Empresa de Pequeno Porte — EPP)*
+• Média de *R$ 30 mil a R$ 400 mil/mês* (teto anual de até R$ 4,8 milhões)
+• _Monitoramento de faturamento avançado e múltiplos centros de custo._
+
+*4* → *Lucro Presumido / Outro / Grande Porte*
+• Faturamento acima de *R$ 400 mil/mês* (mais de R$ 4,8 milhões/ano)
+• _Gestão empresarial completa sem monitoramento de teto do Simples._
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Basta responder com *1*, *2* ou *3* (ou escrever *MEI*, *Simples* ou *Outro*)._`;
+💡 *Dúvida no enquadramento?*
+Basta responder dizendo quanto sua empresa fatura em média (ex: *"faturo 15 mil por mês"* ou *"média de 5 mil"*). 
+O AnalisAí calculará a adequação e pedirá sua confirmação!`;
 }
 
 /**
  * 2.1 Mensagens de Conclusão do Onboarding para PJ por Regime
  */
-export function getPjOnboardingCompletionMessage(regime: 'mei' | 'simples_me' | 'outro'): string {
+export function getPjOnboardingCompletionMessage(regime: 'mei' | 'simples_me' | 'simples_epp' | 'outro'): string {
   if (regime === 'mei') {
     return `🏢 *Excelente! Seu AnalisAí está configurado para MEI (Microempreendedor Individual).*
 
 A partir de agora, suas finanças serão geridas com inteligência tributária:
 • 📑 *Leitura de notas fiscais, boletos e recibos* com extração automática
 • ⏰ *Lembretes na véspera às 10h* com Pix copia-e-cola para não pagar juros
-• 🌡️ *Termômetro MEI:* Radar ativo no faturamento para monitorar o teto anual de até R$ 81 mil
+• 🌡️ *Termômetro MEI:* Radar ativo no faturamento para monitorar o teto anual de até R$ 81 mil (~R$ 6.750/mês)
 • 📊 *Livro Caixa e DRE* prontos para você acompanhar e enviar ao contador
 
 📸 *Para começar agora mesmo:*
@@ -73,13 +217,26 @@ Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo
   }
 
   if (regime === 'simples_me') {
-    return `🏢 *Excelente! Seu AnalisAí está configurado para Simples Nacional (Microempresa).*
+    return `🏢 *Excelente! Seu AnalisAí está configurado para Simples Nacional (Microempresa — ME).*
 
 A partir de agora, suas finanças serão geridas com inteligência contábil empresarial:
 • 📑 *Leitura de notas fiscais, boletos e faturas* com extração automática
 • ⏰ *Lembretes na véspera às 10h* com código Pix copia-e-cola
-• 🌡️ *Termômetro do Simples Nacional:* Acompanhamento anual do faturamento (limite de R$ 360 mil para ME)
+• 🌡️ *Termômetro do Simples Nacional:* Acompanhamento anual do faturamento (limite de R$ 360 mil ou ~R$ 30 mil/mês)
 • 📊 *Fechamento Contábil e DRE:* Relatórios limpos para você e seu contador
+
+📸 *Para começar agora mesmo:*
+Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo suas despesas e receitas! 🚀`;
+  }
+
+  if (regime === 'simples_epp') {
+    return `🏢 *Excelente! Seu AnalisAí está configurado para Simples Nacional (EPP — Empresa de Pequeno Porte).*
+
+A partir de agora, suas finanças contarão com gestão contábil de alto nível:
+• 📑 *Leitura de notas fiscais, boletos e faturas* com extração automática
+• ⏰ *Lembretes na véspera às 10h* com código Pix copia-e-cola
+• 🌡️ *Termômetro Tributário EPP:* Acompanhamento anual até R$ 4,8 milhões (~R$ 400 mil/mês)
+• 📊 *Fechamento Contábil, Livro Caixa e DRE* completos em tempo real
 
 📸 *Para começar agora mesmo:*
 Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo suas despesas e receitas! 🚀`;
@@ -292,7 +449,7 @@ export async function processOnboardingResponse(params: {
 
   const { data: lead } = await supabase
     .from('trial_leads')
-    .select('id, onboarding_step, profile_type')
+    .select('id, onboarding_step, profile_type, doc_data')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
@@ -420,23 +577,28 @@ export async function processOnboardingResponse(params: {
     return { handled: true, completed: false };
   }
 
-  // ── ETAPA 3: ESCOLHA DO ENQUADRAMENTO TRIBUTÁRIO DE PJ (MEI, SIMPLES OU OUTROS) ──
+  // ── ETAPA 3: ESCOLHA OU DEDUÇÃO POR MÉDIA DO ENQUADRAMENTO DE PJ ──
   if (currentStep === 'awaiting_pj_regime') {
     const isMei =
       /^(1\b|1\.|mei\b|microempreendedor\b|teto 81\b)/i.test(clean) ||
       clean === '1' || clean === 'mei';
 
     const isSimples =
-      /^(2\b|2\.|simples\b|simples nacional\b|microempresa\b|me\b|epp\b|pequeno porte\b)/i.test(clean) ||
+      /^(2\b|2\.|simples\b|simples nacional\b|microempresa\b|me\b)/i.test(clean) ||
       clean === '2' || clean === 'simples' || clean === 'me';
 
-    const isOutro =
-      /^(3\b|3\.|outro\b|outros\b|presumido\b|real\b|n[aã]o sei\b|indiferente\b)/i.test(clean) ||
-      clean === '3' || clean === 'outro';
+    const isEpp =
+      /^(3\b|3\.|epp\b|pequeno porte\b|empresa de pequeno porte\b)/i.test(clean) ||
+      clean === '3' || clean === 'epp';
 
-    let chosenRegime: 'mei' | 'simples_me' | 'outro' | null = null;
+    const isOutro =
+      /^(4\b|4\.|outro\b|outros\b|presumido\b|real\b|n[aã]o sei\b|indiferente\b|grande porte\b)/i.test(clean) ||
+      clean === '4' || clean === 'outro';
+
+    let chosenRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro' | null = null;
     if (isMei) chosenRegime = 'mei';
     else if (isSimples) chosenRegime = 'simples_me';
+    else if (isEpp) chosenRegime = 'simples_epp';
     else if (isOutro) chosenRegime = 'outro';
 
     if (chosenRegime) {
@@ -469,15 +631,142 @@ export async function processOnboardingResponse(params: {
       return { handled: true, completed: true, profile: 'pj' };
     }
 
+    // Se o usuário digitou uma média mensal ou faturamento em texto livre
+    const inference = inferRevenueAndRegime(clean);
+    if (inference) {
+      const existingDocData = (lead?.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({
+            profile_type: 'pj',
+            onboarding_step: 'awaiting_pj_regime_confirmation',
+            doc_data: {
+              ...existingDocData,
+              suggested_regime: inference.suggestedRegime,
+              estimated_monthly: inference.monthlyAmount,
+              estimated_annual: inference.annualAmount,
+            },
+          })
+          .eq('id', lead.id);
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: buildTaxRegimeProposalMessage(inference),
+      });
+
+      return { handled: true, completed: false };
+    }
+
     // Se o usuário digitou algo não reconhecido durante a pergunta de regime PJ
     await sendEvolutionText({
       phone,
-      text: `Entendi! Para que eu calibre o Termômetro Tributário do seu CNPJ:
+      text: `Entendi! Para que eu calibre o Termômetro Tributário do seu negócio:
 *Qual é o enquadramento tributário da sua empresa?*
 
-• Digite *1* para *MEI (Microempreendedor Individual)*
-• Digite *2* para *Simples Nacional (ME / EPP)*
-• Digite *3* para *Lucro Presumido / Outro / Não sei informar*`,
+• Digite *1* para *MEI* (média até R$ 6.750/mês | teto R$ 81 mil/ano)
+• Digite *2* para *Simples Nacional — ME* (média até R$ 30 mil/mês | teto R$ 360 mil/ano)
+• Digite *3* para *Simples Nacional — EPP* (média até R$ 400 mil/mês | teto R$ 4,8 mi/ano)
+• Digite *4* para *Lucro Presumido / Outro* (acima de R$ 400 mil/mês)
+
+💡 _Ou simplesmente me diga sua média mensal (ex: *"faturo 15 mil por mês"*)._`,
+    });
+    return { handled: true, completed: false };
+  }
+
+  // ── ETAPA 4: CONFIRMAÇÃO DA ADEQUAÇÃO TRIBUTÁRIA SUGERIDA ──
+  if (currentStep === 'awaiting_pj_regime_confirmation') {
+    const isAffirmative =
+      /^(1\b|1\.|sim\b|s\b|confirmo\b|confirmar\b|confirmado\b|pode ser\b|correto\b|isso\b|ok\b|beleza\b|perfeito\b|fechado\b|claro\b|positivo\b)/i.test(clean) ||
+      clean === '1' || clean === 'sim' || clean === 's';
+
+    const isMei = clean === 'mei' || clean.includes('sou mei');
+    const isSimples = clean === 'simples' || clean.includes('sou simples') || clean === 'me';
+    const isEpp = clean === 'epp' || clean.includes('sou epp');
+    const isOutro = clean === 'outro' || clean === 'presumido';
+
+    const docData: any = (lead?.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
+    const suggestedRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro' =
+      isMei ? 'mei' : isSimples ? 'simples_me' : isEpp ? 'simples_epp' : isOutro ? 'outro' : docData.suggested_regime || 'simples_me';
+
+    if (isAffirmative || isMei || isSimples || isEpp || isOutro) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({
+            profile_type: 'pj',
+            tax_regime: suggestedRegime,
+            onboarding_step: 'completed',
+            annual_revenue_baseline: docData.estimated_annual || null,
+          })
+          .eq('id', lead.id);
+      }
+      if (client?.id) {
+        await supabase
+          .from('clients')
+          .update({
+            profile_type: 'pj',
+            tax_regime: suggestedRegime,
+            tax_type: 'CNPJ',
+            annual_revenue_baseline: docData.estimated_annual || null,
+          })
+          .eq('id', client.id);
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: getPjOnboardingCompletionMessage(suggestedRegime),
+      });
+
+      return { handled: true, completed: true, profile: 'pj' };
+    }
+
+    const isNegative = /^(n[aã]o\b|n\b|errado\b|incorreto\b)/i.test(clean);
+    if (isNegative) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({ onboarding_step: 'awaiting_pj_regime' })
+          .eq('id', lead.id);
+      }
+      await sendEvolutionText({
+        phone,
+        text: getPjTaxRegimeMessage(),
+      });
+      return { handled: true, completed: false };
+    }
+
+    // Se o usuário digitou outro valor ou faturamento
+    const newInference = inferRevenueAndRegime(clean);
+    if (newInference) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({
+            doc_data: {
+              ...docData,
+              suggested_regime: newInference.suggestedRegime,
+              estimated_monthly: newInference.monthlyAmount,
+              estimated_annual: newInference.annualAmount,
+            },
+          })
+          .eq('id', lead.id);
+      }
+      await sendEvolutionText({
+        phone,
+        text: buildTaxRegimeProposalMessage(newInference),
+      });
+      return { handled: true, completed: false };
+    }
+
+    await sendEvolutionText({
+      phone,
+      text: `Por favor, me confirme:
+Podemos definir seu enquadramento como sugerido?
+
+• Digite *1* ou *Sim* para confirmar.
+• Ou digite *MEI*, *Simples* ou *EPP* se preferir outro regime.`,
     });
     return { handled: true, completed: false };
   }

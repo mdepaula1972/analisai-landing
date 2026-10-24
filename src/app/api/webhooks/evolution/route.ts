@@ -4303,6 +4303,42 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
+  // Interceptação de inferência por faturamento / média mensal no chat aberto
+  const { inferRevenueAndRegime, buildTaxRegimeProposalMessage } = await import('@/lib/solo/onboarding-flow');
+  const revenueInference = inferRevenueAndRegime(cleanText);
+  if (revenueInference && !cleanText.startsWith('!')) {
+    const supabase = createServiceRoleClient();
+    const cleanNumber = cleanPhone.length > 11 ? cleanPhone.slice(-11) : cleanPhone;
+    const { data: lead } = await supabase
+      .from('trial_leads')
+      .select('id, doc_data')
+      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.ilike.%${cleanNumber}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (lead?.id) {
+      await supabase
+        .from('trial_leads')
+        .update({
+          profile_type: 'pj',
+          onboarding_step: 'awaiting_pj_regime_confirmation',
+          doc_data: {
+            ...(lead.doc_data && typeof lead.doc_data === 'object' ? lead.doc_data : {}),
+            suggested_regime: revenueInference.suggestedRegime,
+            estimated_monthly: revenueInference.monthlyAmount,
+            estimated_annual: revenueInference.annualAmount,
+          },
+        })
+        .eq('id', lead.id);
+    }
+
+    await sendEvolutionText({
+      phone,
+      text: buildTaxRegimeProposalMessage(revenueInference),
+    });
+    return;
+  }
+
   // ── Interceptação 1.15: Consulta ao Termômetro Tributário (Ideia #55) ─
   const isTaxMeterCommand =
     cleanText === '!termometro' || cleanText === 'termometro' ||
@@ -4333,13 +4369,18 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     if (!targetRegime) {
       await sendEvolutionText({
         phone,
-        text: `🏢 *Como configurar o enquadramento tributário da sua empresa:*
+        text: `🏢 *Enquadramento Tributário e Limites do CNPJ:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha um dos comandos ou responda diretamente:*
-• *MEI* → (teto anual de até R$ 81 mil)
-• *Simples* → (teto anual de até R$ 360 mil para ME)
-• *EPP* → (teto anual de até R$ 4,8 milhões)
-• *Outro* → (gestão sem monitoramento de teto fiscal)`,
+Como muitos empreendedores têm dúvidas sobre o cálculo anual, você pode se basear pela sua *média mensal de faturamento*:
+
+• *MEI* → Média até *R$ 6.750/mês* (teto anual até R$ 81 mil)
+• *Simples* → Média de *R$ 6.750 a R$ 30 mil/mês* (teto anual até R$ 360 mil para ME)
+• *EPP* → Média de *R$ 30 mil a R$ 400 mil/mês* (teto anual até R$ 4,8 milhões)
+• *Outro* → Gestão executiva sem monitoramento de teto do Simples
+
+👉 *Como configurar ou adequar em 1 segundo:*
+Basta responder *MEI*, *Simples*, *EPP* ou *Outro*.
+Ou simplesmente me diga sua média (ex: *"faturo 15 mil por mês"*), que eu calculo e peço sua confirmação!`,
       });
       return;
     }

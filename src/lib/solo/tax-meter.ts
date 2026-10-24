@@ -302,17 +302,21 @@ Para finanças pessoais, suas receitas são tratadas como entradas de salário o
   } else if (!hasExplicitTaxRegime || taxRegimeCode === 'outro') {
     statusMessage = `ℹ️ *Regime Tributário Não Configurado*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para que eu monitore o teto fiscal do seu CNPJ sem surpresas com a Receita Federal, me informe seu enquadramento:
+Para que eu monitore o teto fiscal do seu CNPJ sem surpresas com a Receita Federal, você pode se basear pela sua *média mensal de faturamento*:
+
+• *MEI* → Média até *R$ 6.750/mês* (teto anual até R$ 81 mil)
+• *Simples* → Média de *R$ 6.750 a R$ 30 mil/mês* (teto anual até R$ 360 mil para ME)
+• *EPP* → Média de *R$ 30 mil a R$ 400 mil/mês* (teto anual até R$ 4,8 milhões)
 
 👉 *Como configurar em 1 segundo:*
-• Digite *!regime mei* → Para MEI (teto anual de R$ 81 mil)
-• Digite *!regime simples* → Para Simples Nacional ME (teto anual de R$ 360 mil)
-• Digite *!regime epp* → Para Simples Nacional EPP (teto anual de R$ 4,8 milhões)`;
+Basta responder *MEI*, *Simples* ou *EPP*.
+Ou apenas me diga: *"Minha média é 15 mil por mês"* que eu calculo e adéquo para você!`;
   } else {
+    const monthlyAllowedLimitFmt = Math.round(config.annualLimit / 12).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     statusMessage = `🌡️ *Termômetro Tributário — ${config.name} (${currentYear})*\n`;
     statusMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     statusMessage += `• *Faturamento Acumulado:* ${totalFmt}\n`;
-    statusMessage += `• *Teto Oficial Anual:* ${limitFmt}\n`;
+    statusMessage += `• *Teto Oficial Anual:* ${limitFmt} (~${monthlyAllowedLimitFmt}/mês)\n`;
     statusMessage += `• *Margem Segura Restante:* ${remainingFmt}\n`;
     statusMessage += `• *Termômetro Fiscal:* ${progressBar}\n`;
     statusMessage += `• *Sua Média Mensal Atual:* ${monthlyAvgFmt}/mês\n`;
@@ -427,6 +431,13 @@ export async function updateTaxRegime(params: {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Seu perfil fiscal foi configurado como:
 🏢 *${regimeName}*`;
+
+  const conf = (TAX_CONFIGS as any)[params.regime];
+  if (conf) {
+    const monthlyFmt = conf.monthlyAverageMax.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const annualFmt = conf.annualLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    msg += `\n• *Teto Anual:* ${annualFmt}\n• *Média Mensal Permitida:* até ${monthlyFmt}/mês`;
+  }
 
   if (params.baseline !== undefined) {
     msg += `\n💰 *Faturamento prévio considerado:* R$ ${params.baseline.toFixed(2)}`;
