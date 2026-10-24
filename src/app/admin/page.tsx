@@ -9,7 +9,7 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string>('');
   const [inputToken, setInputToken] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'dormant' | 'hot' | 'converted' | 'all'>('dormant');
+  const [activeTab, setActiveTab] = useState<'dormant' | 'hot' | 'converted' | 'all' | 'radar'>('dormant');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // 1. Carrega token dos parâmetros da URL ou do localStorage
@@ -269,7 +269,7 @@ export default function AdminDashboardPage() {
                 </span>
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Etapa 1: Dormindo */}
                 <div
                   onClick={() => setActiveTab('dormant')}
@@ -344,6 +344,31 @@ export default function AdminDashboardPage() {
                     Assinaturas pagantes ativas no AnalisAí.
                   </p>
                 </div>
+
+                {/* Etapa 4: Radar de Insights */}
+                <div
+                  onClick={() => setActiveTab('radar')}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    activeTab === 'radar'
+                      ? 'bg-cyan-500/10 border-cyan-500/50 ring-1 ring-cyan-500/50'
+                      : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                      4. Radar de Insights
+                    </span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300">
+                      {metrics.radarInsights?.length || 0}
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold text-white mb-1">
+                    {metrics.radarInsights?.length || 0}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Dúvidas, fricções e oportunidades capturadas pela IA.
+                  </p>
+                </div>
               </div>
             </section>
 
@@ -392,6 +417,16 @@ export default function AdminDashboardPage() {
                   >
                     Todos ({metrics.funnel.totalGuestsAndLeads})
                   </button>
+                  <button
+                    onClick={() => setActiveTab('radar')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+                      activeTab === 'radar'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    📡 Radar de Insights ({metrics.radarInsights?.length || 0})
+                  </button>
                 </div>
 
                 {/* Campo de Busca */}
@@ -408,7 +443,88 @@ export default function AdminDashboardPage() {
 
               {/* Listagem */}
               <div className="divide-y divide-slate-800/80">
-                {currentLeadsList.length === 0 ? (
+                {activeTab === 'radar' ? (
+                  !metrics.radarInsights || metrics.radarInsights.length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 text-xs">
+                      Nenhum insight, dúvida ou fricção capturado no momento. O sistema está fluindo sem barreiras! 🚀
+                    </div>
+                  ) : (
+                    metrics.radarInsights.map((insight) => {
+                      const typeBadge = {
+                        question: { label: '❓ Dúvida', bg: 'bg-amber-500/10 text-amber-300 border-amber-500/20' },
+                        friction: { label: '⚠️ Fricção', bg: 'bg-rose-500/10 text-rose-300 border-rose-500/20' },
+                        onboarding_hesitation: { label: '⏱️ Hesitação Onboarding', bg: 'bg-purple-500/10 text-purple-300 border-purple-500/20' },
+                        unsupported: { label: '💡 Recurso Externo', bg: 'bg-blue-500/10 text-blue-300 border-blue-500/20' },
+                        praise: { label: '🌟 Momento UAU', bg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' },
+                        general: { label: '📌 Geral', bg: 'bg-slate-500/10 text-slate-300 border-slate-500/20' },
+                      }[insight.event_type] || { label: insight.event_type, bg: 'bg-slate-500/10 text-slate-300 border-slate-500/20' };
+
+                      const catBadge = {
+                        tax: 'Fiscal & Tributário',
+                        banking: 'Bancário & Extratos',
+                        billing: 'Planos & Comercial',
+                        ocr: 'Leitura OCR & Docs',
+                        usability: 'Usabilidade & UX',
+                        onboarding: 'Onboarding Inicial',
+                        general: 'Geral',
+                      }[insight.category] || insight.category;
+
+                      const timeFormatted = new Date(insight.created_at).toLocaleString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+
+                      const chatPrompt = `Olá! Vi sua dúvida sobre "${insight.detected_intent}". Como posso te ajudar?`;
+                      const waLink = `https://wa.me/${insight.whatsapp_number}?text=${encodeURIComponent(chatPrompt)}`;
+
+                      return (
+                        <div
+                          key={insight.id}
+                          className="p-4 sm:px-6 hover:bg-slate-800/30 transition-colors flex flex-col sm:flex-row sm:items-start justify-between gap-3"
+                        >
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${typeBadge.bg}`}>
+                                {typeBadge.label}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-medium">
+                                {catBadge}
+                              </span>
+                              <span className="text-xs text-slate-400 font-mono">
+                                {insight.whatsapp_number}
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                {timeFormatted}
+                              </span>
+                            </div>
+
+                            <div className="text-sm font-semibold text-white">
+                              {insight.detected_intent}
+                            </div>
+
+                            <p className="text-xs text-slate-300 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 italic font-mono">
+                              "{insight.raw_message}"
+                            </p>
+                          </div>
+
+                          <div className="sm:self-center shrink-0">
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                            >
+                              <span>💬</span>
+                              <span>Atender no Zap</span>
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )
+                ) : currentLeadsList.length === 0 ? (
                   <div className="py-12 text-center text-slate-500 text-xs">
                     Nenhum contato encontrado nesta visualização.
                   </div>

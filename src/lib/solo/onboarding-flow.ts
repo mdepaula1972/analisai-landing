@@ -601,6 +601,18 @@ export async function processOnboardingResponse(params: {
     }
 
     // Se o usuário digitou algo não reconhecido durante a pergunta PF x PJ
+    import('@/lib/solo/friction-radar')
+      .then((m) =>
+        m.recordInsight({
+          phone: cleanPhone,
+          eventType: 'onboarding_hesitation',
+          category: 'onboarding',
+          rawMessage: rawText,
+          detectedIntent: 'Hesitação na escolha inicial PF x PJ',
+        })
+      )
+      .catch(() => {});
+
     await sendEvolutionText({
       phone,
       text: `Entendi! Para eu direcionar sua experiência corretamente:
@@ -658,6 +670,18 @@ export async function processOnboardingResponse(params: {
     }
 
     // Se não compreendeu o subtipo
+    import('@/lib/solo/friction-radar')
+      .then((m) =>
+        m.recordInsight({
+          phone: cleanPhone,
+          eventType: 'onboarding_hesitation',
+          category: 'onboarding',
+          rawMessage: rawText,
+          detectedIntent: 'Hesitação na escolha de perfil PF',
+        })
+      )
+      .catch(() => {});
+
     await sendEvolutionText({
       phone,
       text: `Por favor, selecione qual é o seu formato principal de uso:
@@ -751,6 +775,18 @@ export async function processOnboardingResponse(params: {
     }
 
     // Se o usuário digitou algo não reconhecido durante a pergunta de regime PJ
+    import('@/lib/solo/friction-radar')
+      .then((m) =>
+        m.recordInsight({
+          phone: cleanPhone,
+          eventType: 'onboarding_hesitation',
+          category: 'tax',
+          rawMessage: rawText,
+          detectedIntent: 'Dúvida ou hesitação no regime tributário PJ',
+        })
+      )
+      .catch(() => {});
+
     await sendEvolutionText({
       phone,
       text: `Entendi! Para que eu calibre o Termômetro Tributário do seu negócio:

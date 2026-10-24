@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { formatIdentifierDisplay, getIdentifierVariations } from './qa-whitelist';
 import { ADMIN_PERSONAL_WHATSAPP, OFFICIAL_BOT_WHATSAPP } from './constants';
+import type { InteractionInsightItem } from './friction-radar';
 
 export interface LeadItem {
   phone: string;
@@ -34,6 +35,7 @@ export interface AdminMetricsData {
   hotLeads: LeadItem[];
   convertedLeads: LeadItem[];
   webToken: string;
+  radarInsights?: InteractionInsightItem[];
 }
 
 /**
@@ -260,6 +262,14 @@ export async function collectAdminMetrics(): Promise<AdminMetricsData> {
 
   const webToken = await getOrCreateAdminWebToken();
 
+  let radarInsights: InteractionInsightItem[] = [];
+  try {
+    const { getRecentRadarInsights } = await import('./friction-radar');
+    radarInsights = await getRecentRadarInsights(40);
+  } catch (radarErr) {
+    console.warn('[collectAdminMetrics] Aviso ao carregar radarInsights:', radarErr);
+  }
+
   return {
     summary: {
       totalClients: clients.filter((c) => !c.is_admin).length,
@@ -280,6 +290,7 @@ export async function collectAdminMetrics(): Promise<AdminMetricsData> {
     hotLeads,
     convertedLeads,
     webToken,
+    radarInsights,
   };
 }
 

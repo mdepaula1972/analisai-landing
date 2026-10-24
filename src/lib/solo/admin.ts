@@ -87,6 +87,7 @@ Use estes códigos para navegar e testar cada nível na prática:
 • *!qa remove 13978122222* → Remove do modo QA
 • *!equipe add <tel> <nome>* → Cadastra operador na sua empresa com Modo Onisciência
 • *!feedbacks* → Vê todas as sugestões e críticas enviadas pelos testadores
+• *!radar [dias]* → Radar de Aprendizado: Dúvidas frequentes, fricções e momentos UAU dos usuários
 
 📊 *5. PRODUTOS AVULSOS E AUDITORIA*
 • *!pdf* ou *!relatorio* → Gera seu Livro Caixa em PDF na hora
@@ -157,6 +158,7 @@ Comandos disponíveis para você testar todas as opções:
 • *!qa remove <cpf/cnpj/tel>* → Revoga privilégios de QA do identificador
 • *!qa list* → Lista todos os identificadores em modo QA
 • *!feedbacks* → Consulta os últimos feedbacks e sugestões recebidos dos clientes
+• *!radar [dias]* → Radar de Aprendizado: Dúvidas frequentes, fricções e telemetria
 • *!raio-x* → Dispara a geração e envio imediato do **Raio-X de Fornecedores em PDF**
 • *!pdf* ou *!relatorio* → Emite e envia o **Livro Caixa oficial em PDF**
 • *!escalar* → Simula o **Escalonamento Humano**, disparando o lead no seu WhatsApp
@@ -1256,6 +1258,17 @@ O cliente já foi notificado via WhatsApp sobre a recuperação de conta.`,
       message: isBypass
         ? '🔓 *Bypass Ativado:* Você tem acesso irrestrito e ilimitado a todas as ferramentas.'
         : '🔒 *Bypass Desativado:* Seu perfil agora respeitará limites normais para você simular bloqueios reais.',
+    };
+  }
+
+  // ── !radar / !insights / !duvidas / !friccoes ──────────────────────────────
+  if (action === 'radar' || action === 'insights' || action === 'duvidas' || action === 'friccoes') {
+    const days = arg1 ? Math.max(1, parseInt(arg1) || 7) : 7;
+    const { generateRadarReport } = await import('@/lib/solo/friction-radar');
+    const report = await generateRadarReport(days);
+    return {
+      handled: true,
+      message: report,
     };
   }
 

@@ -2680,6 +2680,18 @@ async function processTrialDocumentMedia(params: {
     (Boolean(extraction.is_bank_statement) || extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
 
   if (!isFinancial) {
+    import('@/lib/solo/friction-radar')
+      .then((m) =>
+        m.recordInsight({
+          phone: cleanPhone,
+          eventType: 'unsupported',
+          category: 'ocr',
+          rawMessage: mediaCaption || 'Documento não identificado como financeiro',
+          detectedIntent: 'Envio de documento não financeiro na degustação',
+        })
+      )
+      .catch(() => {});
+
     await sendEvolutionText({
       phone,
       text: `⚠️ *Documento não identificado como financeiro.*\nO arquivo enviado não parece ser um boleto, conta de consumo, nota fiscal ou extrato bancário.\n\nNa nossa degustação gratuita, envie uma foto nítida de um boleto, NF ou extrato para ver o robô funcionando em tempo real!`,
@@ -3285,6 +3297,19 @@ _Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no
     return;
   } catch (err) {
     console.error('[Gemini Document OCR Error]:', err);
+    import('@/lib/solo/friction-radar')
+      .then((m) =>
+        m.recordInsight({
+          phone: cleanPhone,
+          eventType: 'friction',
+          category: 'ocr',
+          rawMessage: mediaCaption || 'Documento / Foto ilegível',
+          detectedIntent: 'Falha na decodificação de imagem ou documento (OCR)',
+          metadata: { error: String(err) },
+        })
+      )
+      .catch(() => {});
+
     await sendEvolutionText({
       phone,
       text: `Não consegui decodificar nitidamente o documento enviado. Por favor, envie uma foto com melhor iluminação ou o arquivo PDF original.`,
@@ -3441,6 +3466,19 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
     const { startOnboarding } = await import('@/lib/solo/onboarding-flow');
     await startOnboarding({ phone, cleanPhone, client });
     return;
+  }
+
+  // ── TELEMETRIA & RADAR DE APRENDIZADO CONTÍNUO (v1.3.8) ──
+  if (!isCommand && rawText && rawText.length >= 3) {
+    import('@/lib/solo/friction-radar')
+      .then((m) =>
+        m.detectAndLogUserInteraction({
+          phone: cleanPhone,
+          text: rawText,
+          isAudio,
+        })
+      )
+      .catch((radarErr) => console.warn('[Radar Telemetry Error]:', radarErr));
   }
 
   // ── 0.16 ONBOARDING DIDÁTICO DIRECIONADO (RESPOSTA DE PF x PJ OU SUBTIPO PF) ──
@@ -4812,12 +4850,35 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo pr
         const cleanTranscribed = (audioResult.textResponse || '').trim();
 
         if (!cleanTranscribed) {
+          import('@/lib/solo/friction-radar')
+            .then((m) =>
+              m.recordInsight({
+                phone: cleanPhone,
+                eventType: 'friction',
+                category: 'usability',
+                rawMessage: 'Áudio inaudível / ruído',
+                detectedIntent: 'Falha na compreensão de áudio pelo Gemini',
+              })
+            )
+            .catch(() => {});
+
           await sendEvolutionText({
             phone,
             text: `🎙️ Não consegui compreender com nitidez o que foi falado no áudio. Por favor, envie novamente ou digite o fornecedor, valor e vencimento por texto.`,
           });
           return;
         }
+
+        // Telemetria do Radar para comandos e dúvidas faladas por áudio
+        import('@/lib/solo/friction-radar')
+          .then((m) =>
+            m.detectAndLogUserInteraction({
+              phone: cleanPhone,
+              text: cleanTranscribed,
+              isAudio: true,
+            })
+          )
+          .catch(() => {});
 
         const audioLooksLikeEntry =
           /\b(receber|a receber|recebimento|recebimentos|lançar|lance|anotar|anote|cadastrar|cadastre|adicionar|adicione|registrar|registre|salvar|salve|paguei|comprei|gastei|considerei|recebi|cobrar)\b/i.test(cleanTranscribed) ||
