@@ -4297,16 +4297,33 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     return;
   }
 
-  // Configuração de Regime: !regime [mei|simples|epp] [baseline?]
-  if (cleanText.startsWith('!regime') || cleanText.startsWith('/regime')) {
+  // Configuração de Regime: !regime [mei|simples|epp|outro] [baseline?]
+  if (cleanText === '!regime' || cleanText.startsWith('!regime ') || cleanText === '/regime' || cleanText.startsWith('/regime ')) {
     const parts = cleanText.split(/\s+/);
     const targetRegime = parts[1]?.toLowerCase();
-    let regimeCode: 'mei' | 'simples_me' | 'simples_epp' = 'mei';
+
+    if (!targetRegime) {
+      await sendEvolutionText({
+        phone,
+        text: `🏢 *Como configurar o enquadramento tributário da sua empresa:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 *Escolha um dos comandos abaixo:*
+• *!regime mei* → Para MEI (teto anual de R$ 81 mil)
+• *!regime simples* → Para Simples Nacional ME (teto anual de R$ 360 mil)
+• *!regime epp* → Para Simples Nacional EPP (teto anual de R$ 4,8 milhões)
+• *!regime outro* → Gestão sem monitoramento de teto fiscal`,
+      });
+      return;
+    }
+
+    let regimeCode: 'mei' | 'simples_me' | 'simples_epp' | 'outro' = 'mei';
 
     if (targetRegime === 'simples' || targetRegime === 'me' || targetRegime === 'simples_me') {
       regimeCode = 'simples_me';
     } else if (targetRegime === 'epp' || targetRegime === 'simples_epp') {
       regimeCode = 'simples_epp';
+    } else if (targetRegime === 'outro' || targetRegime === 'outros' || targetRegime === 'presumido' || targetRegime === 'real') {
+      regimeCode = 'outro';
     } else {
       regimeCode = 'mei';
     }
@@ -4625,7 +4642,7 @@ Verifique se digitou corretamente ou escolha um dos nossos planos para começar 
                 if (inc.amount) await addTrialLeadRevenue(cleanPhone, Number(inc.amount));
               }
               const taxStatus = await getTaxRevenueTracking({ phone: cleanPhone });
-              trialTaxBadge = `\n\n${taxStatus.miniBadge}`;
+              trialTaxBadge = taxStatus.hasDefinedRegime && taxStatus.miniBadge ? `\n\n${taxStatus.miniBadge}` : '';
             } catch (tErr) {
               console.warn('[Trial Tax Meter Warning]:', tErr);
             }
@@ -4816,7 +4833,7 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo pr
                 if (inc.amount) await addTrialLeadRevenue(cleanPhone, Number(inc.amount));
               }
               const taxStatus = await getTaxRevenueTracking({ phone: cleanPhone });
-              trialTaxBadge = `\n\n${taxStatus.miniBadge}`;
+              trialTaxBadge = taxStatus.hasDefinedRegime && taxStatus.miniBadge ? `\n\n${taxStatus.miniBadge}` : '';
             } catch (tErr) {
               console.warn('[Trial Voice Tax Meter Warning]:', tErr);
             }

@@ -2,7 +2,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 
 export type ProfileType = 'pj' | 'pf_liberal' | 'pf_individual' | 'pf_family';
-export type OnboardingStep = 'awaiting_pf_or_pj' | 'awaiting_pf_subtype' | 'completed';
+export type OnboardingStep = 'awaiting_pf_or_pj' | 'awaiting_pf_subtype' | 'awaiting_pj_regime' | 'completed';
 
 export interface OnboardingState {
   isCompleted: boolean;
@@ -30,6 +30,70 @@ _(Para MEIs, autônomos com CNPJ e empresas. Foco no Livro Caixa do negócio, co
 _(Para controle das finanças pessoais, contas do dia a dia, orçamento e patrimônio, sem necessidade de CNPJ)._
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 _Basta responder com *1* ou *2* (ou digitar *PJ* / *PF*)._`;
+}
+
+/**
+ * 2. Mensagem Didática de Desdobramento para PJ (MEI, Simples Nacional ou Outros)
+ */
+export function getPjTaxRegimeMessage(): string {
+  return `Perfeito! 🏢 *Gestão Financeira para Pessoa Jurídica (PJ).*
+
+Para que eu monitore o teto fiscal do seu negócio sem surpresas na virada do ano, qual é o enquadramento tributário do seu CNPJ?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 *Escolha uma opção:*
+
+*1* → *MEI (Microempreendedor Individual)*
+_(Teto oficial de faturamento até R$ 81 mil/ano. O AnalisAí avisa a sua margem de segurança a cada nota ou receita recebida para evitar desenquadramento involuntário)._
+
+*2* → *Simples Nacional (Microempresa — ME / EPP)*
+_(Limite anual de faturamento até R$ 360 mil para ME ou até R$ 4,8 milhões para EPP, com separação de pró-labore e livro caixa contábil)._
+
+*3* → *Lucro Presumido / Outro / Não sei informar*
+_(Gestão focada em fluxo de caixa, contas a pagar, contas a receber e DRE gerencial, sem cálculo de teto fiscal do Simples)._
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 _Basta responder com *1*, *2* ou *3* (ou escrever *MEI*, *Simples* ou *Outro*)._`;
+}
+
+/**
+ * 2.1 Mensagens de Conclusão do Onboarding para PJ por Regime
+ */
+export function getPjOnboardingCompletionMessage(regime: 'mei' | 'simples_me' | 'outro'): string {
+  if (regime === 'mei') {
+    return `🏢 *Excelente! Seu AnalisAí está configurado para MEI (Microempreendedor Individual).*
+
+A partir de agora, suas finanças serão geridas com inteligência tributária:
+• 📑 *Leitura de notas fiscais, boletos e recibos* com extração automática
+• ⏰ *Lembretes na véspera às 10h* com Pix copia-e-cola para não pagar juros
+• 🌡️ *Termômetro MEI:* Radar ativo no faturamento para monitorar o teto anual de até R$ 81 mil
+• 📊 *Livro Caixa e DRE* prontos para você acompanhar e enviar ao contador
+
+📸 *Para começar agora mesmo:*
+Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo suas despesas e receitas! 🚀`;
+  }
+
+  if (regime === 'simples_me') {
+    return `🏢 *Excelente! Seu AnalisAí está configurado para Simples Nacional (Microempresa).*
+
+A partir de agora, suas finanças serão geridas com inteligência contábil empresarial:
+• 📑 *Leitura de notas fiscais, boletos e faturas* com extração automática
+• ⏰ *Lembretes na véspera às 10h* com código Pix copia-e-cola
+• 🌡️ *Termômetro do Simples Nacional:* Acompanhamento anual do faturamento (limite de R$ 360 mil para ME)
+• 📊 *Fechamento Contábil e DRE:* Relatórios limpos para você e seu contador
+
+📸 *Para começar agora mesmo:*
+Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo suas despesas e receitas! 🚀`;
+  }
+
+  return `🏢 *Excelente! Seu AnalisAí está configurado para Gestão Empresarial (Pessoa Jurídica).*
+
+Seu assistente já está pronto para cuidar da rotina financeira do seu negócio:
+• 📑 *Leitura de notas fiscais, boletos e faturas* em segundos
+• ⏰ *Lembretes na véspera às 10h* para evitar multas e juros
+• 📊 *Fluxo de caixa, relatórios contábeis e demonstrativo DRE* em tempo real
+
+📸 *Para começar agora mesmo:*
+Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo suas despesas e receitas! 🚀`;
 }
 
 /**
@@ -245,14 +309,12 @@ export async function processOnboardingResponse(params: {
       clean === '2' || clean === 'pf';
 
     if (isPj) {
-      // Salva perfil PJ
       if (lead?.id) {
         await supabase
           .from('trial_leads')
           .update({
             profile_type: 'pj',
-            onboarding_step: 'completed',
-            tax_regime: 'simples',
+            onboarding_step: 'awaiting_pj_regime',
           })
           .eq('id', lead.id);
       }
@@ -265,10 +327,10 @@ export async function processOnboardingResponse(params: {
 
       await sendEvolutionText({
         phone,
-        text: getOnboardingCompletionMessage('pj'),
+        text: getPjTaxRegimeMessage(),
       });
 
-      return { handled: true, completed: true, profile: 'pj' };
+      return { handled: true, completed: false };
     }
 
     if (isPf) {
@@ -354,6 +416,68 @@ export async function processOnboardingResponse(params: {
 • Digite *1* para *Profissional Liberal / Autônomo* (Honorários e Carnê-Leão)
 • Digite *2* para *Uso Único / Pessoal* (Salário, cartão e contas individuais)
 • Digite *3* para *Família / Casal* (Orçamento doméstico compartilhado)`,
+    });
+    return { handled: true, completed: false };
+  }
+
+  // ── ETAPA 3: ESCOLHA DO ENQUADRAMENTO TRIBUTÁRIO DE PJ (MEI, SIMPLES OU OUTROS) ──
+  if (currentStep === 'awaiting_pj_regime') {
+    const isMei =
+      /^(1\b|1\.|mei\b|microempreendedor\b|teto 81\b)/i.test(clean) ||
+      clean === '1' || clean === 'mei';
+
+    const isSimples =
+      /^(2\b|2\.|simples\b|simples nacional\b|microempresa\b|me\b|epp\b|pequeno porte\b)/i.test(clean) ||
+      clean === '2' || clean === 'simples' || clean === 'me';
+
+    const isOutro =
+      /^(3\b|3\.|outro\b|outros\b|presumido\b|real\b|n[aã]o sei\b|indiferente\b)/i.test(clean) ||
+      clean === '3' || clean === 'outro';
+
+    let chosenRegime: 'mei' | 'simples_me' | 'outro' | null = null;
+    if (isMei) chosenRegime = 'mei';
+    else if (isSimples) chosenRegime = 'simples_me';
+    else if (isOutro) chosenRegime = 'outro';
+
+    if (chosenRegime) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({
+            profile_type: 'pj',
+            tax_regime: chosenRegime,
+            onboarding_step: 'completed',
+          })
+          .eq('id', lead.id);
+      }
+      if (client?.id) {
+        await supabase
+          .from('clients')
+          .update({
+            profile_type: 'pj',
+            tax_regime: chosenRegime,
+            tax_type: 'CNPJ',
+          })
+          .eq('id', client.id);
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: getPjOnboardingCompletionMessage(chosenRegime),
+      });
+
+      return { handled: true, completed: true, profile: 'pj' };
+    }
+
+    // Se o usuário digitou algo não reconhecido durante a pergunta de regime PJ
+    await sendEvolutionText({
+      phone,
+      text: `Entendi! Para que eu calibre o Termômetro Tributário do seu CNPJ:
+*Qual é o enquadramento tributário da sua empresa?*
+
+• Digite *1* para *MEI (Microempreendedor Individual)*
+• Digite *2* para *Simples Nacional (ME / EPP)*
+• Digite *3* para *Lucro Presumido / Outro / Não sei informar*`,
     });
     return { handled: true, completed: false };
   }

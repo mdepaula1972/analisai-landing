@@ -2,7 +2,9 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { format } from 'date-fns';
 
 export interface TaxRevenueStatus {
-  taxRegime: 'mei' | 'simples_me' | 'simples_epp';
+  hasDefinedRegime: boolean;
+  isPessoaFisica: boolean;
+  taxRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro';
   taxRegimeName: string;
   annualLimit: number;
   toleranceLimit: number;
@@ -138,6 +140,16 @@ export const TAX_CONFIGS = {
 /**
  * Normaliza e busca o regime e o faturamento acumulado no ano para o cliente ou lead.
  */
+export function normalizeTaxRegime(raw?: string | null): 'mei' | 'simples_me' | 'simples_epp' | 'outro' | null {
+  if (!raw) return null;
+  const clean = raw.toLowerCase().trim();
+  if (clean === 'mei') return 'mei';
+  if (clean === 'simples' || clean === 'me' || clean === 'simples_me' || clean === 'simples nacional') return 'simples_me';
+  if (clean === 'epp' || clean === 'simples_epp') return 'simples_epp';
+  if (clean === 'outro' || clean === 'outros' || clean === 'presumido' || clean === 'real' || clean === 'pf') return 'outro';
+  return null;
+}
+
 export async function getTaxRevenueTracking(params: {
   clientId?: string;
   phone?: string;
@@ -153,7 +165,9 @@ export async function getTaxRevenueTracking(params: {
 
   let rawPhone = (params.phone || '').replace(/\D/g, '');
   let resolvedClientId = params.clientId;
-  let taxRegimeCode: 'mei' | 'simples_me' | 'simples_epp' = 'mei';
+  let taxRegimeCode: 'mei' | 'simples_me' | 'simples_epp' | 'outro' | null = null;
+  let hasExplicitTaxRegime = false;
+  let isPessoaFisica = false;
   let baselineRevenue = 0;
   let systemRevenue = 0;
 
@@ -162,28 +176,38 @@ export async function getTaxRevenueTracking(params: {
     const cleanNumber = rawPhone.length > 11 ? rawPhone.slice(-11) : rawPhone;
     const { data: client } = await supabase
       .from('clients')
-      .select('id, tax_regime, annual_revenue_baseline')
+      .select('id, profile_type, tax_regime, annual_revenue_baseline')
       .or(`whatsapp_number.eq.${rawPhone},whatsapp_number.ilike.%${cleanNumber}`)
       .limit(1)
       .maybeSingle();
 
     if (client) {
       resolvedClientId = client.id;
-      if (client.tax_regime && client.tax_regime in TAX_CONFIGS) {
-        taxRegimeCode = client.tax_regime as any;
+      if (client.profile_type && client.profile_type.startsWith('pf')) {
+        isPessoaFisica = true;
+      }
+      const norm = normalizeTaxRegime(client.tax_regime);
+      if (norm) {
+        taxRegimeCode = norm;
+        hasExplicitTaxRegime = true;
       }
       baselineRevenue = Number(client.annual_revenue_baseline) || 0;
     }
   } else if (resolvedClientId) {
     const { data: client } = await supabase
       .from('clients')
-      .select('tax_regime, annual_revenue_baseline')
+      .select('profile_type, tax_regime, annual_revenue_baseline')
       .eq('id', resolvedClientId)
       .maybeSingle();
 
     if (client) {
-      if (client.tax_regime && client.tax_regime in TAX_CONFIGS) {
-        taxRegimeCode = client.tax_regime as any;
+      if (client.profile_type && client.profile_type.startsWith('pf')) {
+        isPessoaFisica = true;
+      }
+      const norm = normalizeTaxRegime(client.tax_regime);
+      if (norm) {
+        taxRegimeCode = norm;
+        hasExplicitTaxRegime = true;
       }
       baselineRevenue = Number(client.annual_revenue_baseline) || 0;
     }
@@ -211,21 +235,29 @@ export async function getTaxRevenueTracking(params: {
     const cleanNumber = rawPhone.length > 11 ? rawPhone.slice(-11) : rawPhone;
     const { data: lead } = await supabase
       .from('trial_leads')
-      .select('tax_regime, annual_revenue_baseline, annual_revenue_current')
+      .select('profile_type, tax_regime, annual_revenue_baseline, annual_revenue_current')
       .or(`whatsapp_number.eq.${rawPhone},whatsapp_number.ilike.%${cleanNumber}`)
       .limit(1)
       .maybeSingle();
 
     if (lead) {
-      if (lead.tax_regime && lead.tax_regime in TAX_CONFIGS) {
-        taxRegimeCode = lead.tax_regime as any;
+      if (lead.profile_type && lead.profile_type.startsWith('pf')) {
+        isPessoaFisica = true;
+      }
+      const norm = normalizeTaxRegime(lead.tax_regime);
+      if (norm) {
+        taxRegimeCode = norm;
+        hasExplicitTaxRegime = true;
       }
       baselineRevenue = Number(lead.annual_revenue_baseline) || 0;
       systemRevenue = Number(lead.annual_revenue_current) || 0;
     }
   }
 
-  const config = await getParametrizedTaxRegimeLimits(taxRegimeCode);
+  const activeRegimeCode: 'mei' | 'simples_me' | 'simples_epp' =
+    taxRegimeCode && taxRegimeCode !== 'outro' ? taxRegimeCode : 'simples_me';
+
+  const config = await getParametrizedTaxRegimeLimits(activeRegimeCode);
   const totalRevenue = baselineRevenue + systemRevenue;
   const percentage = Math.min(150, Math.round((totalRevenue / config.annualLimit) * 100));
   const remaining = Math.max(0, config.annualLimit - totalRevenue);
@@ -259,45 +291,76 @@ export async function getTaxRevenueTracking(params: {
   const monthlyAvgFmt = currentMonthlyAvg.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const safeMonthlyAvgFmt = maxSafeMonthlyAvg.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  let statusMessage = `🌡️ *Termômetro Tributário — ${config.name} (${currentYear})*\n`;
-  statusMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  statusMessage += `• *Faturamento Acumulado:* ${totalFmt}\n`;
-  statusMessage += `• *Teto Oficial Anual:* ${limitFmt}\n`;
-  statusMessage += `• *Margem Segura Restante:* ${remainingFmt}\n`;
-  statusMessage += `• *Termômetro Fiscal:* ${progressBar}\n`;
-  statusMessage += `• *Sua Média Mensal Atual:* ${monthlyAvgFmt}/mês\n`;
-  statusMessage += `• *Média Segura para os Próximos Meses:* ${safeMonthlyAvgFmt}/mês\n`;
+  let statusMessage = '';
+  if (isPessoaFisica) {
+    statusMessage = `ℹ️ *Perfil Pessoa Física Detectado*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O Termômetro Tributário de faturamento anual é exclusivo para Pessoas Jurídicas (CNPJ).
+Para finanças pessoais, suas receitas são tratadas como entradas de salário ou honorários sem limite do Simples!
 
-  if (riskLevel === 'red') {
-    if (totalRevenue <= config.toleranceLimit) {
-      statusMessage += `\n⚠️ *Atenção Máxima (Excesso de até 20%):*\n`;
-      statusMessage += `Você ultrapassou o teto anual de ${limitFmt}, mas está dentro da margem de tolerância de 20% (${toleranceFmt}).\n`;
-      statusMessage += `📌 *Regra da Receita Federal:* O desenquadramento não é retroativo e ocorrerá a partir de 1º de janeiro do próximo ano. Você deverá recolher um DAS complementar sobre o excesso. Recomendamos procurar seu contador para planejar a migração sem sobressaltos!`;
-    } else {
-      statusMessage += `\n🚨 *ALERTA GRAVE (Excesso Superior a 20%):*\n`;
-      statusMessage += `Você ultrapassou ${toleranceFmt} (> 20% acima do teto).\n`;
-      statusMessage += `❗ *Penalidade da Receita Federal:* O desenquadramento se torna RETROATIVO a janeiro do ano corrente! Todos os impostos serão recalculados pelas regras de Microempresa (Simples Nacional) com juros e multa. Contate urgentemente seu contador!`;
-    }
-  } else if (riskLevel === 'orange') {
-    statusMessage += `\n🟠 *Atenção Elevada (Risco Iminente):*\n`;
-    statusMessage += `Você já consumiu ${percentage}% do seu teto anual. Restam apenas ${remainingFmt} para emissão até dezembro. Redobre o controle das notas e avalie com seu contador a viabilidade de desenquadramento planejado para ME!`;
-  } else if (riskLevel === 'yellow') {
-    statusMessage += `\n🟡 *Alerta Preventivo (Zona de Atenção):*\n`;
-    statusMessage += `Você atingiu ${percentage}% do limite anual. Mantenha seu ritmo de faturamento médio abaixo de ${safeMonthlyAvgFmt}/mês para manter o enquadramento sem surpresas na virada do ano.`;
+💡 _Deseja alterar seu perfil para empresa? Digite *!perfil*._`;
+  } else if (!hasExplicitTaxRegime || taxRegimeCode === 'outro') {
+    statusMessage = `ℹ️ *Regime Tributário Não Configurado*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para que eu monitore o teto fiscal do seu CNPJ sem surpresas com a Receita Federal, me informe seu enquadramento:
+
+👉 *Como configurar em 1 segundo:*
+• Digite *!regime mei* → Para MEI (teto anual de R$ 81 mil)
+• Digite *!regime simples* → Para Simples Nacional ME (teto anual de R$ 360 mil)
+• Digite *!regime epp* → Para Simples Nacional EPP (teto anual de R$ 4,8 milhões)`;
   } else {
-    statusMessage += `\n🟢 *Status Confortável (Zona Segura):*\n`;
-    statusMessage += `Seu faturamento acumulado está equilibrado e seguro dentro do limite anual do ${config.name}. Continue registrando todas as suas entradas para manter o radar em dia!`;
+    statusMessage = `🌡️ *Termômetro Tributário — ${config.name} (${currentYear})*\n`;
+    statusMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    statusMessage += `• *Faturamento Acumulado:* ${totalFmt}\n`;
+    statusMessage += `• *Teto Oficial Anual:* ${limitFmt}\n`;
+    statusMessage += `• *Margem Segura Restante:* ${remainingFmt}\n`;
+    statusMessage += `• *Termômetro Fiscal:* ${progressBar}\n`;
+    statusMessage += `• *Sua Média Mensal Atual:* ${monthlyAvgFmt}/mês\n`;
+    statusMessage += `• *Média Segura para os Próximos Meses:* ${safeMonthlyAvgFmt}/mês\n`;
+
+    if (riskLevel === 'red') {
+      if (totalRevenue <= config.toleranceLimit) {
+        statusMessage += `\n⚠️ *Atenção Máxima (Excesso de até 20%):*\n`;
+        statusMessage += `Você ultrapassou o teto anual de ${limitFmt}, mas está dentro da margem de tolerância de 20% (${toleranceFmt}).\n`;
+        statusMessage += `📌 *Regra da Receita Federal:* O desenquadramento não é retroativo e ocorrerá a partir de 1º de janeiro do próximo ano.`;
+      } else {
+        statusMessage += `\n🚨 *ALERTA GRAVE (Excesso Superior a 20%):*\n`;
+        statusMessage += `Você ultrapassou ${toleranceFmt} (> 20% acima do teto).\n`;
+        statusMessage += `❗ *Penalidade da Receita Federal:* O desenquadramento se torna RETROATIVO a janeiro do ano corrente!`;
+      }
+    } else if (riskLevel === 'orange') {
+      statusMessage += `\n🟠 *Atenção Elevada (Risco Iminente):*\n`;
+      statusMessage += `Você já consumiu ${percentage}% do seu teto anual. Restam apenas ${remainingFmt} para emissão até dezembro.`;
+    } else if (riskLevel === 'yellow') {
+      statusMessage += `\n🟡 *Alerta Preventivo (Zona de Atenção):*\n`;
+      statusMessage += `Você atingiu ${percentage}% do limite anual. Mantenha seu ritmo de faturamento médio abaixo de ${safeMonthlyAvgFmt}/mês.`;
+    } else {
+      statusMessage += `\n🟢 *Status Confortável (Zona Segura):*\n`;
+      statusMessage += `Seu faturamento acumulado está equilibrado e seguro dentro do limite anual do ${config.name}.`;
+    }
+
+    statusMessage += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    statusMessage += `💡 _Dica: Para alterar seu regime ou faturamento prévio deste ano:_\n`;
+    statusMessage += `• \`!regime mei\` ou \`!regime simples\`\n`;
+    statusMessage += `• \`!faturamento [valor]\` (ex: \`!faturamento 15000\`)`;
   }
 
-  statusMessage += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  statusMessage += `💡 _Dica: Para alterar seu regime ou informar faturamento anterior fora do AnalisAí, use:_\n`;
-  statusMessage += `• \`!regime mei\` ou \`!regime simples\`\n`;
-  statusMessage += `• \`!faturamento [valor]\` (ex: \`!faturamento 15000\`)`;
-
-  const miniBadge = `📊 *Termômetro ${taxRegimeCode.toUpperCase()}:* ${percentage}% utilizado (${remainingFmt} de margem restante)`;
+  // Mini badge: SÓ EXIBE SE NÃO FOR PF, SE TIVER REGIME EXPLICITO E NÃO FOR OUTRO
+  let miniBadge = '';
+  if (!isPessoaFisica && hasExplicitTaxRegime && taxRegimeCode !== 'outro') {
+    const regimeLabel =
+      taxRegimeCode === 'mei'
+        ? 'MEI'
+        : taxRegimeCode === 'simples_epp'
+        ? 'Simples Nacional (EPP)'
+        : 'Simples Nacional (ME)';
+    miniBadge = `📊 *Termômetro ${regimeLabel}:* ${percentage}% utilizado (${remainingFmt} de margem restante)`;
+  }
 
   return {
-    taxRegime: taxRegimeCode,
+    hasDefinedRegime: hasExplicitTaxRegime,
+    isPessoaFisica,
+    taxRegime: (taxRegimeCode || 'simples_me') as any,
     taxRegimeName: config.name,
     annualLimit: config.annualLimit,
     toleranceLimit: config.toleranceLimit,
@@ -320,7 +383,7 @@ export async function getTaxRevenueTracking(params: {
  */
 export async function updateTaxRegime(params: {
   phone: string;
-  regime: 'mei' | 'simples_me' | 'simples_epp';
+  regime: 'mei' | 'simples_me' | 'simples_epp' | 'outro';
   baseline?: number;
 }): Promise<{ success: boolean; message: string }> {
   const supabase = createServiceRoleClient();
@@ -356,7 +419,10 @@ export async function updateTaxRegime(params: {
     await supabase.from('trial_leads').update(updateData).eq('id', lead.id);
   }
 
-  const regimeName = TAX_CONFIGS[params.regime]?.name || params.regime;
+  const regimeName =
+    params.regime === 'outro'
+      ? 'Gestão Empresarial (Sem cálculo de teto fiscal)'
+      : (TAX_CONFIGS as any)[params.regime]?.name || params.regime;
   let msg = `✅ *Regime Tributário Atualizado!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Seu perfil fiscal foi configurado como:
