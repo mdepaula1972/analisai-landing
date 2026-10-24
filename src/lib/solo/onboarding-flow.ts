@@ -154,38 +154,84 @@ export function inferRevenueAndRegime(input: string): RevenueInferenceResult | n
 }
 
 /**
- * Monta a mensagem de sugestão didática para confirmação do usuário
+ * Monta a mensagem didática e educativa para confirmação do usuário (sem tom fiscal punitivo)
  */
 export function buildTaxRegimeProposalMessage(inference: RevenueInferenceResult): string {
+  const monthlyFmt = inference.monthlyAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const annualFmt = inference.annualAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // Caso 1: Usuário mencionou que não emite nota ou opera direto no caixa
   if (inference.hasNoInvoiceContext) {
-    return `📊 *Análise do Enquadramento (Sensibilidade Fiscal):*
+    return `📊 *Análise Educativa do seu Negócio:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${inference.explanation}
+Excelente! Ter uma movimentação de *${monthlyFmt}/mês* (~*${annualFmt}/ano*) mostra que seu negócio tem tração e está girando forte! 🚀
 
-👉 *Como está o seu CNPJ formalmente hoje na Receita Federal?*
-• Digite *1* (ou *Sim*) para confirmar como *MEI*
-• Digite *2* se seu CNPJ formalmente já for *Simples Nacional (ME)*
-• Digite *3* se for *Simples Nacional (EPP)* ou *Outro*`;
+💡 *Um toque amigo sobre seu enquadramento:*
+No dia a dia de quem atende o público, é muito comum o dinheiro do caixa ser diferente do que tem nota emitida:
+• Se o seu CNPJ hoje é **MEI**, fique super tranquilo! O AnalisAí vai organizar **100% das suas entradas reais de caixa** para você não perder dinheiro, e te ajuda a acompanhar suavemente a referência de R$ 81 mil/ano.
+• Se você já emite notas fiscais ou quer calibrar para o **Simples Nacional**, também podemos ajustar agora mesmo!
+
+👉 *Como você prefere calibrar seu assistente hoje?*
+• Digite *1* (ou *Sim*) para manter no *MEI* (eu controlo seu caixa total e te aviso o momento ideal de crescer)
+• Digite *2* se seu CNPJ já opera formalmente como *Simples Nacional (ME)*
+• Digite *3* se for *EPP* ou outro formato`;
   }
 
+  // Caso 2: Faturamento médio entre R$ 6.750 e R$ 30.000/mês
   if (inference.monthlyAmount > 6750 && inference.monthlyAmount <= 30000) {
-    return `📊 *Análise de Adequação do Enquadramento:*
+    return `📊 *Análise Educativa do seu Negócio:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${inference.explanation}
+Parabéns pelo ritmo! Uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*) é uma ótima marca para o seu negócio! 🚀
 
-👉 *Como está o seu CNPJ formalmente hoje na Receita Federal?*
-• Digite *1* (ou *Sim*) para confirmar como *Simples Nacional (ME)*
-• Digite *2* (ou *MEI*) se o seu CNPJ formalmente ainda for *MEI*
-• Digite *3* se for *Simples Nacional (EPP)* ou *Outro*`;
+💡 *Um toque parceiro sobre seu enquadramento:*
+No dia a dia, é super comum haver diferença entre o total que entra no caixa e as notas fiscais emitidas:
+• Se o seu CNPJ hoje ainda é **MEI**, sem crise nenhuma! Eu controlo 100% do seu dinheiro real no caixa e te dou visibilidade para você planejar os próximos passos com segurança.
+• Se você já emite notas fiscais nesse volume, o regime de **Microempresa (Simples Nacional)** se encaixa como uma luva (limite até R$ 360 mil/ano).
+
+👉 *Como você prefere que o AnalisAí calibre seu termômetro hoje?*
+• Digite *1* (ou *Sim*) se quer calibrar como *Simples Nacional (ME)*
+• Digite *2* (ou *MEI*) se seu CNPJ hoje opera como *MEI* (eu cuido do seu caixa e te aviso com antecedência quando valer a pena mudar)
+• Ou me diga se for *EPP* ou outro formato!`;
   }
 
-  return `📊 *Análise de Adequação do Enquadramento:*
+  // Caso 3: Faturamento entre 30 mil e 400 mil/mês (EPP)
+  if (inference.monthlyAmount > 30000 && inference.monthlyAmount <= 400000) {
+    return `📊 *Análise Educativa do seu Negócio:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${inference.explanation}
+Seu negócio está em uma escala impressionante! Faturar cerca de *${monthlyFmt}/mês* (~*${annualFmt}/ano*) é sinal de grande expansão! 🚀
 
-👉 *Podemos confirmar seu enquadramento como ${inference.regimeName}?*
-• Responda *1* ou *Sim* para confirmar e ativar seu radar fiscal.
-• Ou me diga se o enquadramento for diferente (ex: *MEI*, *Simples* ou *EPP*).`;
+💡 *Toque preventivo do AnalisAí:*
+Nessa faixa de faturamento, a categoria de **Empresa de Pequeno Porte (EPP — Simples Nacional)** ou **Lucro Presumido** oferece toda a flexibilidade que você precisa para crescer sem travas (teto até R$ 4,8 milhões/ano).
+
+👉 *Podemos calibrar seu termômetro como Simples Nacional (EPP)?*
+• Digite *1* ou *Sim* para confirmar como *EPP*.
+• Digite *2* se seu faturamento oficial com notas ainda for de *Microempresa (ME)*.
+• Ou me diga se for outro formato.`;
+  }
+
+  // Caso 4: Faturamento até R$ 6.750/mês (MEI)
+  if (inference.monthlyAmount <= 6750) {
+    return `📊 *Análise Educativa do seu Negócio:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Muito bom! Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu negócio se encaixa com total folga na faixa do **MEI (Microempreendedor Individual)**! 🚀
+
+💡 *Dica amiga:* O MEI é super prático e tem teto de R$ 81 mil/ano. O AnalisAí vai te ajudar a manter as contas em dia e aproveitar essa tranquilidade.
+
+👉 *Podemos confirmar seu enquadramento como MEI?*
+• Responda *1* ou *Sim* para confirmar e ativar seu radar.
+• Ou digite *2* se seu CNPJ já estiver estruturado como *Simples Nacional (ME)*.`;
+  }
+
+  // Caso 5: Acima de 400 mil/mês
+  return `📊 *Análise Educativa do seu Negócio:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Espetacular! Faturamento de *${monthlyFmt}/mês* (~*${annualFmt}/ano*) reflete uma operação robusta e madura! 🚀
+
+💡 *Dica do AnalisAí:*
+Nesse patamar, o foco principal é fluxo de caixa refinado, conciliação e relatórios de DRE executivos.
+
+👉 *Podemos confirmar seu perfil para Gestão Empresarial Completa?*
+• Responda *1* ou *Sim* para confirmar.`;
 }
 
 /**
@@ -211,36 +257,37 @@ _(Para controle das finanças pessoais, contas do dia a dia, orçamento e patrim
 }
 
 /**
- * 2. Mensagem Didática de Desdobramento para PJ com Sensibilidade Fiscal
+ * 2. Mensagem Didática e Acolhedora para PJ
  */
 export function getPjTaxRegimeMessage(): string {
-  return `Perfeito! 🏢 *Gestão Financeira para Pessoa Jurídica (PJ).*
+  return `Perfeito! 🏢 *Gestão Financeira para sua Empresa (PJ).*
 
-Para que eu monitore o teto fiscal do seu negócio sem surpresas com a Receita Federal, precisamos calibrar seu enquadramento.
+O AnalisAí é o seu parceiro no WhatsApp: cuidamos de 100% das suas contas, despesas e entradas reais de dinheiro, para você focar no que faz melhor — vender e crescer!
 
-💡 *Sensibilidade Contábil Importante:*
-O enquadramento tributário e os impostos incidem sobre o faturamento **oficial informado em Nota Fiscal / Receita Federal**, que muitas vezes é diferente da movimentação total de caixa:
+Para calibrar seus relatórios e termômetro de forma educativa e personalizada:
+*Como seu negócio está enquadrado hoje?*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Qual é o enquadramento formal do seu CNPJ hoje?*
+👉 *Escolha uma opção ou me conte sua média de faturamento:*
 
 *1* → *MEI (Microempreendedor Individual)*
-• Média de até *R$ 6.750/mês* (teto anual de até R$ 81 mil).
-• _Dispensada emissão de NF para consumidor final PF. O AnalisAí controla todo o seu caixa real e monitora o teto oficial._
+• Média de referência até *R$ 6.750/mês* (teto de R$ 81 mil/ano).
+• _Ideal para quem está no começo ou vende direto para pessoas físicas. Eu cuido de todo o seu caixa real e te ajudo a crescer seguro._
 
 *2* → *Simples Nacional (Microempresa — ME)*
-• Faturamento oficial de *R$ 6.750 a R$ 30 mil/mês* (até R$ 360 mil/ano declarado com NF).
-• _O imposto DAS incide sobre as notas fiscais emitidas._
+• Faturamento de *R$ 6.750 a R$ 30 mil/mês* (até R$ 360 mil/ano).
+• _Ideal para quem emite notas fiscais regularmente, tem equipe ou busca expandir._
 
 *3* → *Simples Nacional (Empresa de Pequeno Porte — EPP)*
-• Faturamento oficial de *R$ 30 mil a R$ 400 mil/mês* (até R$ 4,8 milhões/ano declarado com NF).
+• Faturamento de *R$ 30 mil a R$ 400 mil/mês* (até R$ 4,8 milhões/ano).
+• _Para empresas consolidadas e em forte aceleração._
 
 *4* → *Lucro Presumido / Outro / Grande Porte*
-• Faturamento oficial acima de *R$ 400 mil/mês* (gestão executiva sem teto do Simples).
+• Faturamento acima de *R$ 400 mil/mês* (gestão executiva sem teto do Simples).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Dúvida entre o que entra no caixa e o que emite de Nota Fiscal?*
-Basta me dizer sua média (ex: *"faturo 15 mil no caixa, mas sou MEI"* ou *"emito 10 mil de nota"*).
-O AnalisAí orienta a adequação exata para você confirmar!`;
+💡 *Dúvida no enquadramento?*
+Basta me dizer quanto costuma entrar no seu caixa por mês (ex: *"minha média é 10 mil"* ou *"faturo 15 mil no caixa, mas sou MEI"*).
+O AnalisAí sugere o melhor ajuste para você aprovar!`;
 }
 
 /**

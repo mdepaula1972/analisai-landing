@@ -4369,14 +4369,14 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
     if (!targetRegime) {
       await sendEvolutionText({
         phone,
-        text: `🏢 *Enquadramento Tributário e Limites do CNPJ:*
+        text: `🏢 *Radar de Categorias do CNPJ:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Sensibilidade Fiscal:* O enquadramento na Receita Federal considera as receitas **oficialmente informadas em Nota Fiscal**, que podem ser diferentes da movimentação de caixa:
+💡 *Dica do AnalisAí:* No dia a dia, é super comum haver diferença entre o que gira no caixa e as notas emitidas. O AnalisAí cuida de todo o seu dinheiro real e te ajuda a calibrar o radar da sua empresa:
 
-• *MEI* → Média até *R$ 6.750/mês* (teto R$ 81 mil/ano | dispensada NF para consumidor PF)
-• *Simples* → Média com NF de *R$ 6.750 a R$ 30 mil/mês* (teto até R$ 360 mil para ME)
-• *EPP* → Média com NF de *R$ 30 mil a R$ 400 mil/mês* (teto até R$ 4,8 milhões)
-• *Outro* → Gestão executiva sem monitoramento de teto do Simples
+• *MEI* → Média de referência até *R$ 6.750/mês* (teto R$ 81 mil/ano)
+• *Simples Nacional (ME)* → Média de *R$ 6.750 a R$ 30 mil/mês* (teto até R$ 360 mil/ano)
+• *Simples Nacional (EPP)* → Média de *R$ 30 mil a R$ 400 mil/mês* (teto até R$ 4,8 milhões/ano)
+• *Outro* → Gestão executiva sem teto do Simples
 
 👉 *Como configurar ou adequar em 1 segundo:*
 Basta responder *MEI*, *Simples*, *EPP* ou *Outro*.

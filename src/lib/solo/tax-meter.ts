@@ -300,58 +300,52 @@ Para finanças pessoais, suas receitas são tratadas como entradas de salário o
 
 💡 _Deseja alterar seu perfil para empresa? Digite *!perfil*._`;
   } else if (!hasExplicitTaxRegime || taxRegimeCode === 'outro') {
-    statusMessage = `ℹ️ *Regime Tributário Não Configurado*
+    statusMessage = `ℹ️ *Radar Tributário Educativo*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para que eu monitore o teto fiscal do seu CNPJ sem surpresas com a Receita Federal, você pode se basear pela sua *média mensal de faturamento oficial*:
+Para que eu acompanhe a evolução do seu negócio e te avise suavemente quando for a hora de crescer de faixa, me conte seu enquadramento atual:
 
-• *MEI* → Média até *R$ 6.750/mês* (teto anual até R$ 81 mil | dispensada NF para consumidor final PF)
-• *Simples* → Média com NF de *R$ 6.750 a R$ 30 mil/mês* (teto anual até R$ 360 mil para ME)
-• *EPP* → Média com NF de *R$ 30 mil a R$ 400 mil/mês* (teto anual até R$ 4,8 milhões)
+• *MEI* → Média de referência até *R$ 6.750/mês* (teto R$ 81 mil/ano)
+• *Simples ME* → Média de *R$ 6.750 a R$ 30 mil/mês* (teto R$ 360 mil/ano)
+• *Simples EPP* → Média de *R$ 30 mil a R$ 400 mil/mês* (teto R$ 4,8 milhões/ano)
 
 👉 *Como configurar em 1 segundo:*
 Basta responder *MEI*, *Simples* ou *EPP*.
-Ou apenas me diga: *"Minha média é 15 mil no caixa, mas sou MEI"*, que eu calculo e adéquo com total sensibilidade para você!`;
+Ou apenas me diga: *"Minha média é 10 mil no caixa"*, que eu oriento a melhor configuração para você!`;
   } else {
     const monthlyAllowedLimitFmt = Math.round(config.annualLimit / 12).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const isMeiRegime = taxRegimeCode === 'mei';
-    statusMessage = `🌡️ *Termômetro Tributário — ${config.name} (${currentYear})*\n`;
+    statusMessage = `🌡️ *Termômetro Financeiro & Tributário — ${config.name} (${currentYear})*\n`;
     statusMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     statusMessage += `• *Faturamento Acumulado:* ${totalFmt}\n`;
-    statusMessage += `• *Teto Oficial Anual:* ${limitFmt} (~${monthlyAllowedLimitFmt}/mês)\n`;
+    statusMessage += `• *Teto de Referência Anual:* ${limitFmt} (~${monthlyAllowedLimitFmt}/mês)\n`;
     statusMessage += `• *Margem Segura Restante:* ${remainingFmt}\n`;
-    statusMessage += `• *Termômetro Fiscal:* ${progressBar}\n`;
+    statusMessage += `• *Termômetro de Expansão:* ${progressBar}\n`;
     statusMessage += `• *Sua Média Mensal Atual:* ${monthlyAvgFmt}/mês\n`;
-    statusMessage += `• *Média Segura para os Próximos Meses:* ${safeMonthlyAvgFmt}/mês\n`;
-
-    if (isMeiRegime) {
-      statusMessage += `\n💡 _Sensibilidade MEI:_ Dispensada emissão de NF para pessoa física. O limite anual de R$ 81 mil monitora o faturamento geral do negócio.\n`;
-    } else {
-      statusMessage += `\n💡 _Sensibilidade Simples Nacional:_ Os limites e o imposto DAS incidem estritamente sobre as receitas faturadas com Nota Fiscal / declaradas ao Fisco.\n`;
-    }
+    statusMessage += `• *Média Sugerida para os Próximos Meses:* ${safeMonthlyAvgFmt}/mês\n`;
 
     if (riskLevel === 'red') {
       if (totalRevenue <= config.toleranceLimit) {
-        statusMessage += `\n⚠️ *Atenção Máxima (Excesso de até 20%):*\n`;
-        statusMessage += `Você ultrapassou o teto anual de ${limitFmt}, mas está dentro da margem de tolerância de 20% (${toleranceFmt}).\n`;
-        statusMessage += `📌 *Regra da Receita Federal:* O desenquadramento não é retroativo e ocorrerá a partir de 1º de janeiro do próximo ano.`;
+        statusMessage += `\n🚀 *Parabéns pelo Crescimento! (Marca de ${limitFmt} superada):*\n`;
+        statusMessage += `Seu negócio ultrapassou a marca anual de ${limitFmt}, mantendo-se na faixa de tolerância de até ${toleranceFmt}.\n`;
+        statusMessage += `💡 *Dica Amiga do AnalisAí:* Este é o momento perfeito para conversar com seu contador e planejar com calma a transição para a próxima faixa no ano que vem, garantindo que sua empresa continue expandindo com tranquilidade!`;
       } else {
-        statusMessage += `\n🚨 *ALERTA GRAVE (Excesso Superior a 20%):*\n`;
-        statusMessage += `Você ultrapassou ${toleranceFmt} (> 20% acima do teto).\n`;
-        statusMessage += `❗ *Penalidade da Receita Federal:* O desenquadramento se torna RETROATIVO a janeiro do ano corrente!`;
+        statusMessage += `\n🌟 *Ritmo Acelerado de Expansão (Acima de ${toleranceFmt}):*\n`;
+        statusMessage += `Seu faturamento superou em mais de 20% o limite anual de referência do ${config.name}.\n`;
+        statusMessage += `💡 *Toque de Parceiro:* O seu negócio cresceu mais rápido do que o enquadramento original! Vale a pena alinhar com seu contador uma revisão de categoria tributária para você economizar impostos e continuar voando alto!`;
       }
     } else if (riskLevel === 'orange') {
-      statusMessage += `\n🟠 *Atenção Elevada (Risco Iminente):*\n`;
-      statusMessage += `Você já consumiu ${percentage}% do seu teto anual. Restam apenas ${remainingFmt} para emissão até dezembro.`;
+      statusMessage += `\n📈 *Seu negócio está voando! (Zona de Atenção):*\n`;
+      statusMessage += `Você já utilizou ${percentage}% da referência anual. Restam ${remainingFmt} de margem confortável até dezembro.\n`;
+      statusMessage += `💡 *Dica preventiva:* Mantendo esse ritmo forte, você pode se planejar junto com seu contador para a virada do ano com total tranquilidade!`;
     } else if (riskLevel === 'yellow') {
-      statusMessage += `\n🟡 *Alerta Preventivo (Zona de Atenção):*\n`;
-      statusMessage += `Você atingiu ${percentage}% do limite anual. Mantenha seu ritmo de faturamento médio abaixo de ${safeMonthlyAvgFmt}/mês.`;
+      statusMessage += `\n🟡 *Ritmo Saudável de Vendas:*\n`;
+      statusMessage += `Você atingiu ${percentage}% do limite de referência. Mantendo sua média recomendada de até ${safeMonthlyAvgFmt}/mês, você fecha o ano com folga e equilíbrio!`;
     } else {
-      statusMessage += `\n🟢 *Status Confortável (Zona Segura):*\n`;
-      statusMessage += `Seu faturamento acumulado está equilibrado e seguro dentro do limite anual do ${config.name}.`;
+      statusMessage += `\n🟢 *Tudo Saudável e no Rumo Certo:*\n`;
+      statusMessage += `Seu faturamento está equilibrado e super confortável dentro da faixa do ${config.name}. Siga acelerando!`;
     }
 
     statusMessage += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    statusMessage += `💡 _Dica: Para alterar seu regime ou faturamento prévio deste ano:_\n`;
+    statusMessage += `💡 _Dica: Para ajustar sua categoria ou faturamento prévio deste ano:_\n`;
     statusMessage += `• \`!regime mei\` ou \`!regime simples\`\n`;
     statusMessage += `• \`!faturamento [valor]\` (ex: \`!faturamento 15000\`)`;
   }
