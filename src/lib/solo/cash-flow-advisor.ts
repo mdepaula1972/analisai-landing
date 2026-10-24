@@ -157,11 +157,22 @@ export function isLongTermCashFlowQuery(cleanText: string): boolean {
 }
 
 /**
- * Detecta se a mensagem do usuário solicita consulta de contas, despesas, receitas ou agenda
+ * Detecta se a mensagem do usuário solicita consulta de contas, despesas, receitas ou agenda.
+ * NUNCA deve interceptar frases onde o usuário está tentando lançar/registrar contas ou receitas.
  */
 export function isWeeklyBillsQuery(cleanText: string): boolean {
   const query = cleanText.toLowerCase().trim();
-  const weeklyKeywords = [
+
+  // 1. Barreira absoluta: se o usuário expressa intenção de lançar/registrar, ou cita valores/datas/recebimentos
+  const hasEntryAction = /\b(receber|a receber|recebimento|recebimentos|lançar|lance|anotar|anote|cadastrar|cadastre|adicionar|adicione|registrar|registre|salvar|salve|paguei|comprei|gastei|considerei|recebi|cobrar)\b/i.test(query);
+  const hasMoneyOrDate = /(?:r\$\s*|reais|\b\d+[,.]\d{2}\b|\b\d{1,2}\/\d{1,2}\b|dia\s*\d{1,2})/i.test(query);
+
+  if (hasEntryAction || (hasMoneyOrDate && query.length > 20)) {
+    return false;
+  }
+
+  // 2. Comandos ou frases curtas de consulta
+  const shortQueryKeywords = [
     '!semana',
     '/semana',
     'semana',
@@ -173,6 +184,7 @@ export function isWeeklyBillsQuery(cleanText: string): boolean {
     '7 dias',
     'contas',
     '!contas',
+    '/contas',
     'minhas contas',
     'ver contas',
     'listar contas',
@@ -181,11 +193,8 @@ export function isWeeklyBillsQuery(cleanText: string): boolean {
     'próximas contas',
     'proximas contas',
     'contas salvas',
-    'despesas e receitas do dia a dia',
     'despesas e receitas',
     'receitas e despesas',
-    'despesas',
-    'receitas',
     'minhas despesas',
     'minhas receitas',
     'o que está salvo',
@@ -205,9 +214,33 @@ export function isWeeklyBillsQuery(cleanText: string): boolean {
     'meus lancamentos',
     'lançamentos',
     'lancamentos',
+    'despesas',
+    'receitas',
   ];
 
-  return weeklyKeywords.some((kw) => query === kw || query.includes(kw));
+  // Se a mensagem for curta (até 35 caracteres), pode ser comando direto
+  if (query.length <= 35) {
+    return shortQueryKeywords.some((kw) => query === kw || query.startsWith(kw) || query.endsWith(kw));
+  }
+
+  // Para mensagens mais longas, só aceita se contiver perguntas/pedidos explícitos de visualização
+  const explicitViewQueries = [
+    'ver minhas contas',
+    'ver todas as contas',
+    'listar minhas contas',
+    'mostrar minhas contas',
+    'quais são as minhas contas',
+    'o que tenho a pagar essa semana',
+    'o que tenho a pagar esta semana',
+    'o que tenho que pagar essa semana',
+    'o que tenho que pagar esta semana',
+    'o que vence essa semana',
+    'o que vence esta semana',
+    'consultar minha agenda',
+    'consultar minhas contas',
+  ];
+
+  return explicitViewQueries.some((kw) => query.includes(kw));
 }
 
 /**

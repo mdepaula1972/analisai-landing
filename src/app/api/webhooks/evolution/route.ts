@@ -1580,18 +1580,26 @@ Lançamos esta obrigação particular com a anotação para pagamento via **Dist
   }
 
   // A) Interceptação de botões interativos de sequência / Menu Numerado
+  // Se o texto parece um lançamento financeiro (tem valores, datas ou verbos de lançamento), NUNCA intercepta como "Ver Minhas Contas"
+  const looksLikeFinancialEntry =
+    /\b(receber|a receber|recebimento|recebimentos|lançar|lance|anotar|anote|cadastrar|cadastre|adicionar|adicione|registrar|registre|salvar|salve|paguei|comprei|gastei|considerei|recebi|cobrar)\b/i.test(clean) ||
+    (/(?:r\$\s*|reais|\b\d+[,.]\d{2}\b)/i.test(clean) && /(?:dia\s*\d{1,2}|\b\d{1,2}\/\d{1,2}\b)/i.test(clean));
+
   // 1. Ver Minhas Contas
   if (
-    clean === '1' || normalizedClean === '1' || clean === '1️⃣' ||
-    normalizedClean === 'um' || normalizedClean === 'hum' || normalizedClean === 'primeiro' ||
-    clean.startsWith('opcao 1') || clean.startsWith('opção 1') ||
-    clean.startsWith('opcao um') || clean.startsWith('opção um') ||
-    clean === 'primeira opcao' || clean === 'primeira opção' ||
-    clean.includes('ver minhas contas') || clean.includes('ver_minhas_contas') ||
-    clean.includes('ver todas as contas') || clean === '📅 ver minhas contas' ||
-    isWeeklyBillsQuery(clean) || clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
-    clean.includes('listar contas') || clean.includes('mostrar contas') || clean.includes('quais contas') ||
-    clean.includes('o que tenho a pagar') || clean.includes('o que tenho que pagar') || clean.includes('contas a pagar')
+    !looksLikeFinancialEntry && (
+      clean === '1' || normalizedClean === '1' || clean === '1️⃣' ||
+      normalizedClean === 'um' || normalizedClean === 'hum' || normalizedClean === 'primeiro' ||
+      clean.startsWith('opcao 1') || clean.startsWith('opção 1') ||
+      clean.startsWith('opcao um') || clean.startsWith('opção um') ||
+      clean === 'primeira opcao' || clean === 'primeira opção' ||
+      clean.includes('ver minhas contas') || clean.includes('ver_minhas_contas') ||
+      clean.includes('ver todas as contas') || clean === '📅 ver minhas contas' ||
+      isWeeklyBillsQuery(clean) || clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
+      clean.includes('listar contas') || clean.includes('mostrar contas') || clean.includes('quais contas') ||
+      clean.includes('o que tenho a pagar') || clean.includes('o que tenho que pagar') ||
+      (clean.includes('contas a pagar') && !clean.includes('a receber') && clean.length <= 30)
+    )
   ) {
     const periodOption = extractBillsQueryPeriod(clean);
     const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
@@ -4725,28 +4733,34 @@ Para garantir respostas rápidas e interpretação exata dos valores, consigo pr
           return;
         }
 
-        // 1. Verifica se o áudio falado é um comando de ação (mudar valor, mudar vencimento, código/pagar, excluir, ver contas, etc.)
-        const handledAudioCommand = await dispatchUserActionCommand({
-          text: cleanTranscribed,
-          phone,
-          cleanPhone,
-          client,
-        });
-        if (handledAudioCommand) {
-          return;
-        }
+        const audioLooksLikeEntry =
+          /\b(receber|a receber|recebimento|recebimentos|lançar|lance|anotar|anote|cadastrar|cadastre|adicionar|adicione|registrar|registre|salvar|salve|paguei|comprei|gastei|considerei|recebi|cobrar)\b/i.test(cleanTranscribed) ||
+          (/(?:r\$\s*|reais|\b\d+[,.]\d{2}\b)/i.test(cleanTranscribed) && /(?:dia\s*\d{1,2}|\b\d{1,2}\/\d{1,2}\b)/i.test(cleanTranscribed));
 
-        const handledAudioNaturalLang = await handleConversationalNaturalLanguageRouter({
-          text: cleanTranscribed,
-          phone,
-          cleanPhone,
-          client,
-          body,
-          isAdminPhone,
-          isOperator,
-        });
-        if (handledAudioNaturalLang) {
-          return;
+        if (!audioLooksLikeEntry) {
+          // 1. Verifica se o áudio falado é um comando de ação (mudar valor, mudar vencimento, código/pagar, excluir, ver contas, etc.)
+          const handledAudioCommand = await dispatchUserActionCommand({
+            text: cleanTranscribed,
+            phone,
+            cleanPhone,
+            client,
+          });
+          if (handledAudioCommand) {
+            return;
+          }
+
+          const handledAudioNaturalLang = await handleConversationalNaturalLanguageRouter({
+            text: cleanTranscribed,
+            phone,
+            cleanPhone,
+            client,
+            body,
+            isAdminPhone,
+            isOperator,
+          });
+          if (handledAudioNaturalLang) {
+            return;
+          }
         }
 
         // Tenta interpretar o áudio como lançamento financeiro (1 ou múltiplos lançamentos)

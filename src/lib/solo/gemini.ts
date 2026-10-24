@@ -447,7 +447,11 @@ REGRAS PARA CADA ITEM EM 'entries':
    Se o usuário quer lançar uma compra parcelada ou despesa mas faltou o valor ou o dia do vencimento, defina needs_clarification = true e elabore em clarification_prompt uma pergunta curta, acolhedora e direta em português perguntando os dados faltantes.
 10. INTENÇÃO DE CADASTRO/LANÇAMENTO SEM DADOS COMPLETOS (ex: "quero inserir uma conta a pagar", "preciso cadastrar uma conta", "como lanço uma conta", "quero lançar uma despesa"):
    Marque is_financial_entry = true, needs_clarification = true e em clarification_prompt envie:
-   "Com certeza! Para eu registrar sua conta a pagar, me diz: quem é o fornecedor, qual o valor e qual a data de vencimento? Se já foi paga ou se foi parcelada, me avisa também. Pode me mandar tudo em texto ou áudio!"`,
+   "Com certeza! Para eu registrar sua conta a pagar, me diz: quem é o fornecedor, qual o valor e qual a data de vencimento? Se já foi paga ou se foi parcelada, me avisa também. Pode me mandar tudo em texto ou áudio!"
+11. INTENÇÃO DE CADASTRO DE CONTAS A RECEBER / RECEITAS (ex: "lista de contas a receber", "contas a receber na próxima semana", "quero cadastrar uma receita", "tenho a receber", "considerei dia 31/10"):
+   - Se citou clientes, valores e datas, extraia cada item em 'entries' com entry_type: 'receivable'.
+   - Se o usuário anunciou a intenção de contas a receber ou citou a data (ex: "lista de contas a receber nesta próxima semana, considerei dia 31/10") mas faltou os clientes ou valores, marque is_financial_entry = true, needs_clarification = true e em clarification_prompt envie:
+     "Perfeito! Identifiquei suas contas a receber para 31/10. Quais são os clientes e os respectivos valores que você tem a receber? Pode me falar por áudio ou texto que eu organizo tudo!"`,
       });
 
       const result = await model.generateContent(`Mensagem do usuário: "${userText}"`);
