@@ -16,10 +16,11 @@ export interface RevenueInferenceResult {
   suggestedRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro';
   regimeName: string;
   explanation: string;
+  hasNoInvoiceContext?: boolean;
 }
 
 /**
- * Infere o regime tributário adequado com base na média mensal ou faturamento anual informado em texto livre.
+ * Infere o regime tributário adequado com sensibilidade entre Caixa Real e Notas Fiscais Declaradas.
  */
 export function inferRevenueAndRegime(input: string): RevenueInferenceResult | null {
   const clean = input.toLowerCase().trim();
@@ -29,8 +30,12 @@ export function inferRevenueAndRegime(input: string): RevenueInferenceResult | n
     return null;
   }
 
+  const hasNoInvoiceContext =
+    /(sem nota|sem nf|n[aã]o emito nota|n[aã]o tiro nota|n[aã]o emite nota|sem emitir|s[oó] dinheiro|sem faturar oficial|n[aã]o oficial)/i.test(clean);
+
   const hasRevenueContext =
-    /(fatur|m[eé]dia|ganh|receb|entr|m[eê]s|mensal|ano|anual|reais|r\$|\bmil\b|\bk\b|\bmi\b|milh)/i.test(clean) ||
+    /(fatur|m[eé]dia|ganh|receb|entr|m[eê]s|mensal|ano|anual|reais|r\$|\bmil\b|\bk\b|\bmi\b|milh|nota|nf)/i.test(clean) ||
+    hasNoInvoiceContext ||
     /\d+/.test(clean);
 
   if (!hasRevenueContext) return null;
@@ -103,22 +108,39 @@ export function inferRevenueAndRegime(input: string): RevenueInferenceResult | n
   const monthlyFmt = monthlyAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const annualFmt = annualAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  if (monthlyAmount <= 6750) {
+  // Regra de sensibilidade contábil (Caixa Real vs Notas Fiscais Declaradas):
+  if (hasNoInvoiceContext) {
     suggestedRegime = 'mei';
     regimeName = 'MEI (Microempreendedor Individual)';
-    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu negócio se enquadra perfeitamente no *MEI*, que tem teto anual de até *R$ 81 mil* (~R$ 6.750/mês).`;
+    explanation = `Entendi! Sua movimentação total de caixa é de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), sem emissão de Nota Fiscal.\n\n` +
+      `💡 *Sensibilidade Fiscal:*\n` +
+      `• Para o **MEI**, a emissão de NF para consumidor final (pessoa física) é dispensada por lei, com teto de até R$ 81 mil/ano (~R$ 6.750/mês).\n` +
+      `• Já para o **Simples Nacional**, a emissão de NF é obrigatória em todas as operações e o imposto DAS incide sobre as notas transmitidas.\n\n` +
+      `O AnalisAí controlará **100% das suas entradas reais de caixa** para você não perder dinheiro, e cuidará da régua do seu CNPJ.`;
+  } else if (monthlyAmount <= 6750) {
+    suggestedRegime = 'mei';
+    regimeName = 'MEI (Microempreendedor Individual)';
+    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu negócio está confortavelmente dentro do teto do *MEI* (até R$ 81 mil/ano).\n` +
+      `Lembrando que para o MEI, a emissão de nota fiscal para consumidor pessoa física é dispensada!`;
   } else if (monthlyAmount <= 30000) {
     suggestedRegime = 'simples_me';
     regimeName = 'Simples Nacional — ME (Microempresa)';
-    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu faturamento supera o teto do MEI (R$ 6.750/mês) e se adequa ao *Simples Nacional — ME (Microempresa)*, com limite anual de até *R$ 360 mil* (~R$ 30 mil/mês).`;
+    explanation = `Sua média de faturamento no caixa é de *${monthlyFmt}/mês* (~*${annualFmt}/ano*).\n\n` +
+      `💡 *Sensibilidade Fiscal (Caixa Real vs Notas Fiscais):*\n` +
+      `• O enquadramento na Receita Federal considera o faturamento **oficial emitido em Nota Fiscal**.\n` +
+      `• Se a sua empresa emite NF desse valor total, seu regime adequado é o *Simples Nacional — ME (Microempresa)*, com teto até R$ 360 mil/ano.\n` +
+      `• Se você formalmente ainda é *MEI* (emitindo até R$ 6.750/mês em notas fiscais oficiais):\n` +
+      `  O AnalisAí gerencia 100% do seu caixa real e monitora no termômetro o teto formal do MEI!`;
   } else if (monthlyAmount <= 400000) {
     suggestedRegime = 'simples_epp';
     regimeName = 'Simples Nacional — EPP (Pequeno Porte)';
-    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), seu faturamento supera o teto de ME (R$ 30 mil/mês) e se adequa ao *Simples Nacional — EPP (Pequeno Porte)*, com limite de até *R$ 4,8 milhões/ano* (~R$ 400 mil/mês).`;
+    explanation = `Sua média de faturamento no caixa é de *${monthlyFmt}/mês* (~*${annualFmt}/ano*).\n\n` +
+      `💡 *Sensibilidade Fiscal:*\n` +
+      `No Simples Nacional, os limites de ME (R$ 360 mil/ano) e EPP (R$ 4,8 milhões/ano) incidem estritamente sobre as **notas fiscais emitidas e informadas à Receita Federal**.`;
   } else {
     suggestedRegime = 'outro';
     regimeName = 'Lucro Presumido / Outro';
-    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), o faturamento supera o teto máximo do Simples Nacional (R$ 4,8 milhões/ano), sendo mais adequado para *Lucro Presumido ou Lucro Real*.`;
+    explanation = `Com uma média de *${monthlyFmt}/mês* (~*${annualFmt}/ano*), o faturamento supera o teto do Simples Nacional (R$ 4,8 milhões/ano em NF), enquadrando-se em *Lucro Presumido ou Lucro Real*.`;
   }
 
   return {
@@ -127,6 +149,7 @@ export function inferRevenueAndRegime(input: string): RevenueInferenceResult | n
     suggestedRegime,
     regimeName,
     explanation,
+    hasNoInvoiceContext,
   };
 }
 
@@ -134,6 +157,28 @@ export function inferRevenueAndRegime(input: string): RevenueInferenceResult | n
  * Monta a mensagem de sugestão didática para confirmação do usuário
  */
 export function buildTaxRegimeProposalMessage(inference: RevenueInferenceResult): string {
+  if (inference.hasNoInvoiceContext) {
+    return `📊 *Análise do Enquadramento (Sensibilidade Fiscal):*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${inference.explanation}
+
+👉 *Como está o seu CNPJ formalmente hoje na Receita Federal?*
+• Digite *1* (ou *Sim*) para confirmar como *MEI*
+• Digite *2* se seu CNPJ formalmente já for *Simples Nacional (ME)*
+• Digite *3* se for *Simples Nacional (EPP)* ou *Outro*`;
+  }
+
+  if (inference.monthlyAmount > 6750 && inference.monthlyAmount <= 30000) {
+    return `📊 *Análise de Adequação do Enquadramento:*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${inference.explanation}
+
+👉 *Como está o seu CNPJ formalmente hoje na Receita Federal?*
+• Digite *1* (ou *Sim*) para confirmar como *Simples Nacional (ME)*
+• Digite *2* (ou *MEI*) se o seu CNPJ formalmente ainda for *MEI*
+• Digite *3* se for *Simples Nacional (EPP)* ou *Outro*`;
+  }
+
   return `📊 *Análise de Adequação do Enquadramento:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${inference.explanation}
@@ -166,37 +211,36 @@ _(Para controle das finanças pessoais, contas do dia a dia, orçamento e patrim
 }
 
 /**
- * 2. Mensagem Didática de Desdobramento para PJ com Média Mensal e Teto Anual
+ * 2. Mensagem Didática de Desdobramento para PJ com Sensibilidade Fiscal
  */
 export function getPjTaxRegimeMessage(): string {
   return `Perfeito! 🏢 *Gestão Financeira para Pessoa Jurídica (PJ).*
 
-Para que eu monitore o teto fiscal do seu negócio sem surpresas com a Receita Federal, precisamos adequar seu enquadramento tributário.
+Para que eu monitore o teto fiscal do seu negócio sem surpresas com a Receita Federal, precisamos calibrar seu enquadramento.
 
-Como muitos empreendedores têm dúvidas sobre os limites anuais, você pode se guiar pela sua *média mensal de faturamento*:
+💡 *Sensibilidade Contábil Importante:*
+O enquadramento tributário e os impostos incidem sobre o faturamento **oficial informado em Nota Fiscal / Receita Federal**, que muitas vezes é diferente da movimentação total de caixa:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha uma das opções abaixo:*
+👉 *Qual é o enquadramento formal do seu CNPJ hoje?*
 
 *1* → *MEI (Microempreendedor Individual)*
-• Média de até *R$ 6.750/mês* (teto anual de até R$ 81 mil)
-• _Alerta automático de margem de segurança a cada receita._
+• Média de até *R$ 6.750/mês* (teto anual de até R$ 81 mil).
+• _Dispensada emissão de NF para consumidor final PF. O AnalisAí controla todo o seu caixa real e monitora o teto oficial._
 
 *2* → *Simples Nacional (Microempresa — ME)*
-• Média de *R$ 6.750 a R$ 30 mil/mês* (teto anual de até R$ 360 mil)
-• _Separação de pró-labore, livro caixa contábil e fluxo de caixa._
+• Faturamento oficial de *R$ 6.750 a R$ 30 mil/mês* (até R$ 360 mil/ano declarado com NF).
+• _O imposto DAS incide sobre as notas fiscais emitidas._
 
 *3* → *Simples Nacional (Empresa de Pequeno Porte — EPP)*
-• Média de *R$ 30 mil a R$ 400 mil/mês* (teto anual de até R$ 4,8 milhões)
-• _Monitoramento de faturamento avançado e múltiplos centros de custo._
+• Faturamento oficial de *R$ 30 mil a R$ 400 mil/mês* (até R$ 4,8 milhões/ano declarado com NF).
 
 *4* → *Lucro Presumido / Outro / Grande Porte*
-• Faturamento acima de *R$ 400 mil/mês* (mais de R$ 4,8 milhões/ano)
-• _Gestão empresarial completa sem monitoramento de teto do Simples._
+• Faturamento oficial acima de *R$ 400 mil/mês* (gestão executiva sem teto do Simples).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Dúvida no enquadramento?*
-Basta responder dizendo quanto sua empresa fatura em média (ex: *"faturo 15 mil por mês"* ou *"média de 5 mil"*). 
-O AnalisAí calculará a adequação e pedirá sua confirmação!`;
+💡 *Dúvida entre o que entra no caixa e o que emite de Nota Fiscal?*
+Basta me dizer sua média (ex: *"faturo 15 mil no caixa, mas sou MEI"* ou *"emito 10 mil de nota"*).
+O AnalisAí orienta a adequação exata para você confirmar!`;
 }
 
 /**
@@ -678,25 +722,40 @@ export async function processOnboardingResponse(params: {
   // ── ETAPA 4: CONFIRMAÇÃO DA ADEQUAÇÃO TRIBUTÁRIA SUGERIDA ──
   if (currentStep === 'awaiting_pj_regime_confirmation') {
     const isAffirmative =
-      /^(1\b|1\.|sim\b|s\b|confirmo\b|confirmar\b|confirmado\b|pode ser\b|correto\b|isso\b|ok\b|beleza\b|perfeito\b|fechado\b|claro\b|positivo\b)/i.test(clean) ||
-      clean === '1' || clean === 'sim' || clean === 's';
+      /^(sim\b|s\b|confirmo\b|confirmar\b|confirmado\b|pode ser\b|correto\b|isso\b|ok\b|beleza\b|perfeito\b|fechado\b|claro\b|positivo\b)/i.test(clean) ||
+      clean === 'sim' || clean === 's';
 
-    const isMei = clean === 'mei' || clean.includes('sou mei');
-    const isSimples = clean === 'simples' || clean.includes('sou simples') || clean === 'me';
+    const isOption1 = clean === '1' || clean === '1.';
+    const isOption2 = clean === '2' || clean === '2.';
+    const isOption3 = clean === '3' || clean === '3.';
+
+    const isMei = clean === 'mei' || clean.includes('sou mei') || clean.includes('cnpj é mei') || clean.includes('ainda é mei');
+    const isSimples = clean === 'simples' || clean.includes('sou simples') || clean === 'me' || clean.includes('sou me');
     const isEpp = clean === 'epp' || clean.includes('sou epp');
     const isOutro = clean === 'outro' || clean === 'presumido';
 
     const docData: any = (lead?.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
-    const suggestedRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro' =
-      isMei ? 'mei' : isSimples ? 'simples_me' : isEpp ? 'simples_epp' : isOutro ? 'outro' : docData.suggested_regime || 'simples_me';
+    let resolvedRegime: 'mei' | 'simples_me' | 'simples_epp' | 'outro' | null = null;
 
-    if (isAffirmative || isMei || isSimples || isEpp || isOutro) {
+    if (isOption2 || isMei) {
+      resolvedRegime = 'mei';
+    } else if (isOption3 || isEpp) {
+      resolvedRegime = 'simples_epp';
+    } else if (isSimples) {
+      resolvedRegime = 'simples_me';
+    } else if (isOutro) {
+      resolvedRegime = 'outro';
+    } else if (isAffirmative || isOption1) {
+      resolvedRegime = docData.suggested_regime || 'simples_me';
+    }
+
+    if (resolvedRegime) {
       if (lead?.id) {
         await supabase
           .from('trial_leads')
           .update({
             profile_type: 'pj',
-            tax_regime: suggestedRegime,
+            tax_regime: resolvedRegime,
             onboarding_step: 'completed',
             annual_revenue_baseline: docData.estimated_annual || null,
           })
@@ -707,7 +766,7 @@ export async function processOnboardingResponse(params: {
           .from('clients')
           .update({
             profile_type: 'pj',
-            tax_regime: suggestedRegime,
+            tax_regime: resolvedRegime,
             tax_type: 'CNPJ',
             annual_revenue_baseline: docData.estimated_annual || null,
           })
@@ -716,7 +775,7 @@ export async function processOnboardingResponse(params: {
 
       await sendEvolutionText({
         phone,
-        text: getPjOnboardingCompletionMessage(suggestedRegime),
+        text: getPjOnboardingCompletionMessage(resolvedRegime),
       });
 
       return { handled: true, completed: true, profile: 'pj' };

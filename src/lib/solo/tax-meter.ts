@@ -302,17 +302,18 @@ Para finanças pessoais, suas receitas são tratadas como entradas de salário o
   } else if (!hasExplicitTaxRegime || taxRegimeCode === 'outro') {
     statusMessage = `ℹ️ *Regime Tributário Não Configurado*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para que eu monitore o teto fiscal do seu CNPJ sem surpresas com a Receita Federal, você pode se basear pela sua *média mensal de faturamento*:
+Para que eu monitore o teto fiscal do seu CNPJ sem surpresas com a Receita Federal, você pode se basear pela sua *média mensal de faturamento oficial*:
 
-• *MEI* → Média até *R$ 6.750/mês* (teto anual até R$ 81 mil)
-• *Simples* → Média de *R$ 6.750 a R$ 30 mil/mês* (teto anual até R$ 360 mil para ME)
-• *EPP* → Média de *R$ 30 mil a R$ 400 mil/mês* (teto anual até R$ 4,8 milhões)
+• *MEI* → Média até *R$ 6.750/mês* (teto anual até R$ 81 mil | dispensada NF para consumidor final PF)
+• *Simples* → Média com NF de *R$ 6.750 a R$ 30 mil/mês* (teto anual até R$ 360 mil para ME)
+• *EPP* → Média com NF de *R$ 30 mil a R$ 400 mil/mês* (teto anual até R$ 4,8 milhões)
 
 👉 *Como configurar em 1 segundo:*
 Basta responder *MEI*, *Simples* ou *EPP*.
-Ou apenas me diga: *"Minha média é 15 mil por mês"* que eu calculo e adéquo para você!`;
+Ou apenas me diga: *"Minha média é 15 mil no caixa, mas sou MEI"*, que eu calculo e adéquo com total sensibilidade para você!`;
   } else {
     const monthlyAllowedLimitFmt = Math.round(config.annualLimit / 12).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const isMeiRegime = taxRegimeCode === 'mei';
     statusMessage = `🌡️ *Termômetro Tributário — ${config.name} (${currentYear})*\n`;
     statusMessage += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     statusMessage += `• *Faturamento Acumulado:* ${totalFmt}\n`;
@@ -321,6 +322,12 @@ Ou apenas me diga: *"Minha média é 15 mil por mês"* que eu calculo e adéquo 
     statusMessage += `• *Termômetro Fiscal:* ${progressBar}\n`;
     statusMessage += `• *Sua Média Mensal Atual:* ${monthlyAvgFmt}/mês\n`;
     statusMessage += `• *Média Segura para os Próximos Meses:* ${safeMonthlyAvgFmt}/mês\n`;
+
+    if (isMeiRegime) {
+      statusMessage += `\n💡 _Sensibilidade MEI:_ Dispensada emissão de NF para pessoa física. O limite anual de R$ 81 mil monitora o faturamento geral do negócio.\n`;
+    } else {
+      statusMessage += `\n💡 _Sensibilidade Simples Nacional:_ Os limites e o imposto DAS incidem estritamente sobre as receitas faturadas com Nota Fiscal / declaradas ao Fisco.\n`;
+    }
 
     if (riskLevel === 'red') {
       if (totalRevenue <= config.toleranceLimit) {

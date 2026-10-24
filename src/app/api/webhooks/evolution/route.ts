@@ -4371,16 +4371,16 @@ Assine um de nossos planos para ativar seu CFO digital 24h!`,
         phone,
         text: `🏢 *Enquadramento Tributário e Limites do CNPJ:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Como muitos empreendedores têm dúvidas sobre o cálculo anual, você pode se basear pela sua *média mensal de faturamento*:
+💡 *Sensibilidade Fiscal:* O enquadramento na Receita Federal considera as receitas **oficialmente informadas em Nota Fiscal**, que podem ser diferentes da movimentação de caixa:
 
-• *MEI* → Média até *R$ 6.750/mês* (teto anual até R$ 81 mil)
-• *Simples* → Média de *R$ 6.750 a R$ 30 mil/mês* (teto anual até R$ 360 mil para ME)
-• *EPP* → Média de *R$ 30 mil a R$ 400 mil/mês* (teto anual até R$ 4,8 milhões)
+• *MEI* → Média até *R$ 6.750/mês* (teto R$ 81 mil/ano | dispensada NF para consumidor PF)
+• *Simples* → Média com NF de *R$ 6.750 a R$ 30 mil/mês* (teto até R$ 360 mil para ME)
+• *EPP* → Média com NF de *R$ 30 mil a R$ 400 mil/mês* (teto até R$ 4,8 milhões)
 • *Outro* → Gestão executiva sem monitoramento de teto do Simples
 
 👉 *Como configurar ou adequar em 1 segundo:*
 Basta responder *MEI*, *Simples*, *EPP* ou *Outro*.
-Ou simplesmente me diga sua média (ex: *"faturo 15 mil por mês"*), que eu calculo e peço sua confirmação!`,
+Ou simplesmente me diga sua média (ex: *"faturo 15 mil no caixa, mas sou MEI"*), que eu calculo e peço sua confirmação!`,
       });
       return;
     }
