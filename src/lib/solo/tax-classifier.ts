@@ -19,13 +19,13 @@ export interface TaxClassification {
 export async function classifyTaxId(rawTaxId?: string | null, companyHint?: string): Promise<TaxClassification> {
   const clean = (rawTaxId || '').replace(/\D/g, '');
 
-  // 1. Caso seja CPF (11 dígitos) ou não informado: cota estrita de 1 degustação
+  // 1. Caso seja CPF (11 dígitos) ou não informado: cota confortável de até 5 degustações
   if (!clean || clean.length <= 11) {
     return {
       taxId: clean,
       type: 'cpf',
       label: 'Pessoa Física / Autônomo',
-      trialLimit: 1,
+      trialLimit: 5,
       isMei: false,
       isSimples: false,
     };

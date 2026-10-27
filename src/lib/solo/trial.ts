@@ -74,20 +74,25 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 
   // 0. Verifica se o número ou documento está na Whitelist de QA (acesso livre sem limites)
   const { isQaWhitelisted } = await import('@/lib/solo/qa-whitelist');
-  if (await isQaWhitelisted(cleanPhone) || await isQaWhitelisted(altPhone)) {
-    return {
-      hasUsedTrial: false,
-      docsCount: 0,
-      docsLimit: 99999,
-      remainingDocs: 99999,
-    };
-  }
+  const isQa = (await isQaWhitelisted(cleanPhone)) || (await isQaWhitelisted(altPhone));
 
   const { data } = await supabase
     .from('trial_leads')
     .select('doc_processed, doc_data, trial_docs_count, trial_docs_limit, interested_plan, created_at, first_interaction_at')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
+
+  if (isQa) {
+    const realCount = data ? (Number(data.trial_docs_count) || (data.doc_processed ? 1 : 0)) : 0;
+    return {
+      hasUsedTrial: false,
+      docsCount: realCount,
+      docsLimit: 99999,
+      remainingDocs: 99999,
+      docData: data?.doc_data,
+      interestedPlan: data?.interested_plan,
+    };
+  }
 
   if (!data) {
     // Verifica se ainda há vagas abertas no lote das 50 Vagas VIP
@@ -97,8 +102,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 
     const totalLeads = count || 0;
     const isVipEligible = totalLeads < MAX_BETA_VIP_USERS;
-    // Se VIP: 10 contas. Se cota VIP esgotada: 3 contas na Degustação Express (sem barrar lead)
-    const initialLimit = isVipEligible ? BETA_VIP_DOCS_LIMIT : 3;
+    // Se VIP: 10 contas. Se cota VIP esgotada: 5 contas na Degustação Express (nunca menos que 5)
+    const initialLimit = isVipEligible ? BETA_VIP_DOCS_LIMIT : 5;
 
     return {
       hasUsedTrial: false,
@@ -108,7 +113,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
     };
   }
 
-  const docsLimit = Number(data.trial_docs_limit) || 1;
+  // Garante que nenhum lead existente ou novo fique com cota inferior a 5 contas
+  const docsLimit = Math.max(Number(data.trial_docs_limit) || 5, 5);
   const docsCount = Number(data.trial_docs_count) || (data.doc_processed ? 1 : 0);
   const remainingDocs = Math.max(0, docsLimit - docsCount);
 
@@ -155,10 +161,10 @@ export async function recordTrialUsage(
   let taxType: 'cpf' | 'mei' | 'simples' | 'empresa' = 'cpf';
   let suggestedPlan = current.interestedPlan || null;
 
-  // Se o lead ainda tem o limite padrão inicial (<= 1) e nenhum limite manual forçado:
-  if (!grantedLimit && current.docsLimit <= 1) {
+  // Se o lead ainda tem o limite padrão inicial (<= 5) e nenhum limite manual forçado:
+  if (!grantedLimit && current.docsLimit <= 5) {
     if (docData.tax_profile === 'mei') {
-      detectedLimit = 3;
+      detectedLimit = 5;
       taxType = 'mei';
       suggestedPlan = 'solo';
     } else if (docData.tax_profile === 'simples' || docData.tax_profile === 'empresa') {
@@ -171,7 +177,7 @@ export async function recordTrialUsage(
 
       try {
         const classification = await classifyTaxId(rawTaxId, companyHint);
-        detectedLimit = Math.max(current.docsLimit, classification.trialLimit);
+        detectedLimit = Math.max(current.docsLimit, classification.trialLimit, 5);
         taxType = classification.type;
 
         if (classification.type === 'simples' || classification.type === 'empresa') {
@@ -187,7 +193,7 @@ export async function recordTrialUsage(
     }
   }
 
-  const newLimit = grantedLimit || detectedLimit;
+  const newLimit = grantedLimit || Math.max(detectedLimit, 5);
 
   let altPhone = cleanPhone;
   if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
@@ -517,6 +523,54 @@ export async function getHowItWorksMessage(phone?: string): Promise<string> {
       .or(`identifier.eq.${cleanPhone},identifier.eq.${altPhone}`)
       .limit(1)
       .maybeSingle();
+
+    // 2. Verifica se o lead já possui contas cadastradas no Livro Caixa
+    const { data: leadRecord } = await supabase
+      .from('trial_leads')
+      .select('id, bills_list, trial_docs_count, trial_docs_limit')
+      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+      .limit(1)
+      .maybeSingle();
+
+    const bills: any[] = Array.isArray(leadRecord?.bills_list) ? leadRecord.bills_list : [];
+
+    // Se o usuário JÁ possui contas cadastradas no Livro Caixa, saúda com o resumo das contas (sem amnésia!)
+    if (bills.length > 0) {
+      const isQa = Boolean(whitelistEntry);
+      const guestFirstName = whitelistEntry?.description ? whitelistEntry.description.split(' ')[0] : '';
+      
+      const totalAmount = bills.reduce((acc, b) => {
+        const amt = Number(b.amount || b.total_amount || 0);
+        return acc + (isNaN(amt) ? 0 : amt);
+      }, 0);
+
+      const billsSnippet = bills.slice(0, 5).map((b) => {
+        const name = (b.supplier_name || b.counterparty_name || 'Conta').trim();
+        const amt = Number(b.amount || b.total_amount || 0);
+        const amtFmt = !isNaN(amt) && amt > 0 ? `R$ ${amt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'A apurar';
+        let dueFmt = '';
+        if (b.due_date) {
+          const parts = String(b.due_date).split('-');
+          if (parts.length === 3) dueFmt = ` (Venc: ${parts[2]}/${parts[1]})`;
+        }
+        return `• *${name}:* ${amtFmt}${dueFmt}`;
+      }).join('\n');
+
+      const extraText = bills.length > 5 ? `\n_... e mais ${bills.length - 5} lançamento(s)._\n` : '';
+
+      return `👋 *Olá${guestFirstName ? `, ${guestFirstName}` : ''}! Bom te ver de volta!* 😊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${isQa ? `🧪 *Acesso VIP Ilimitado (QA): Ativo*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` : ''}📋 *Seu Livro Caixa Atual:*
+Você já possui *${bills.length} ${bills.length === 1 ? 'conta cadastrada' : 'contas cadastradas'}* (Total: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}):
+${billsSnippet}${extraText}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *O que deseja fazer agora?*
+• 📸 *Novo Lançamento:* Envie foto/PDF de boleto ou nota fiscal
+• 🎙️ *Áudio ou Texto:* Fale ou digite (ex: *"Recebi 1.500 do cliente"* ou *"Paguei 50 de água"*)
+• 📋 Digite *Contas* para ver seus lançamentos detalhados
+• 📄 Digite *Relatório* para receber seu Livro Caixa em PDF
+• ❓ Pode me perguntar qualquer dúvida sobre seu caixa!`;
+    }
 
     if (whitelistEntry) {
       const guestFirstName = whitelistEntry.description ? whitelistEntry.description.split(' ')[0] : 'Convidado VIP';

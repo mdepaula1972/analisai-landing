@@ -755,11 +755,17 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
   }
 
   // ── !qa add / remove / list ───────────────────────────────────────────────
-  if (action === 'qa') {
-    const subAction = arg1;
+  if (action === 'qa' || action === 'whitelist') {
+    let subAction = (arg1 || '').toLowerCase().trim();
+
+    // Se o usuário digitou direto "!qa 13-31500987 [nome]" sem a palavra "add", infere como "add"
+    const isDirectAdd = subAction && subAction !== 'remove' && subAction !== 'list' && (/\d/.test(subAction) || subAction.length >= 3);
+    if (isDirectAdd) {
+      subAction = 'add';
+    }
 
     if (subAction === 'add') {
-      const rawAfter = commandText.replace(/^[!/](qa)\s+add\s+/i, '').trim();
+      const rawAfter = commandText.replace(/^[!/](qa|whitelist)(\s+add)?\s+/i, '').trim();
       let rawTarget = '';
       let description = '';
 
@@ -779,8 +785,8 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
         const res = await addQaWhitelist(rawTarget, description || 'QA Liberado pelo Admin', client.name);
         return { handled: true, message: res.message };
       }
-    } else if (subAction === 'remove') {
-      const rawTarget = commandText.replace(/^[!/](qa)\s+remove\s+/i, '').trim();
+    } else if (subAction === 'remove' || subAction === 'del' || subAction === 'rm') {
+      const rawTarget = commandText.replace(/^[!/](qa|whitelist)\s+(remove|del|rm)\s+/i, '').trim();
       if (rawTarget) {
         const { removeQaWhitelist } = await import('@/lib/solo/qa-whitelist');
         const res = await removeQaWhitelist(rawTarget);
@@ -794,7 +800,7 @@ A ficha estruturada do lead qualificado está sendo despachada agora para o seu 
 
     return {
       handled: true,
-      message: `🧪 *Uso dos Comandos de QA:*\n• \`!qa add <telefone/cpf> [descrição]\`\n  ↳ _Exemplos aceitos:_\n    • \`!qa add 13978122222 João Amigo\`\n    • \`!qa add (13) 97812-2222 João Amigo\`\n    • \`!qa add +55 13 97812-2222 João Amigo\`\n• \`!qa remove <telefone/cpf>\`\n• \`!qa list\``,
+      message: `🧪 *Uso dos Comandos de QA:*\n• \`!qa <telefone/cpf> [descrição]\`\n  ↳ _Exemplos aceitos:_\n    • \`!qa 13-31500987 Teste\`\n    • \`!qa 13978122222 João Amigo\`\n    • \`!qa add (13) 97812-2222 João Amigo\`\n• \`!qa remove <telefone/cpf>\`\n• \`!qa list\``,
     };
   }
 
