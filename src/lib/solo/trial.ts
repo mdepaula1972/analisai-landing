@@ -621,7 +621,7 @@ Em segundos eu organizo tudo para você! 🚀
 💡 _Já possui cadastro? Digite seu *CPF ou CNPJ* para carregar seus dados._`;
   }
 
-  // Se a cota dos 50 Pioneiros VIP estiver preenchida, NUNCA perde o lead: oferece a Degustação Express (3 contas)
+  // Se a cota dos 50 Pioneiros VIP estiver preenchida, NUNCA perde o lead: oferece a Degustação Express (5 contas)
   return `👋 *Olá! Que bom ter você por aqui!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 O *AnalisAí* é o seu assistente financeiro no WhatsApp para MEIs e pequenas empresas:
@@ -631,7 +631,7 @@ O *AnalisAí* é o seu assistente financeiro no WhatsApp para MEIs e pequenas em
 • 📊 *Fluxo de Caixa Descomplicado:* Acompanhe seu saldo e livro caixa direto na conversa.
 
 🎁 *Quer experimentar gratuitamente?*
-Nossa cota de 50 vagas VIP completas foi preenchida, mas liberamos para você uma **Degustação Express Gratuita (com até 3 contas)** para você testar a inteligência agora mesmo sem nenhum compromisso!
+Nossa cota de 50 vagas VIP completas foi preenchida, mas liberamos para você uma **Degustação Express Gratuita (com até 5 contas)** para você testar a inteligência agora mesmo sem nenhum compromisso!
 
 👉 *Para testar imediatamente:*
 Envie uma foto de um **boleto** ou mande um áudio/texto com uma conta sua (ex: *"Pagar internet R$ 90 dia 21"*). Em segundos eu organizo para você! 🚀
