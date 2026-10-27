@@ -4,22 +4,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { WHATSAPP, CONTACT_EMAIL } from '@/lib/contact';
 import {
-  ChevronDown, MessageCircle, Calendar, ArrowRight,
+  ChevronDown, MessageCircle, ArrowRight,
   Sparkles, HeartHandshake,
 } from 'lucide-react';
 
 // Componentes BPO
 import HeroSection from '@/components/bpo/HeroSection';
-import CostComparisonSection from '@/components/bpo/CostComparisonSection';
+import SolutionsComparisonSection from '@/components/bpo/SolutionsComparisonSection';
 import ReportShowcase from '@/components/bpo/ReportShowcase';
 import PricingSection from '@/components/bpo/PricingSection';
 import TrustSection from '@/components/bpo/TrustSection';
 import DashboardShowcase from '@/components/DashboardShowcase';
 
 // ── Links de WA ──────────────────────────────────────────────────────────────
-const WA_SOLO        = WHATSAPP.soloTeste;
-const WA_DIAGNOSTICO = WHATSAPP.diagnostico;
-const WA_BETA        = WHATSAPP.beta;
+const WA_SOLO = WHATSAPP.soloTeste;
+const WA_BETA = WHATSAPP.beta;
 
 // ── Hook de visibilidade ─────────────────────────────────────────────────────
 function useInView(threshold = 0.1) {
@@ -177,6 +176,9 @@ export default function BpoLandingPage() {
 
       {/* ── O QUE ENTREGAMOS TODO MÊS ── */}
       <ReportShowcase />
+
+      {/* ── TABELA COMPARATIVA (ANALISAÍ VS OUTRAS SOLUÇÕES) ── */}
+      <SolutionsComparisonSection waUrl={WA_SOLO} />
 
       {/* ── SEGURANÇA + SETORES ── */}
       <TrustSection waUrl={WA_SOLO} />

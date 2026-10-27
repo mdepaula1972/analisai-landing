@@ -4,8 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  Calendar, ArrowRight, Clock, Shield, Zap, ChevronDown,
-  TrendingDown, PiggyBank, Sparkles, CheckCircle2, MessageCircle, FileText, Send, Check
+  ArrowRight, Shield, Zap, ChevronDown,
+  Sparkles, MessageCircle, FileText, Check
 } from 'lucide-react';
 import DashboardMockup from './DashboardMockup';
 import { WHATSAPP } from '@/lib/contact';
@@ -33,6 +33,7 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
           {/* Nav principal */}
           <nav className="hidden items-center gap-4 xl:gap-6 text-xs font-semibold text-slate-300 lg:flex" aria-label="Navegação principal">
             <a href="#como-funciona" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Como Funciona</a>
+            <a href="#comparativo" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Por que o AnalisAí?</a>
             <a href="#entregamos" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Relatório em PDF</a>
             <a href="#planos" className="whitespace-nowrap text-amber-300 hover:text-amber-200 transition-colors">Planos (a partir de R$ 39,90)</a>
             <a href="#faq" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Dúvidas Frequentes</a>
@@ -88,14 +89,14 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
               </div>
 
               {/* Headline */}
-              <h1 className="text-4xl font-black leading-[1.02] tracking-[-0.04em] text-white sm:text-5xl lg:text-[3.4rem] xl:text-[3.8rem]">
-                Seu financeiro no piloto automático{' '}
-                <span className="text-shimmer-emerald">direto pelo WhatsApp.</span>
+              <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] xl:text-[3.1rem] font-black leading-[1.08] tracking-[-0.03em] text-white">
+                Organize o caixa da sua empresa pelo WhatsApp com Inteligência Artificial.{' '}
+                <span className="text-shimmer-emerald block mt-1.5 sm:inline">Zero senhas de banco. Zero risco.</span>
               </h1>
 
               {/* Subheadline */}
               <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-300 max-w-xl">
-                Basta enviar a foto ou PDF de um boleto: a inteligência artificial do <strong className="text-white">AnalisAí Solo</strong> organiza seu Livro Caixa, lembra antes do vencimento, aceita comandos por voz e emite relatórios executivos em PDF com seu CNPJ e sua marca.
+                Você não precisa conectar suas contas bancárias nem arriscar seu dinheiro. Envie fotos de notas, boletos ou áudios: o <strong className="text-white">AnalisAí</strong> audita seus gastos, protege seu teto fiscal e deixa tudo pronto para o seu contador.
               </p>
 
               {/* Card Destaque: Como funciona na prática (3 Passos) */}
@@ -144,20 +145,56 @@ export default function HeroSection({ waUrl, scrolled }: HeroSectionProps) {
                 </a>
               </div>
 
-              {/* Garantias */}
-              <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-emerald-400" />
-                  Degustação gratuita imediata
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5 text-emerald-400" />
-                  Sem cartão de crédito para começar
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-amber-400" />
-                  PDF oficial com seu CNPJ
-                </span>
+              {/* ── SELOS DE CONFIANÇA (BADGES VISÍVEIS LOGO ABAIXO DO BOTÃO DE TESTE) ── */}
+              <div className="mt-7 pt-4 border-t border-slate-800/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-emerald-500/30 transition-colors shadow-sm">
+                    <span className="text-lg shrink-0 select-none">🛡️</span>
+                    <div className="text-xs">
+                      <strong className="text-white font-bold block">100% Seguro</strong>
+                      <span className="text-slate-400 text-[11px] leading-snug">Não pedimos senhas, tokens nem acessos bancários.</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-emerald-500/30 transition-colors shadow-sm">
+                    <span className="text-lg shrink-0 select-none">🚫</span>
+                    <div className="text-xs">
+                      <strong className="text-white font-bold block">Sem Transações</strong>
+                      <span className="text-slate-400 text-[11px] leading-snug">Não movimentamos seu dinheiro. Você mantém o controle no seu banco.</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-amber-500/30 transition-colors shadow-sm">
+                    <span className="text-lg shrink-0 select-none">👩‍💼</span>
+                    <div className="text-xs">
+                      <strong className="text-white font-bold block">Seguro para sua Equipe</strong>
+                      <span className="text-slate-400 text-[11px] leading-snug">Sua secretária ou ajudante pode lançar contas sem nunca ver seus saldos ou lucros.</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-amber-500/30 transition-colors shadow-sm">
+                    <span className="text-lg shrink-0 select-none">📑</span>
+                    <div className="text-xs">
+                      <strong className="text-white font-bold block">Pronto pro Contador</strong>
+                      <span className="text-slate-400 text-[11px] leading-snug">Fechamento mensal em CSV e notas fiscais organizadas em um clique.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    Degustação gratuita imediata
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Shield className="h-3.5 w-3.5 text-emerald-400" />
+                    Sem cartão de crédito
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-amber-400" />
+                    Relatório oficial com seu CNPJ
+                  </span>
+                </div>
               </div>
             </div>
 
