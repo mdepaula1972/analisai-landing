@@ -1859,13 +1859,18 @@ Atualizei o último lançamento cadastrado no seu Livro Caixa!`,
     }
   }
 
-  // C.2) Baixa em Recebimentos em Linguagem Natural ("já recebi", "recebi da mar brasil", "caiu o pix", "atualiza que recebi")
-  const isReceivedIntent =
+  // C.2) Baixa em Recebimentos e Pagamentos em Linguagem Natural
+  // Frases com qualificadores ricos (única, atrasada, vencida, a receber, de hoje, etc.) devem ser processadas
+  // exclusivamente pelo Roteador Semântico com snapshot do DB e Espelho de Conferência Obrigatório!
+  const hasSemanticQualifiers = /(?:[uú]nic[ao]|atrasad[ao]|vencid[ao]|em\s+atraso|passad[ao]|ontem|hoje|a\s+receber|a\s+pagar)/i.test(clean);
+
+  const isReceivedIntent = !hasSemanticQualifiers && (
     /^(?:já\s+)?recebi(?:\s+(?:da|do|de|o\s+valor\s+d[ao]|o\s+cliente))?(\s+.*)?$/i.test(clean) ||
     /^(?:já\s+)?caiu\s+(?:o\s+dinheiro|na\s+conta|o\s+pix|o\s+pagamento)(\s+.*)?$/i.test(clean) ||
     /^(?:atualiza\s+que\s+eu\s+)?(?:já\s+)?recebi(\s+.*)?$/i.test(clean) ||
     /^(?:o\s+)?cliente\s+(?:já\s+)?pagou(\s+.*)?$/i.test(clean) ||
-    /^(?:dar\s+baixa|baixar|marcar\s+como\s+pago)\s+(?:no\s+recebimento|na\s+receita)(\s+.*)?$/i.test(clean);
+    /^(?:dar\s+baixa|baixar|marcar\s+como\s+pago)\s+(?:no\s+recebimento|na\s+receita)(\s+.*)?$/i.test(clean)
+  );
 
   if (isReceivedIntent) {
     let targetQuery = clean
@@ -1901,11 +1906,12 @@ Atualizei o último lançamento cadastrado no seu Livro Caixa!`,
   }
 
   // C.3) Baixa em Pagamentos em Linguagem Natural ("já paguei", "paguei a sabesp", "tá pago", "acabei de pagar")
-  const isPaidIntent =
+  const isPaidIntent = !hasSemanticQualifiers && (
     /^(?:já\s+)?paguei(?:\s+(?:a|o|a\s+conta\s+d[ao]|o\s+boleto\s+d[ao]))?(\s+.*)?$/i.test(clean) ||
     /^(?:tá|ta|esta|está)\s+pago(?:\s+(?:a|o))?(\s+.*)?$/i.test(clean) ||
     /^(?:acabei\s+de\s+pagar)(?:\s+(?:a|o))?(\s+.*)?$/i.test(clean) ||
-    /^(?:dar\s+baixa|baixar|liquidar|quitar)\s+(?:no\s+boleto|na\s+conta|o\s+pagamento)?(\s+.*)?$/i.test(clean);
+    /^(?:dar\s+baixa|baixar|liquidar|quitar)\s+(?:no\s+boleto|na\s+conta|o\s+pagamento)?(\s+.*)?$/i.test(clean)
+  );
 
   if (isPaidIntent) {
     let targetQuery = clean
@@ -2054,11 +2060,12 @@ Exemplo: *"Excluir conta da Sabesp"*`,
   }
 
   // H) Baixa de Pagamento ou Recebimento Conversacional
-  const markPaidMatch =
+  const markPaidMatch = !hasSemanticQualifiers && (
     clean.match(/^(?:j[aá]\s+)?(?:paguei|quitei|liquidei|baixei|pago)\s+(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|a\s+|o\s+)?(.+)/i) ||
     clean.match(/^(?:dar\s+)?baixa\s+(?:n[ao]|da|de|em|para)?\s*(?:a\s+conta\s+d[ao]|conta\s+d[ao]|a\s+conta|conta|d[ao]|a\s+|o\s+)?(.+)/i) ||
     clean.match(/^(?:j[aá]\s+)?(?:recebi|recebido|recebimento)\s+(?:d[ao]|de|do\s+cliente|da\s+cliente)?\s*(.+)/i) ||
-    clean.match(/^(?:o\s+)?cliente\s+(.+?)\s+(?:já\s+)?pagou/i);
+    clean.match(/^(?:o\s+)?cliente\s+(.+?)\s+(?:já\s+)?pagou/i)
+  );
 
   if (markPaidMatch) {
     let target = markPaidMatch[1]?.replace(/[?.!]+$/, '').trim();
@@ -2202,6 +2209,10 @@ async function handleConversationalNaturalLanguageRouter(params: {
     lastBillSummary = `"${lastName}" de ${lastAmt} (${lastType} ${lastDue})`;
   }
 
+  // Carrega snapshot ativo das contas abertas, atrasadas e de hoje do cliente ou lead
+  const { getClientActiveFinancialSnapshot } = await import('@/lib/solo/active-context');
+  const snapshot = await getClientActiveFinancialSnapshot(supabase, client?.id || null, cleanPhone);
+
   const context: UserConversationalContext = {
     userId: client?.id || cleanPhone,
     userName: client?.name || body?.data?.pushName || 'Usuário',
@@ -2210,9 +2221,10 @@ async function handleConversationalNaturalLanguageRouter(params: {
     userType: client ? (isOperator ? 'operator' : 'subscriber') : 'trial',
     plan: client?.plan || (client?.id ? 'solo' : 'trial'),
     companyName: client?.company_name || undefined,
-    hasOpenBills: userBills.length > 0,
+    hasOpenBills: userBills.length > 0 || snapshot.allOpenReceivables.length > 0 || snapshot.allOpenPayables.length > 0,
     activeBillsSummary: activeBillsSummary || undefined,
     lastBillSummary: lastBillSummary || undefined,
+    snapshot,
   };
 
   try {
@@ -2234,6 +2246,54 @@ async function handleConversationalNaturalLanguageRouter(params: {
     if (!decision.is_applicable) {
       const msg = decision.inapplicable_message || 'Essa funcionalidade não está habilitada para o seu perfil no momento.';
       await sendEvolutionText({ phone, text: msg });
+      return true;
+    }
+
+    // ── 0. ESPELHO DE CONFERÊNCIA OBRIGATÓRIO (SETTLE_ACCOUNT) ─────────────
+    // Nenhuma baixa é executada silenciosamente. A IA identifica a conta e submete ao card interativo [1] ou [2]
+    if (decision.intent === 'SETTLE_ACCOUNT' && decision.target_account_id) {
+      const isTrial = !client?.id;
+      const isReceivable = decision.target_type === 'receivable';
+      const targetDesc = decision.target_description || (isReceivable ? 'Recebimento de Cliente' : 'Pagamento de Despesa');
+      const targetAmt = Number(decision.target_amount || 0);
+      const valFmt = targetAmt > 0 ? targetAmt.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+
+      const { addMinutes } = await import('date-fns');
+      await supabase.from('bot_action_confirmations').insert({
+        client_id: client?.id || null,
+        phone_number: cleanPhone,
+        action_type: 'SETTLE_ACCOUNT',
+        target_entity_id: isTrial ? null : decision.target_account_id,
+        proposed_payload: {
+          isTrial,
+          billId: decision.target_account_id,
+          target_account_id: decision.target_account_id,
+          target_type: decision.target_type || (isReceivable ? 'receivable' : 'payable'),
+          target_description: targetDesc,
+          target_amount: targetAmt,
+        },
+        status: 'pending',
+        expires_at: addMinutes(new Date(), 10).toISOString(),
+      });
+
+      const mirrorCard = `📋 *Espelho de Conferência — Baixa de Conta*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Tipo:* ${isReceivable ? 'Recebimento de Cliente 🟢' : 'Pagamento de Despesa 🔴'}
+• *Descrição:* ${targetDesc}
+• *Valor:* ${valFmt}
+• *Ação:* Marcar como liquidado e registrar no Livro Caixa
+
+*[1]* ✅ Confirmar Baixa
+*[2]* ❌ Cancelar`;
+
+      await sendEvolutionText({ phone, text: mirrorCard });
+      return true;
+    }
+
+    // Se houver ambiguidade, envia a mensagem amigável solicitando clarificação/escolha
+    if (decision.intent === 'CLARIFICATION_NEEDED') {
+      const clarifyText = decision.reply_text || decision.conversational_reply || 'Encontrei mais de uma conta em aberto. Poderia me confirmar o nome ou valor da conta que deseja baixar?';
+      await sendEvolutionText({ phone, text: clarifyText });
       return true;
     }
 
@@ -2577,7 +2637,8 @@ ${resultLines.join('\n')}
 
     // 9. Consulta de Preços / Planos
     if (decision.intent === 'VIEW_PLANS_PRICING') {
-      await sendEvolutionText({ phone, text: getTrialConversionMenu() });
+      const { getTrialConversionMenu } = await import('@/lib/solo/trial');
+      await sendEvolutionText({ phone, text: getTrialConversionMenu(userBills.length) });
       return true;
     }
 
@@ -4126,6 +4187,97 @@ Seus lançamentos foram preservados no seu Livro Caixa oficial e os lembretes de
         .from('bot_action_confirmations')
         .update({ status: 'confirmed' })
         .eq('id', pendingAction.id);
+
+      // AÇÃO 0: Liquidação / Baixa de Conta com Espelho de Conferência (SETTLE_ACCOUNT)
+      if (pendingAction.action_type === 'SETTLE_ACCOUNT' || pendingAction.action_type === 'settle_account') {
+        const payload = pendingAction.proposed_payload as any;
+        const isReceivable = payload.target_type === 'receivable';
+        const formattedVal = Number(payload.target_amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        if (payload.isTrial) {
+          // Atualiza conta na lista de degustação (trial_leads.bills_list)
+          const { data: lead } = await supabase
+            .from('trial_leads')
+            .select('id, bills_list')
+            .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+            .maybeSingle();
+
+          if (lead && Array.isArray(lead.bills_list)) {
+            const bills = [...lead.bills_list];
+            let targetIdx = -1;
+
+            if (payload.target_account_id?.startsWith('trial_')) {
+              const idxCand = parseInt(payload.target_account_id.replace('trial_', ''), 10);
+              if (!isNaN(idxCand) && bills[idxCand]) {
+                targetIdx = idxCand;
+              }
+            }
+
+            if (targetIdx === -1 && payload.target_description) {
+              const qDesc = payload.target_description.toLowerCase().trim();
+              targetIdx = bills.findIndex((b: any) => {
+                const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase();
+                return bName.includes(qDesc) || qDesc.includes(bName);
+              });
+            }
+
+            if (targetIdx === -1) {
+              if (isReceivable) {
+                targetIdx = bills.findIndex((b: any) => (b.entry_type || 'payable') === 'receivable' && !b.is_paid);
+              } else {
+                targetIdx = bills.findIndex((b: any) => (b.entry_type || 'payable') === 'payable' && !b.is_paid);
+              }
+            }
+
+            if (targetIdx >= 0) {
+              bills[targetIdx] = {
+                ...bills[targetIdx],
+                is_paid: true,
+                status: 'paid',
+                reconciled_at: new Date().toISOString(),
+              };
+
+              await supabase
+                .from('trial_leads')
+                .update({ bills_list: bills })
+                .eq('id', lead.id);
+            }
+          }
+        } else if (client?.id) {
+          // Atualiza para cliente assinante oficial
+          await supabase
+            .from('payables_receivables')
+            .update({
+              status: 'paid',
+              paid_at: new Date().toISOString(),
+            })
+            .eq('id', payload.target_account_id);
+
+          await supabase.from('cash_ledger_entries').insert({
+            client_id: client.id,
+            entry_date: new Date().toISOString().split('T')[0],
+            description: `${isReceivable ? 'Recebimento de' : 'Pagamento de'} ${payload.target_description}`,
+            amount: isReceivable ? Math.abs(Number(payload.target_amount || 0)) : -Math.abs(Number(payload.target_amount || 0)),
+            entry_type: isReceivable ? 'revenue' : 'expense',
+            dre_group: isReceivable ? 'receita_operacional' : 'despesa_operacional',
+            status: 'realizado',
+          });
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `🎉 *Baixa Confirmada com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Tipo:* ${isReceivable ? 'Recebimento de Cliente 🟢' : 'Pagamento de Despesa 🔴'}
+• *Conta:* *${payload.target_description}*
+• *Valor:* *${formattedVal}*
+• *Status:* **LIQUIDADO / REGISTRADO**
+
+✅ O lançamento foi baixado e seus relatórios e fluxo de caixa foram atualizados!`,
+        });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+        return;
+      }
 
       // AÇÃO 1: Reset Geral / Apagar Tudo
       if (pendingAction.action_type === 'reset_all') {

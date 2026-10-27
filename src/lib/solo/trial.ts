@@ -1014,42 +1014,59 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
 /**
  * Menu de conversão e apresentação dos recursos dos planos ativos
  */
-export function getTrialConversionMenu(): string {
-  return `✨ *Sabia que nos planos ativos o AnalisAí entrega muito mais para seu negócio?*
+export function getTrialConversionMenu(actualDocsCount: number = 0): string {
+  // Se o usuário utilizou volume leve/moderado (padrão até 15 contas)
+  if (actualDocsCount <= 15) {
+    return `🚀 *Assinatura Antecipada — Escolha o Plano Ideal*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Para que você tenha visão de tudo o que o robô faz no dia a dia da sua empresa, confira os recursos disponíveis em nossas assinaturas:
+Selecionamos as 2 melhores opções para a sua rotina:
 
-1️⃣ 📅 *Agenda Semanal de Contas (Incluso em todos os planos):*
-• Digite *Semana* para consultar seus compromissos imediatos dos próximos 7 dias.
-
-2️⃣ 🎙️ *Comandos por Voz e Áudio (Plano Solo):*
-• Mande áudios na correria para registrar despesas, receitas ou adiar prazos sem precisar digitar.
-
-3️⃣ 💡 *Consultor Estratégico de Caixa (Plano Solo / Solo Plus):*
-• Apertou o caixa? Pergunte _"qual conta devo atrasar?"_ para ter orientação contábil sobre juros e multas.
-
-4️⃣ 📑 *Relatórios Contábeis e DRE em PDF (Incluso em todos os planos):*
-• Digite *Relatório* e receba seu Livro Caixa oficial em segundos para controle ou envio ao contador.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚀 *Escolha o plano ideal e ative seu assistente agora mesmo:*
-
-• *AnalisAí Start* (R$ 39,90/mês — 15 lançamentos/mês + Avisos no WhatsApp):
+⭐ *1️⃣ AnalisAí Start — Apenas R$ 39,90/mês* (menos de R$ 1,35/dia!)
+_(A proposta mais próxima do que você utilizou no seu dia a dia)_
+• Até 15 lançamentos/mês por fotos de notas, boletos ou texto;
+• Lembretes pontuais no WhatsApp na véspera e no dia do vencimento;
+• Relatório completo do Livro Caixa em PDF para você e seu contador.
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
 
-• *AnalisAí Solo* (R$ 87,99/mês — 30 lançamentos/mês + Áudio + Consultor de Caixa):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ *2️⃣ AnalisAí Solo — R$ 87,99/mês* ⭐ *Mais Escolhido*
+*(O diferencial completo em relação ao Start por menos de R$ 2,90/dia)*
+🔥 **O que você ganha a mais no Solo:**
+• 🎙️ *Comandos por Áudio/Voz:* Mande áudios na correria para registrar despesas e receitas sem precisar digitar;
+• 💡 *Consultor Estratégico de Caixa:* IA que orienta quais contas priorizar e projeta seu saldo futuro;
+• 🔔 *Cobrança Amigável:* Lembretes de cobrança via Pix para clientes no WhatsApp com 1 toque;
+• 📈 *Cota ampliada:* Até 30 lançamentos/mês inclusos!
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
-• *AnalisAí Solo Plus* (R$ 157,99/mês — 60 lançamentos/mês + Separação PJ x PF):
-👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💳 *Ativação instantânea após confirmação no Asaas.*
+💬 Dúvidas ou faturamento corporativo? Pode responder por aqui!`;
+  }
 
-🏢 *Precisa de múltiplos CNPJs ou mais de 500 lançamentos?*
-Conheça os planos corporativos sob demanda:
-• *AnalisAí Pro* (R$ 297/mês): ${ASAAS_PLANS.monthly.pro.checkoutUrl}
-• *AnalisAí Super* (R$ 597/mês): ${ASAAS_PLANS.monthly.super.checkoutUrl}
+  // Se o usuário já opera com volume maior (> 15 contas)
+  return `🚀 *Assinatura Antecipada — Escolha o Plano Ideal*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Pelo seu ritmo de lançamentos, selecionamos as 2 opções sob medida:
+
+⭐ *1️⃣ AnalisAí Solo — R$ 87,99/mês* (menos de R$ 2,90/dia — Mais Escolhido)
+_(A proposta ideal para o seu volume atual de despesas)_
+• Até 30 lançamentos/mês por foto, PDF, áudio ou texto;
+• Lembretes na véspera às 10h com código de barras/Pix prontos;
+• Consultor estratégico de caixa e DRE contábil em PDF.
+👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💬 *Dúvidas ou faturamento corporativo? Pode responder aqui mesmo!*`;
+⚡ *2️⃣ AnalisAí Solo Plus — R$ 157,99/mês*
+*(O diferencial para quem busca separar finanças da Empresa e Pessoais)*
+🔥 **O que você ganha a mais no Solo Plus:**
+• 👥 *Separação Blindada PJ x PF:* Dois caixas independentes na mesma conversa de WhatsApp;
+• 📊 *Cota Dupla:* Até 60 lançamentos/mês para empresas em expansão;
+• 🛡️ *Suporte Prioritário VIP:* Conciliação financeira assistida.
+👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💳 *Ativação instantânea após confirmação no Asaas.*
+💬 Dúvidas? Pode responder por aqui!`;
 }
 
 export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de confirmar o pagamento no aplicativo do seu banco, confira sempre se o nome do favorecido, CNPJ e o valor na tela de confirmação correspondem exatamente ao seu credor/fornecedor. O AnalisAí realiza a leitura digital automatizada dos dados, cabendo exclusivamente ao pagador a conferência final e autorização da operação junto à sua instituição financeira.`;

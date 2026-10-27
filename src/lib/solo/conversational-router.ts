@@ -1,6 +1,7 @@
 import { SchemaType } from '@google/generative-ai';
 import { getGeminiClient } from './gemini';
 import { validateOperatorPermissions } from './team-guard';
+import { ActiveFinancialSnapshot } from './active-context';
 
 export interface UserConversationalContext {
   userId: string;
@@ -13,9 +14,16 @@ export interface UserConversationalContext {
   hasOpenBills?: boolean;
   activeBillsSummary?: string;
   lastBillSummary?: string;
+  snapshot?: ActiveFinancialSnapshot;
 }
 
 export type ConversationalIntentType =
+  | 'SETTLE_ACCOUNT'
+  | 'CLARIFICATION_NEEDED'
+  | 'NEW_ENTRY'
+  | 'POSTPONE_ACCOUNT'
+  | 'CANCEL_ACCOUNT'
+  | 'GENERAL_QUERY'
   | 'INVITE_GUEST'
   | 'TEAM_MANAGEMENT'
   | 'QUERY_BILLS'
@@ -39,6 +47,11 @@ export interface RoutedDecision {
   confidence: number;
   is_applicable: boolean;
   inapplicable_message?: string;
+  target_account_id?: string;
+  target_type?: 'payable' | 'receivable';
+  target_amount?: number;
+  target_description?: string;
+  reply_text?: string;
   invite_params?: {
     phone?: string;
     name?: string;
@@ -129,7 +142,7 @@ export async function routeConversationalIntent(
 ): Promise<RoutedDecision> {
   const cleanUserText = userText.trim();
 
-  // ── FAST PATH: Calibração ou Ajuste de Saldo de Caixa (Tarefa 5) ──
+  // ── FAST PATH 1: Calibração ou Ajuste de Saldo de Caixa (Tarefa 5) ──
   // Mensagens como: "meu saldo hoje é X", "saldo atual 2500", "ajustar saldo para 4000", "calibrar saldo 1500"
   const balanceRegex = /^(?:(?:ol[aá]|oi|bom dia|boa tarde|boa noite)[\s,!.]*)?(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)|(?:ajustar|calibrar|atualizar|definir)\s+(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)))/i;
   const balanceMatch = cleanUserText.match(balanceRegex);
@@ -150,8 +163,78 @@ export async function routeConversationalIntent(
       };
     }
   }
+
+  // ── FAST PATH 2: Resolução Semântica Determinística de Baixas e Liquidações com Snapshot Ativo ──
+  // Frases como: "dar baixa na única conta atrasada a receber", "baixa na conta a receber atrasada"
+  const isSettlementPhrasing = /(?:dar\s+baixa|baixar|liquidar|quitar|marcar\s+como\s+(?:pago|recebido)|j[aá]\s+(?:recebi|paguei)|t[aá]\s+pago)/i.test(cleanUserText);
+  if (isSettlementPhrasing && context.snapshot) {
+    const isOverdue = /(?:atrasad[ao]|vencid[ao]|em\s+atraso|passad[ao]|j[aá]\s+venceu)/i.test(cleanUserText);
+    const isReceivable = /(?:receber|receb[ií]vel|receita|cliente|venda|honor[aá]rio)/i.test(cleanUserText);
+    const isPayable = /(?:pagar|despesa|boleto|fornecedor|conta)/i.test(cleanUserText) && !isReceivable;
+
+    if (isOverdue && isReceivable) {
+      if (context.snapshot.overdueReceivables.length === 1) {
+        const item = context.snapshot.overdueReceivables[0];
+        return {
+          intent: 'SETTLE_ACCOUNT',
+          confidence: 1.0,
+          is_applicable: true,
+          target_account_id: item.id,
+          target_type: 'receivable',
+          target_description: item.description,
+          target_amount: item.amount,
+        };
+      } else if (context.snapshot.overdueReceivables.length > 1) {
+        const listStr = context.snapshot.overdueReceivables
+          .map((r, i) => `${i + 1}️⃣ *${r.description}* (R$ ${r.amount.toFixed(2)} - Vencimento ${r.due_date})`)
+          .join('\n');
+        return {
+          intent: 'CLARIFICATION_NEEDED',
+          confidence: 0.95,
+          is_applicable: true,
+          reply_text: `Encontrei mais de uma conta a receber em atraso:\n\n${listStr}\n\nQual delas você deseja dar baixa? Envie o número ou o nome!`,
+        };
+      }
+    }
+
+    if (isOverdue && isPayable) {
+      if (context.snapshot.overduePayables.length === 1) {
+        const item = context.snapshot.overduePayables[0];
+        return {
+          intent: 'SETTLE_ACCOUNT',
+          confidence: 1.0,
+          is_applicable: true,
+          target_account_id: item.id,
+          target_type: 'payable',
+          target_description: item.description,
+          target_amount: item.amount,
+        };
+      } else if (context.snapshot.overduePayables.length > 1) {
+        const listStr = context.snapshot.overduePayables
+          .map((p, i) => `${i + 1}️⃣ *${p.description}* (R$ ${p.amount.toFixed(2)} - Vencimento ${p.due_date})`)
+          .join('\n');
+        return {
+          intent: 'CLARIFICATION_NEEDED',
+          confidence: 0.95,
+          is_applicable: true,
+          reply_text: `Encontrei mais de uma conta a pagar em atraso:\n\n${listStr}\n\nQual delas você pagou? Envie o número ou o nome!`,
+        };
+      }
+    }
+  }
+
   const genAI = getGeminiClient();
   const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+
+  const snapshotPrompt = context.snapshot
+    ? `\nSITUAÇÃO ATIVA DE CONTAS NO BANCO DE DADOS (CONSULTE ANTES DE DECIDIR):
+- Contas a Receber Atrasadas (${context.snapshot.overdueReceivables.length}): ${JSON.stringify(context.snapshot.overdueReceivables)}
+- Contas a Receber Vencendo Hoje (${context.snapshot.todayReceivables.length}): ${JSON.stringify(context.snapshot.todayReceivables)}
+- Todas as Contas a Receber Abertas (${context.snapshot.allOpenReceivables.length}): ${JSON.stringify(context.snapshot.allOpenReceivables)}
+- Contas a Pagar Atrasadas (${context.snapshot.overduePayables.length}): ${JSON.stringify(context.snapshot.overduePayables)}
+- Contas a Pagar Vencendo Hoje (${context.snapshot.todayPayables.length}): ${JSON.stringify(context.snapshot.todayPayables)}
+- Todas as Contas a Pagar Abertas (${context.snapshot.allOpenPayables.length}): ${JSON.stringify(context.snapshot.allOpenPayables)}`
+    : '';
 
   const prompt = `MENSAGEM DO USUÁRIO: "${userText}"
 
@@ -163,7 +246,8 @@ DADOS DO USUÁRIO:
 - Plano: ${context.plan}
 - Empresa: ${context.companyName || 'Não informada'}
 - Possui contas cadastradas: ${context.hasOpenBills ? 'SIM' : 'NÃO'}
-${context.activeBillsSummary ? `\nCONTAS ATIVAS NO BANCO DE DADOS DESTE USUÁRIO:\n${context.activeBillsSummary}` : ''}
+${snapshotPrompt}
+${context.activeBillsSummary ? `\nRESUMO DE CONTAS:\n${context.activeBillsSummary}` : ''}
 ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA IMEDIATA):\n${context.lastBillSummary}` : ''}`;
 
   for (const modelName of candidateModels) {
@@ -178,6 +262,12 @@ ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA I
               intent: {
                 type: SchemaType.STRING,
                 enum: [
+                  'SETTLE_ACCOUNT',
+                  'CLARIFICATION_NEEDED',
+                  'NEW_ENTRY',
+                  'POSTPONE_ACCOUNT',
+                  'CANCEL_ACCOUNT',
+                  'GENERAL_QUERY',
                   'INVITE_GUEST',
                   'TEAM_MANAGEMENT',
                   'QUERY_BILLS',
@@ -208,6 +298,32 @@ ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA I
               inapplicable_message: {
                 type: SchemaType.STRING,
                 description: 'Explicação amigável em caso de ação não permitida',
+                nullable: true,
+              },
+              target_account_id: {
+                type: SchemaType.STRING,
+                description: 'ID da conta identificada nas listas para baixa/alteração/cancelamento',
+                nullable: true,
+              },
+              target_type: {
+                type: SchemaType.STRING,
+                enum: ['payable', 'receivable'],
+                description: 'Tipo da conta identificada (payable ou receivable)',
+                nullable: true,
+              },
+              target_amount: {
+                type: SchemaType.NUMBER,
+                description: 'Valor numérico exato da conta identificada',
+                nullable: true,
+              },
+              target_description: {
+                type: SchemaType.STRING,
+                description: 'Nome do fornecedor ou cliente da conta identificada',
+                nullable: true,
+              },
+              reply_text: {
+                type: SchemaType.STRING,
+                description: 'Texto conversacional quando necessária clarificação ou resposta ao usuário',
                 nullable: true,
               },
               invite_params: {
@@ -385,34 +501,39 @@ ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA I
         systemInstruction: `Você é o Cérebro Central de Compreensão e Roteamento de Linguagem Natural do AnalisAí, o assistente financeiro no WhatsApp.
 Sua missão é entender com perfeição o que o usuário quer fazer, a partir de áudios transcritos ou mensagens de texto em português brasileiro falado natural por pessoas simples, SEM EXIGIR NENHUM COMANDO FIXO OU '!'.
 
-Categorias de Intenção:
-- MARK_RECEIVABLE_AS_RECEIVED: Dar baixa em conta a receber / receita (ex: "já recebi", "recebi da mar brasil", "caiu o dinheiro", "cliente me pagou", "já recebi os 2750", "atualiza que eu já recebi", "mar brasil pagou").
-  ↳ Se o usuário disser "já recebi" ou "atualiza que recebi" e houver contas a receber na lista acima, classifique como MARK_RECEIVABLE_AS_RECEIVED e identifique o cliente em mark_paid_params.supplier_or_customer (ex: "Mar Brasil") e o valor se citado. NUNCA classifique como RECORD_FINANCIAL_ENTRY quando o usuário estiver avisando que já recebeu uma conta já existente!
-- MARK_BILL_AS_PAID: Dar baixa em conta a pagar / despesa (ex: "já paguei", "paguei a sabesp", "tá pago", "acabei de pagar", "paguei a contabilivre", "dar baixa no boleto", "pagamento realizado").
-  ↳ Identifique o credor em mark_paid_params.supplier_or_customer (ex: "Sabesp").
-- EDIT_BILL: Alterar valor, vencimento ou renomear fornecedores (ex: "mudar vencimento da sabesp pro dia 20", "mudar valor do aluguel pra 1600", "corrigir nome para Brdid", "o nome é Brdid e não Br Digi", "muda o nome pra Brdid").
-  ↳ REGRA DE MEMÓRIA DO ÚLTIMO LANÇAMENTO: Se o usuário disser "corrigir nome para X", "mudar para X" ou "o nome é X" sem dizer o nome antigo, consulte a ÚLTIMA CONTA CADASTRADA indicada acima e use o nome dela como current_name_query e X como new_name!
-- INVITE_GUEST: Convidar alguém para testar, enviar convite VIP, liberar acesso livre para amigo/parceiro (ex: "convidar o Luizão no zap 14 99894-7271", "manda um convite pro Luizão testar", "libera o zap do meu amigo").
-- TEAM_MANAGEMENT: Gestão de operadores da empresa (ex: "quem tá na minha equipe?", "adiciona o Luizão na minha equipe", "remover operador", "silencia os avisos da Maria").
-- QUERY_BILLS: Consultar contas agendadas (ex: "ver minhas contas", "o que tenho que pagar essa semana?", "contas de hoje", "quais boletos vencem esse mês?", "minhas contas", "1", "um").
-- GET_PAYMENT_CODE: Pedir linha digitável, código de barras ou Pix para pagar/antecipar (ex: "pagar sabesp", "código da vivo", "passa o pix do aluguel", "2", "dois").
-- DELETE_BILL: Excluir ou cancelar uma conta (ex: "excluir conta da Sabesp", "apagar boleto do fornecedor").
-- RECORD_FINANCIAL_ENTRY: Lançar despesa ou receita nova que ainda NÃO existe (ex: "gastei 45 de gasolina", "recebi 800 do cliente Pedro hoje à tarde", "anota pagar Vivo 120 dia 22", "aluguel 1500 dia 5").
-- ADJUST_BALANCE: Calibrar ou atualizar o saldo bancário da conta corrente / caixa (ex: "meu saldo hoje é R$ 2500", "saldo atual 2500", "ajustar saldo para 4000", "saldo hoje é 1200", "calibrar saldo 3500").
-- REQUEST_PDF_REPORT: Solicitar relatório, Livro Caixa ou DRE em PDF (ex: "me manda o relatório", "quero o livro caixa em PDF", "gerar PDF").
-- REQUEST_ACCOUNTING_CLOSING: Solicitar pacote de fechamento contábil para o contador ou apuração mensal (ex: "fechamento do mês passado", "gerar arquivo pro meu contador", "pacote fiscal de setembro", "!fechamento", "extrato contábil em csv", "fechamento de 09/2026").
-- CASH_FLOW_ADVICE: Dúvidas financeiras e de caixa (ex: "qual conta devo atrasar?", "meu caixa fecha positivo?", "o que fazer se faltar dinheiro?").
-- VIEW_PLANS_PRICING: Consultar planos, valores, upgrade, assinar (ex: "quanto custa?", "quais os planos?", "como assinar?").
-- ADMIN_SIMULATION: Exclusivo para administradores testando cenários (ex: "simular plano start", "resetar meus contadores", "gerar contas de teste", "estourar limite").
-- REQUEST_DASHBOARD_ACCESS: Solicitar link do painel visual, gráficos, PWA ou dashboard (ex: "!painel", "painel", "dashboard", "graficos", "gráficos", "ver resumo visual", "ver meus gráficos", "link do painel", "abrir dashboard", "abrir painel", "app", "pwa").
-- GENERAL_CONVERSATION: Saudações ("oi", "olá", "bom dia"), perguntas sobre como o AnalisAí funciona, ou bate-papo informal.
+INSTRUÇÕES DE RESOLUÇÃO SEMÂNTICA DE CONTAS (CRÍTICO):
+1. Quando o usuário quiser dar baixa, liquidar ou marcar como pago/recebido:
+   - "dar baixa na única conta atrasada a receber", "recebi da mar brasil", "paguei a vivo", "tá pago o boleto de 98"
+   - SEMPRE consulte a "SITUAÇÃO ATIVA DE CONTAS NO BANCO DE DADOS" fornecida acima!
+   - Se houver correspondência inequívoca para um único registro (ex: existe apenas 1 conta atrasada a receber e ele pediu para baixar a única atrasada, ou citou o fornecedor/cliente de uma conta aberta), retorne:
+     intent: "SETTLE_ACCOUNT",
+     target_account_id: "<id da conta>",
+     target_type: "payable" ou "receivable",
+     target_description: "<descrição/nome da conta>",
+     target_amount: <valor numérico da conta>.
+   - Se houver mais de uma conta candidata e faltar clareza para desempate, retorne:
+     intent: "CLARIFICATION_NEEDED",
+     reply_text: "Encontrei as seguintes contas abertas: [liste-as com número e valor amigavelmente]. Qual delas você deseja baixar?"
 
-DIRETRIZES CRÍTICAS SOBRE NOTAS FISCAIS, BOLETOS E IMAGENS:
-- O AnalisAí POSSUI PROCESSAMENTO E LEITURA AUTOMÁTICA DE IMAGENS E PDFS DE NOTAS FISCAIS (NF-e, NFC-e, NFS-e, DANFE), BOLETOS, RECIBOS E EXTRATOS BANCÁRIOS 100% ATIVO, OPERACIONAL E EM PRODUÇÃO!
-- É EXPRESSAMENTE PROIBIDO dizer que o processamento de imagens de NF ou documentos "não está ativo", "não é suportado" ou "está desativado".
+2. Outras Categorias de Intenção:
+- EDIT_BILL: Alterar valor, vencimento ou renomear fornecedores. Se disser "o nome é X" consulte a ÚLTIMA CONTA CADASTRADA.
+- INVITE_GUEST: Convidar alguém para testar, enviar convite VIP.
+- TEAM_MANAGEMENT: Gestão de operadores da empresa.
+- QUERY_BILLS: Consultar contas agendadas (ex: "ver minhas contas", "o que tenho a pagar hoje?").
+- GET_PAYMENT_CODE: Pedir linha digitável, código de barras ou Pix para pagar/antecipar.
+- DELETE_BILL / CANCEL_ACCOUNT: Excluir ou cancelar uma conta.
+- RECORD_FINANCIAL_ENTRY / NEW_ENTRY: Lançar despesa ou receita nova que ainda NÃO existe no banco.
+- ADJUST_BALANCE: Calibrar ou atualizar o saldo bancário da conta corrente / caixa.
+- REQUEST_PDF_REPORT: Solicitar relatório, Livro Caixa ou DRE em PDF.
+- REQUEST_ACCOUNTING_CLOSING: Solicitar pacote de fechamento contábil.
+- CASH_FLOW_ADVICE: Dúvidas financeiras e de caixa.
+- VIEW_PLANS_PRICING: Consultar planos, valores, upgrade, assinar.
+- ADMIN_SIMULATION: Exclusivo para administradores.
+- REQUEST_DASHBOARD_ACCESS: Solicitar link do painel visual, gráficos, PWA.
+- GENERAL_CONVERSATION: Saudações ou bate-papo informal.
 
 REGRAS DE PERMISSÃO POR PAPEL:
-- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos (RECORD_FINANCIAL_ENTRY). Para relatórios, fechamento contábil, consultas de contas, exclusões, edições, ajustes de saldo ou conselhos, defina is_applicable = false.
+- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos. Para outras ações, is_applicable = false.
 
 Seja humanizado, acolhedor, tolerante com erros de digitação e variações fonéticas.`,
       });
@@ -425,7 +546,7 @@ Seja humanizado, acolhedor, tolerante com erros de digitação e variações fon
       let isApplicable = Boolean(parsed.is_applicable);
       let inapplicableMessage = parsed.inapplicable_message || undefined;
 
-      // FASE 3: Interceptor de permissões rígido para operadores
+      // Interceptor de permissões rígido para operadores
       if (context.userType === 'operator') {
         const permCheck = validateOperatorPermissions('operator', intent);
         if (!permCheck.allowed) {
@@ -439,6 +560,11 @@ Seja humanizado, acolhedor, tolerante com erros de digitação e variações fon
         confidence: Number(parsed.confidence) || 0.9,
         is_applicable: isApplicable,
         inapplicable_message: inapplicableMessage,
+        target_account_id: parsed.target_account_id || undefined,
+        target_type: parsed.target_type || undefined,
+        target_amount: parsed.target_amount ? Number(parsed.target_amount) : undefined,
+        target_description: parsed.target_description || undefined,
+        reply_text: parsed.reply_text || undefined,
         invite_params: parsed.invite_params || undefined,
         team_params: parsed.team_params || undefined,
         bills_query_params: parsed.bills_query_params || undefined,
