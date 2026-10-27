@@ -27,6 +27,7 @@ export type ConversationalIntentType =
   | 'VIEW_PLANS_PRICING'
   | 'ADMIN_SIMULATION'
   | 'REQUEST_DASHBOARD_ACCESS'
+  | 'ADJUST_BALANCE'
   | 'GENERAL_CONVERSATION';
 
 export interface RoutedDecision {
@@ -77,7 +78,34 @@ export interface RoutedDecision {
     action: string;
     target_plan?: string;
   };
+  balance_adjustment_params?: {
+    reported_balance: number;
+  };
   conversational_reply?: string;
+}
+
+/**
+ * Converte strings numéricas em formato brasileiro ou internacional para number
+ */
+export function parseBalanceNumber(rawStr: string): number {
+  let clean = rawStr.trim().replace(/^r\$\s*/i, '');
+  if (clean.includes(',') && clean.includes('.')) {
+    // 2.500,50 -> 2500.50
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (clean.includes(',')) {
+    // 2500,50 -> 2500.50
+    clean = clean.replace(',', '.');
+  } else if (clean.includes('.')) {
+    const parts = clean.split('.');
+    if (parts.length > 2) {
+      clean = clean.replace(/\./g, '');
+    } else if (parts[1] && parts[1].length === 3) {
+      // 2.500 -> 2500
+      clean = parts[0] + parts[1];
+    }
+  }
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : Math.round(num * 100) / 100;
 }
 
 /**
@@ -89,6 +117,29 @@ export async function routeConversationalIntent(
   userText: string,
   context: UserConversationalContext
 ): Promise<RoutedDecision> {
+  const cleanUserText = userText.trim();
+
+  // ── FAST PATH: Calibração ou Ajuste de Saldo de Caixa (Tarefa 5) ──
+  // Mensagens como: "meu saldo hoje é X", "saldo atual 2500", "ajustar saldo para 4000", "calibrar saldo 1500"
+  const balanceRegex = /^(?:(?:ol[aá]|oi|bom dia|boa tarde|boa noite)[\s,!.]*)?(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)|(?:ajustar|calibrar|atualizar|definir)\s+(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)))/i;
+  const balanceMatch = cleanUserText.match(balanceRegex);
+  if (balanceMatch) {
+    const rawVal = balanceMatch[1] || balanceMatch[2];
+    if (rawVal) {
+      const parsedNum = parseBalanceNumber(rawVal);
+      const isOperator = context.userType === 'operator';
+      const permCheck = validateOperatorPermissions(isOperator ? 'operator' : 'admin', 'ADJUST_BALANCE');
+      return {
+        intent: 'ADJUST_BALANCE',
+        confidence: 1.0,
+        is_applicable: permCheck.allowed,
+        inapplicable_message: permCheck.refusalMessage,
+        balance_adjustment_params: {
+          reported_balance: parsedNum,
+        },
+      };
+    }
+  }
   const genAI = getGeminiClient();
   const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
 
@@ -128,6 +179,7 @@ DADOS DO USUÁRIO:
                   'VIEW_PLANS_PRICING',
                   'ADMIN_SIMULATION',
                   'REQUEST_DASHBOARD_ACCESS',
+                  'ADJUST_BALANCE',
                   'GENERAL_CONVERSATION',
                 ],
               },
@@ -287,6 +339,16 @@ DADOS DO USUÁRIO:
                 },
                 nullable: true,
               },
+              balance_adjustment_params: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  reported_balance: {
+                    type: SchemaType.NUMBER,
+                    description: 'Valor numérico do saldo informado para ajuste (ex: 2500, 4000.50)',
+                  },
+                },
+                nullable: true,
+              },
               conversational_reply: {
                 type: SchemaType.STRING,
                 description: 'Resposta conversacional cordial, direta e acolhedora em português do Brasil quando couber resposta direta',
@@ -308,6 +370,7 @@ Categorias de Intenção:
 - EDIT_BILL: Alterar valor, vencimento ou renomear fornecedores (ex: "mudar vencimento da sabesp pro dia 20", "mudar valor do aluguel pra 1600", "onde tá Contalivre é Contabilivre, Persi com S é com C", "corrija os fornecedores").
 - DELETE_BILL: Excluir ou cancelar uma conta (ex: "excluir conta da Sabesp", "apagar boleto do fornecedor").
 - RECORD_FINANCIAL_ENTRY: Lançar despesa ou receita nova (ex: "gastei 45 de gasolina", "recebi 800 do cliente Pedro", "anota pagar Vivo 120 dia 22", "aluguel 1500 dia 5").
+- ADJUST_BALANCE: Calibrar ou atualizar o saldo bancário da conta corrente / caixa (ex: "meu saldo hoje é R$ 2500", "saldo atual 2500", "ajustar saldo para 4000", "saldo hoje é 1200", "calibrar saldo 3500").
 - REQUEST_PDF_REPORT: Solicitar relatório, Livro Caixa ou DRE em PDF (ex: "me manda o relatório", "quero o livro caixa em PDF", "gerar PDF").
 - REQUEST_ACCOUNTING_CLOSING: Solicitar pacote de fechamento contábil para o contador ou apuração mensal (ex: "fechamento do mês passado", "gerar arquivo pro meu contador", "pacote fiscal de setembro", "!fechamento", "extrato contábil em csv", "fechamento de 09/2026").
 - CASH_FLOW_ADVICE: Dúvidas financeiras e de caixa (ex: "qual conta devo atrasar?", "meu caixa fecha positivo?", "o que fazer se faltar dinheiro?").
@@ -325,7 +388,7 @@ DIRETRIZES CRÍTICAS SOBRE NOTAS FISCAIS, BOLETOS E IMAGENS:
   "O processamento automático de Notas Fiscais e boletos está 100% ativo! 📄✨ Pode me enviar a foto ou arquivo PDF da sua Nota Fiscal aqui que nossa IA lê o fornecedor, valores e datas na hora e já organiza no seu fluxo de caixa!"
 
 REGRAS DE PERMISSÃO POR PAPEL:
-- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos (RECORD_FINANCIAL_ENTRY). Para relatórios (REQUEST_PDF_REPORT), fechamento contábil (REQUEST_ACCOUNTING_CLOSING), consultas de contas (QUERY_BILLS), exclusões (DELETE_BILL), edições (EDIT_BILL) ou conselhos (CASH_FLOW_ADVICE), defina is_applicable = false.
+- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos (RECORD_FINANCIAL_ENTRY). Para relatórios (REQUEST_PDF_REPORT), fechamento contábil (REQUEST_ACCOUNTING_CLOSING), consultas de contas (QUERY_BILLS), exclusões (DELETE_BILL), edições (EDIT_BILL), ajustes de saldo (ADJUST_BALANCE) ou conselhos (CASH_FLOW_ADVICE), defina is_applicable = false.
 
 Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
       });
@@ -359,6 +422,7 @@ Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
         edit_params: parsed.edit_params || undefined,
         delete_params: parsed.delete_params || undefined,
         financial_entries: parsed.financial_entries || undefined,
+        balance_adjustment_params: parsed.balance_adjustment_params || undefined,
         report_params: parsed.report_params || undefined,
         closing_params: parsed.closing_params || undefined,
         simulation_params: parsed.simulation_params || undefined,

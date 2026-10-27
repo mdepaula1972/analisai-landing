@@ -103,6 +103,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
   overdueCount: number;
   overdueTotal: number;
   companyName: string;
+  lastBalanceUpdateDate?: string | null;
 }> {
   const supabase = createServiceRoleClient();
 
@@ -802,6 +803,7 @@ export async function generateCashLedgerPdfBuffer(clientId: string): Promise<{
     overdueCount: overdueBills.length,
     overdueTotal,
     companyName,
+    lastBalanceUpdateDate: client?.last_balance_update_date || null,
   };
 }
 
@@ -1035,6 +1037,16 @@ export async function sendCashLedgerPdfToWhatsApp(clientId: string, phone: strin
   }
 
   caption += `\n📄 Segue em anexo seu relatório completo em PDF pronto para conferência ou impressão!`;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  if (!result.lastBalanceUpdateDate || result.lastBalanceUpdateDate < todayStr) {
+    let dateFmt = 'data anterior não informada';
+    if (result.lastBalanceUpdateDate) {
+      const [y, m, d] = result.lastBalanceUpdateDate.split('-');
+      dateFmt = `${d}/${m}/${y}`;
+    }
+    caption += `\n\n_ℹ️ Nota de Caixa: O saldo bancário foi calibrado pela última vez em ${dateFmt}. Você pode calibrar seu saldo atual a qualquer momento informando seu valor de hoje._`;
+  }
 
   return await sendEvolutionMedia({
     phone,

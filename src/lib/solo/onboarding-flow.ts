@@ -2,12 +2,19 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 
 export type ProfileType = 'pj' | 'pf_liberal' | 'pf_individual' | 'pf_family';
-export type OnboardingStep = 'awaiting_pf_or_pj' | 'awaiting_pf_subtype' | 'awaiting_pj_regime' | 'awaiting_pj_regime_confirmation' | 'completed';
+export type OnboardingStep =
+  | 'awaiting_pf_or_pj'
+  | 'awaiting_pf_subtype'
+  | 'awaiting_pj_regime'
+  | 'awaiting_pj_regime_confirmation'
+  | 'awaiting_initial_balance'
+  | 'completed';
 
 export interface OnboardingState {
   isCompleted: boolean;
   step?: OnboardingStep;
   profileType?: ProfileType;
+  isMixedProfile?: boolean;
 }
 
 export interface RevenueInferenceResult {
@@ -235,25 +242,71 @@ Nesse patamar, o foco principal é fluxo de caixa refinado, conciliação e rela
 }
 
 /**
- * 1. Mensagem de Boas-Vindas + Pergunta Didática Inicial (PF ou PJ)
+ * 1. Mensagem de Boas-Vindas + Pergunta Didática Inicial (PF, PJ ou Ambos)
  */
 export function getWelcomeAndPfPjMessage(): string {
   return `👋 *Olá! Seja muito bem-vindo ao AnalisAí!*
 Sou sua inteligência financeira no WhatsApp, pronta para desburocratizar sua rotina, organizar suas contas e fluxo de caixa em segundos.
 
 Para que eu personalize seus alertas, categorias e relatórios desde o início, me conte:
-*A sua utilização será como Pessoa Física (PF) ou Pessoa Jurídica (PJ)?*
+*Como você pretende utilizar o AnalisAí hoje?*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha uma opção:*
+👉 *Escolha uma das opções abaixo:*
 
-*1* ou *PJ* → *Pessoa Jurídica*
-_(Para MEIs, autônomos com CNPJ e empresas. Foco no Livro Caixa do negócio, controle de faturamento, DRE contábil e teto fiscal do Simples/MEI)._
+*1* ou *PJ* → *Pessoa Jurídica (Empresa / MEI)*
+_(Para MEIs, prestadores de serviço e empresas. Foco no Livro Caixa, DRE contábil, notas e teto fiscal)._
 
-*2* ou *PF* → *Pessoa Física*
-_(Para controle das finanças pessoais, contas do dia a dia, orçamento e patrimônio, sem necessidade de CNPJ)._
+*2* ou *PF* → *Pessoa Física (Pessoal / Autônomo)*
+_(Para finanças pessoais, orçamento do lar ou profissional liberal sem CNPJ)._
+
+*3* ou *Ambos* → *Ambos (Misturo contas pessoais e da empresa)*
+_(Ideal para empresários e MEIs que ainda usam a mesma conta ou cartão para despesas pessoais e do negócio)._
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Basta responder com *1* ou *2* (ou digitar *PJ* / *PF*)._`;
+💡 _Basta responder com *1*, *2* ou *3* (ou digitar *PJ*, *PF* ou *Ambos*)._`;
+}
+
+/**
+ * Mensagem didática para quem escolheu a Opção 3 (Ambos / Mistura contas)
+ */
+export function getMixedProfileWelcomeMessage(): string {
+  return `⚠️ *Aviso Amigo de Gestão & Alerta de Confusão Patrimonial*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Entendi perfeitamente! Mais de 70% dos empresários brasileiros começam misturando as contas do negócio com as contas de casa. Você não está sozinho!
+
+💡 *Como o AnalisAí vai te proteger:*
+1. Sua conta principal será configurada como **Pessoa Jurídica (PJ)** para proteger o teto fiscal do seu negócio e organizar seu Livro Caixa.
+2. Contas de cunho pessoal que você enviar serão sinalizadas com a tag **[PF_PESSOAL]**, gerando alerta preventivo contra riscos de desconsideração da personalidade jurídica e glosas fiscais.
+3. Seus relatórios gerenciais e DRE serão consolidados na empresa. Se no futuro você quiser relatórios 100% separados para a sua Pessoa Física, você poderá ativar um perfil adicional e migrar seu histórico em 1 clique!
+
+Agora vamos calibrar o seu negócio:`;
+}
+
+/**
+ * Mensagem de Marco Zero Flexível (Saldo Inicial)
+ */
+export function getInitialBalancePromptMessage(): string {
+  return `💰 *Marco Zero: Saldo Inicial em Caixa*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para começarmos com o pé direito e projetarmos seu fluxo de caixa com precisão:
+
+*Qual é o saldo aproximado somando suas contas correntes hoje?* (Ou envie uma foto/print/extrato bancário do seu banco).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 _Se preferir não informar agora, digite *[Pular]* ou *0* (você poderá calibrar quando quiser)._`;
+}
+
+/**
+ * Mensagem de Conclusão e Convite do Primeiro Lançamento Guiado
+ */
+export function getFirstBillGuidedMessage(): string {
+  return `🎉 *Tudo pronto! Seu AnalisAí está 100% configurado!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para testar na prática e ver a mágica acontecer:
+
+📸 *Envie agora a foto, PDF, áudio ou documento do seu próximo boleto, nota a pagar ou valor que tem a receber.*
+
+Em 2 segundos a IA lê todos os dados, agenda seus lembretes e organiza seu Livro Caixa! 🚀`;
 }
 
 /**
@@ -546,8 +599,12 @@ export async function processOnboardingResponse(params: {
 
   const currentStep: OnboardingStep = (lead?.onboarding_step as OnboardingStep) || 'awaiting_pf_or_pj';
 
-  // ── ETAPA 1: ESCOLHA ENTRE PF E PJ ──
+  // ── ETAPA 1: ESCOLHA ENTRE PF, PJ OU AMBOS ──
   if (currentStep === 'awaiting_pf_or_pj') {
+    const isAmbos =
+      /^(3\b|3\.|ambos\b|ambas\b|misturo\b|misturado\b|os dois\b|as duas\b|pf e pj\b|pj e pf\b)/i.test(clean) ||
+      clean === '3' || clean === 'ambos';
+
     const isPj =
       /^(1\b|1\.|pj\b|empresa\b|cnpj\b|jur[ií]dica\b|mei\b|microempresa\b|comercial\b|neg[oó]cio\b)/i.test(clean) ||
       clean === '1' || clean === 'pj';
@@ -556,12 +613,13 @@ export async function processOnboardingResponse(params: {
       /^(2\b|2\.|pf\b|f[ií]sica\b|pessoa f[ií]sica\b|pessoal\b|casa\b|mim\b|minha\b|particular\b)/i.test(clean) ||
       clean === '2' || clean === 'pf';
 
-    if (isPj) {
+    if (isAmbos) {
       if (lead?.id) {
         await supabase
           .from('trial_leads')
           .update({
             profile_type: 'pj',
+            is_mixed_profile: true,
             onboarding_step: 'awaiting_pj_regime',
           })
           .eq('id', lead.id);
@@ -569,7 +627,33 @@ export async function processOnboardingResponse(params: {
       if (client?.id) {
         await supabase
           .from('clients')
-          .update({ profile_type: 'pj', tax_type: 'CNPJ' })
+          .update({ profile_type: 'pj', tax_type: 'CNPJ', is_mixed_profile: true })
+          .eq('id', client.id);
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: `${getMixedProfileWelcomeMessage()}\n\n${getPjTaxRegimeMessage()}`,
+      });
+
+      return { handled: true, completed: false };
+    }
+
+    if (isPj) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({
+            profile_type: 'pj',
+            is_mixed_profile: false,
+            onboarding_step: 'awaiting_pj_regime',
+          })
+          .eq('id', lead.id);
+      }
+      if (client?.id) {
+        await supabase
+          .from('clients')
+          .update({ profile_type: 'pj', tax_type: 'CNPJ', is_mixed_profile: false })
           .eq('id', client.id);
       }
 
@@ -588,8 +672,15 @@ export async function processOnboardingResponse(params: {
           .from('trial_leads')
           .update({
             onboarding_step: 'awaiting_pf_subtype',
+            is_mixed_profile: false,
           })
           .eq('id', lead.id);
+      }
+      if (client?.id) {
+        await supabase
+          .from('clients')
+          .update({ is_mixed_profile: false })
+          .eq('id', client.id);
       }
 
       await sendEvolutionText({
@@ -616,10 +707,11 @@ export async function processOnboardingResponse(params: {
     await sendEvolutionText({
       phone,
       text: `Entendi! Para eu direcionar sua experiência corretamente:
-*A sua utilização será como Pessoa Jurídica (1) ou Pessoa Física (2)?*
+*Como você pretende utilizar o AnalisAí hoje?*
 
 • Digite *1* para *Pessoa Jurídica (PJ / MEI / Empresa)*
-• Digite *2* para *Pessoa Física (PF / Contas Pessoais)*`,
+• Digite *2* para *Pessoa Física (PF / Contas Pessoais)*
+• Digite *3* para *Ambos (Misturo contas pessoais e da empresa)*`,
     });
     return { handled: true, completed: false };
   }
@@ -649,7 +741,7 @@ export async function processOnboardingResponse(params: {
           .from('trial_leads')
           .update({
             profile_type: chosenProfile,
-            onboarding_step: 'completed',
+            onboarding_step: 'awaiting_initial_balance',
             tax_regime: 'pf',
           })
           .eq('id', lead.id);
@@ -663,10 +755,10 @@ export async function processOnboardingResponse(params: {
 
       await sendEvolutionText({
         phone,
-        text: getOnboardingCompletionMessage(chosenProfile),
+        text: `${getOnboardingCompletionMessage(chosenProfile)}\n\n${getInitialBalancePromptMessage()}`,
       });
 
-      return { handled: true, completed: true, profile: chosenProfile };
+      return { handled: true, completed: false, profile: chosenProfile };
     }
 
     // Se não compreendeu o subtipo
@@ -723,7 +815,7 @@ export async function processOnboardingResponse(params: {
           .update({
             profile_type: 'pj',
             tax_regime: chosenRegime,
-            onboarding_step: 'completed',
+            onboarding_step: 'awaiting_initial_balance',
           })
           .eq('id', lead.id);
       }
@@ -740,10 +832,10 @@ export async function processOnboardingResponse(params: {
 
       await sendEvolutionText({
         phone,
-        text: getPjOnboardingCompletionMessage(chosenRegime),
+        text: `${getPjOnboardingCompletionMessage(chosenRegime)}\n\n${getInitialBalancePromptMessage()}`,
       });
 
-      return { handled: true, completed: true, profile: 'pj' };
+      return { handled: true, completed: false, profile: 'pj' };
     }
 
     // Se o usuário digitou uma média mensal ou faturamento em texto livre
@@ -839,7 +931,7 @@ export async function processOnboardingResponse(params: {
           .update({
             profile_type: 'pj',
             tax_regime: resolvedRegime,
-            onboarding_step: 'completed',
+            onboarding_step: 'awaiting_initial_balance',
             annual_revenue_baseline: docData.estimated_annual || null,
           })
           .eq('id', lead.id);
@@ -858,10 +950,10 @@ export async function processOnboardingResponse(params: {
 
       await sendEvolutionText({
         phone,
-        text: getPjOnboardingCompletionMessage(resolvedRegime),
+        text: `${getPjOnboardingCompletionMessage(resolvedRegime)}\n\n${getInitialBalancePromptMessage()}`,
       });
 
-      return { handled: true, completed: true, profile: 'pj' };
+      return { handled: true, completed: false, profile: 'pj' };
     }
 
     const isNegative = /^(n[aã]o\b|n\b|errado\b|incorreto\b)/i.test(clean);
@@ -909,6 +1001,114 @@ Podemos definir seu enquadramento como sugerido?
 
 • Digite *1* ou *Sim* para confirmar.
 • Ou digite *MEI*, *Simples* ou *EPP* se preferir outro regime.`,
+    });
+    return { handled: true, completed: false };
+  }
+
+  // ── ETAPA 5: MARCO ZERO FLEXÍVEL (SALDO INICIAL) ──
+  if (currentStep === 'awaiting_initial_balance') {
+    const isSkip =
+      /^(pular|pulo|pule|skip|0|zero|depois|mais tarde|n[aã]o|nao|sem saldo|nenhum|ignorar)$/i.test(clean) ||
+      clean === '0' || clean === 'pular';
+
+    const brDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const [d, m, y] = brDateFormatter.format(new Date()).split('/');
+    const today = `${y}-${m}-${d}`;
+
+    if (isSkip) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({ onboarding_step: 'completed' })
+          .eq('id', lead.id);
+      }
+      await sendEvolutionText({
+        phone,
+        text: `Sem problemas! Deixamos seu saldo inicial como R$ 0,00 por enquanto.\n\n${getFirstBillGuidedMessage()}`,
+      });
+      return { handled: true, completed: true };
+    }
+
+    // Tenta extrair valor numérico de saldo
+    let parsedVal: number | null = null;
+    if (clean.includes('k') || clean.includes('mil')) {
+      const kMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:mil\b|k\b)/i);
+      if (kMatch) {
+        parsedVal = parseFloat(kMatch[1].replace(',', '.')) * 1000;
+      }
+    }
+
+    if (parsedVal === null) {
+      const numMatch = clean.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:[.,]\d{2})?|\d+)/i);
+      if (numMatch) {
+        let numStr = numMatch[1];
+        if (numStr.includes('.') && numStr.includes(',')) {
+          numStr = numStr.replace(/\./g, '').replace(',', '.');
+        } else if (numStr.includes('.')) {
+          if (numStr.split('.')[1].length === 3) numStr = numStr.replace(/\./g, '');
+        } else if (numStr.includes(',')) {
+          numStr = numStr.replace(',', '.');
+        }
+        const n = parseFloat(numStr);
+        if (!isNaN(n) && n >= 0) parsedVal = n;
+      }
+    }
+
+    if (parsedVal !== null) {
+      if (lead?.id) {
+        await supabase
+          .from('trial_leads')
+          .update({
+            initial_balance: parsedVal,
+            onboarding_step: 'completed',
+          })
+          .eq('id', lead.id);
+      }
+
+      if (client?.id) {
+        await supabase
+          .from('clients')
+          .update({
+            initial_bank_balance: parsedVal,
+            last_balance_update_date: today,
+          })
+          .eq('id', client.id);
+
+        try {
+          await supabase.from('cash_ledger_entries').insert({
+            client_id: client.id,
+            entry_date: today,
+            description: 'Saldo Inicial de Abertura (Marco Zero)',
+            amount: parsedVal,
+            entry_type: 'income',
+            dre_group: 'outros',
+            status: 'realizado',
+            origin_profile: 'PJ',
+            entry_nature: 'BALANCE_ADJUSTMENT',
+          });
+        } catch (ledgerErr) {
+          console.warn('[Onboarding Initial Balance Entry Error]:', ledgerErr);
+        }
+      }
+
+      const valFmt = parsedVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      await sendEvolutionText({
+        phone,
+        text: `💰 *Saldo inicial de ${valFmt} registrado com sucesso!*\n\n${getFirstBillGuidedMessage()}`,
+      });
+
+      return { handled: true, completed: true };
+    }
+
+    // Se não for nem skip nem número (ex: mandou mensagem de texto sem número), orienta amigavelmente
+    await sendEvolutionText({
+      phone,
+      text: `Por favor, informe apenas o valor aproximado do seu saldo em reais (ex: *"5.000"* ou *"1200"*).\n\n_Ou digite *[Pular]* para avançar sem saldo inicial._`,
     });
     return { handled: true, completed: false };
   }

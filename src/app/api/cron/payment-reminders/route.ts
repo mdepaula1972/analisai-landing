@@ -229,10 +229,103 @@ Você pode:
     processedBillsCount += allNotifiedIds.length;
   }
 
+  // ── 3. ROTINA D+1 INTERATIVA DE LIQUIDAÇÃO / POSTERGAÇÃO ──────────────────
+  // Localiza contas com vencimento D+1 (ontem) e status em 'open' ou 'pending'
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const [yd, ym, yy] = brDateFormatter.format(yesterdayDate).split('/');
+  const yesterday = `${yy}-${ym}-${yd}`;
+
+  const { data: d1Bills, error: d1Error } = await supabase
+    .from('payables_receivables')
+    .select(`
+      id,
+      counterparty_name,
+      amount,
+      type,
+      current_due_date,
+      barcode_or_pix,
+      d1_check_sent_at,
+      status,
+      origin_profile,
+      clients (
+        id,
+        name,
+        whatsapp_number,
+        status,
+        company_name,
+        tax_id
+      )
+    `)
+    .eq('current_due_date', yesterday)
+    .in('status', ['open', 'pending'])
+    .is('d1_check_sent_at', null);
+
+  if (d1Error) {
+    console.error('[Cron D+1] Erro ao buscar contas D+1:', d1Error);
+  }
+
+  let d1ChecksSent = 0;
+  for (const bill of d1Bills || []) {
+    const client = bill.clients as any;
+    if (!client || client.status !== 'active' || !client.whatsapp_number) continue;
+
+    // Evita sobreposição com confirmações pendentes ativas
+    const { data: existingActive } = await supabase
+      .from('bot_action_confirmations')
+      .select('id')
+      .eq('client_id', client.id)
+      .in('status', ['PENDING', 'pending', 'AWAITING_CORRECTION', 'AWAITING_POSTPONE_DATE'])
+      .gt('expires_at', new Date().toISOString())
+      .limit(1);
+
+    if (existingActive && existingActive.length > 0) {
+      continue;
+    }
+
+    const amtFmt = Number(bill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const favorecido = bill.counterparty_name || 'Agendamento';
+    const d1Msg = `Ontem venceu o agendamento de ${amtFmt} (${favorecido}).\nEsse pagamento foi liquidado no banco?\n\n[1] Sim, foi pago\n[2] Não, quero prorrogar a data\n[3] Não, manter como em atraso`;
+
+    await supabase.from('bot_action_confirmations').insert({
+      client_id: client.id,
+      phone_number: client.whatsapp_number,
+      action_type: 'D1_SETTLEMENT_CHECK',
+      status: 'PENDING',
+      extracted_payload: {
+        bill_id: bill.id,
+        amount: Number(bill.amount),
+        counterparty_name: bill.counterparty_name,
+        description: `Pagamento ${bill.counterparty_name}`,
+        due_date: bill.current_due_date,
+        type: bill.type || 'payable',
+        origin_profile: bill.origin_profile || 'PJ',
+      },
+      proposed_payload: {
+        bill_id: bill.id,
+      },
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    await supabase
+      .from('payables_receivables')
+      .update({ d1_check_sent_at: new Date().toISOString() })
+      .eq('id', bill.id);
+
+    await sendEvolutionText({
+      phone: client.whatsapp_number,
+      text: d1Msg,
+    });
+
+    d1ChecksSent++;
+  }
+
   return NextResponse.json({
     success: true,
     today_br: today,
+    yesterday_br: yesterday,
     notified_clients: sentCount,
     processed_bills: processedBillsCount,
+    d1_checks_sent: d1ChecksSent,
   });
 }

@@ -2270,6 +2270,101 @@ Acesse seus gráficos, fluxo da semana e saldos em tempo real pelo link seguro:
       return true;
     }
 
+    // 10.2 Ajuste de Conciliação de Caixa (Tarefa 5)
+    if (decision.intent === 'ADJUST_BALANCE' && decision.balance_adjustment_params) {
+      const reportedBalance = Number(decision.balance_adjustment_params.reported_balance || 0);
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      if (client?.id) {
+        // 1. Calcular saldo_atual_teorico somando entradas e saídas de cash_ledger_entries
+        const { data: entries } = await supabase
+          .from('cash_ledger_entries')
+          .select('amount, entry_type')
+          .eq('client_id', client.id);
+
+        let theoreticalBalance = 0;
+        for (const entry of entries || []) {
+          const amt = Number(entry.amount || 0);
+          const isInc = entry.entry_type === 'income' || (entry.entry_type as string) === 'INFLOW' || amt > 0;
+          if (isInc) {
+            theoreticalBalance += Math.abs(amt);
+          } else {
+            theoreticalBalance -= Math.abs(amt);
+          }
+        }
+
+        // 2. Obter a diferença: diferenca = saldo_informado - saldo_atual_teorico
+        const difference = Math.round((reportedBalance - theoreticalBalance) * 100) / 100;
+
+        // 3. Se diferenca != 0, inserir em cash_ledger_entries
+        if (difference !== 0) {
+          const isPositive = difference > 0;
+          await supabase.from('cash_ledger_entries').insert({
+            client_id: client.id,
+            entry_date: todayStr,
+            description: 'Ajuste de Conciliação de Caixa',
+            amount: isPositive ? Math.abs(difference) : -Math.abs(difference),
+            entry_type: isPositive ? 'income' : 'expense',
+            dre_group: 'ajuste_patrimonial',
+            status: 'realizado',
+            origin_profile: client.is_mixed_profile ? 'PJ' : 'PJ',
+            entry_nature: 'BALANCE_ADJUSTMENT',
+          });
+        }
+
+        // 4. Atualizar last_balance_update_date = CURRENT_DATE
+        await supabase
+          .from('clients')
+          .update({
+            last_balance_update_date: todayStr,
+            last_balance_prompt_at: new Date().toISOString(),
+          })
+          .eq('id', client.id);
+
+        // 5. Responder
+        const saldoFmt = reportedBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const diffFmt = Math.abs(difference).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        let replyMsg = '';
+        if (difference !== 0) {
+          replyMsg = `✅ *Saldo Atualizado!*\n\nSaldo atualizado para *${saldoFmt}*. Ajuste de conciliação de *${difference > 0 ? '+' : '-'}${diffFmt}* registrado com sucesso no caixa.`;
+        } else {
+          replyMsg = `✅ *Saldo Conferido!*\n\nSeu saldo atual informado de *${saldoFmt}* já está perfeitamente alinhado com todas as movimentações do seu caixa. Nenhuma divergência encontrada!`;
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: replyMsg,
+        });
+        return true;
+      } else {
+        // Degustação (trial_leads)
+        const { data: lead } = await supabase
+          .from('trial_leads')
+          .select('id, initial_balance, doc_data')
+          .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (lead) {
+          await supabase
+            .from('trial_leads')
+            .update({
+              initial_balance: reportedBalance,
+              last_balance_prompt_at: new Date().toISOString(),
+            })
+            .eq('id', lead.id);
+        }
+
+        const saldoFmt = reportedBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        await sendEvolutionText({
+          phone,
+          text: `✅ *Saldo Atualizado!*\n\nSaldo calibrado para *${saldoFmt}*. As próximas consultas de fluxo considerarão este valor como base de abertura.`,
+        });
+        return true;
+      }
+    }
+
     // 11. Conversação Geral / Dúvida com resposta direta da IA
     if (decision.conversational_reply && decision.confidence >= 0.8) {
       await sendEvolutionText({ phone, text: decision.conversational_reply });

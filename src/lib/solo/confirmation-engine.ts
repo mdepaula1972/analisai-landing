@@ -20,6 +20,7 @@ export interface PendingConfirmationPayload {
   pix_key?: string | null;
   pix_key_type?: string | null;
   document_id?: string | null;
+  bill_id?: string | null;
   is_provision?: boolean;
   installments_count?: number | null;
   is_installment?: boolean;
@@ -350,11 +351,11 @@ export async function handlePendingConfirmation(params: {
   const supabase = createServiceRoleClient();
   const nowIso = new Date().toISOString();
 
-  // Busca confirmação ativa com status PENDING, AWAITING_CORRECTION ou AWAITING_INVOICE_DETAILS
+  // Busca confirmação ativa com status PENDING, AWAITING_CORRECTION, AWAITING_INVOICE_DETAILS ou AWAITING_POSTPONE_DATE
   let query = supabase
     .from('bot_action_confirmations')
     .select('*')
-    .in('status', ['PENDING', 'pending', 'AWAITING_CORRECTION', 'AWAITING_INVOICE_DETAILS'])
+    .in('status', ['PENDING', 'pending', 'AWAITING_CORRECTION', 'AWAITING_INVOICE_DETAILS', 'AWAITING_POSTPONE_DATE'])
     .gt('expires_at', nowIso)
     .order('created_at', { ascending: false })
     .limit(1);
@@ -372,13 +373,14 @@ export async function handlePendingConfirmation(params: {
     return { handled: false };
   }
 
-  // Apenas processa se a ação for de lançamento financeiro ou provocação consultiva de NF
+  // Apenas processa se a ação for de lançamento financeiro, conferência D+1 ou provocação consultiva de NF
   const isFinancialConfirmation = [
     'CASH_ENTRY',
     'PAYABLE_BILL',
     'RECEIVABLE_BILL',
     'confirm_low_confidence_doc',
     'INVOICE_CONSULTATIVE_PROMPT',
+    'D1_SETTLEMENT_CHECK',
   ].includes(pendingAction.action_type);
 
   if (!isFinancialConfirmation) {
@@ -390,6 +392,203 @@ export async function handlePendingConfirmation(params: {
     pendingAction.extracted_payload || pendingAction.proposed_payload || {};
 
   const cleanText = rawText.trim().toLowerCase();
+
+  // ── AÇÃO ESPECIAL: CONFERÊNCIA INTERATIVA D+1 (LIQUIDAÇÃO / POSTERGAÇÃO) ──
+  if (pendingAction.action_type === 'D1_SETTLEMENT_CHECK') {
+    const billId = currentPayload.bill_id;
+    const billAmount = Math.abs(Number(currentPayload.amount || 0));
+    const counterparty = currentPayload.counterparty_name || 'Agendamento';
+    const rawType = (currentPayload as Record<string, unknown>).type;
+    const billType = currentPayload.entry_type === 'income' || rawType === 'receivable' ? 'receivable' : 'payable';
+    const isInc = billType === 'receivable';
+
+    // Sub-estado: Aguardando nova data de prorrogação
+    if (pendingAction.status === 'AWAITING_POSTPONE_DATE') {
+      const dateMatch = rawText.match(/(\d{1,2})(?:\/(\d{1,2}))?(?:\/(\d{2,4}))?/);
+      let newDueDate: string | null = null;
+      if (dateMatch) {
+        const today = new Date();
+        const d = parseInt(dateMatch[1], 10);
+        const m = dateMatch[2] ? parseInt(dateMatch[2], 10) : today.getMonth() + 1;
+        let y = dateMatch[3] ? parseInt(dateMatch[3], 10) : today.getFullYear();
+        if (y < 100) y += 2000;
+        newDueDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      }
+
+      if (newDueDate && billId) {
+        await supabase
+          .from('payables_receivables')
+          .update({
+            current_due_date: newDueDate,
+            status: 'postponed',
+          })
+          .eq('id', billId);
+
+        await supabase
+          .from('bot_action_confirmations')
+          .update({ status: 'CONFIRMED' })
+          .eq('id', pendingAction.id);
+
+        const [ny, nm, nd] = newDueDate.split('-');
+        await sendEvolutionText({
+          phone,
+          text: `🗓️ *Vencimento Prorrogado!*\n\nO agendamento de *${counterparty}* foi prorrogado para o dia *${nd}/${nm}/${ny}* com sucesso. Você receberá o lembrete de liquidação na nova data.`,
+        });
+
+        return { handled: true, status: 'CONFIRMED' };
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `🗓️ Por favor, informe o dia do novo vencimento (ex: *15* ou *15/11*).`,
+        });
+        return { handled: true, status: 'AWAITING_POSTPONE_DATE' };
+      }
+    }
+
+    // Estado PENDING: Opções [1] Pago, [2] Prorrogar, [3] Em atraso
+    const isOption1 = /^(1\b|1️⃣|sim\b|s\b|pago\b|foi pago\b|liquidado\b|liquidei\b|ja paguei\b|já paguei\b|quitado\b)/i.test(cleanText);
+    const isOption2 = /^(2\b|2️⃣|prorrogar\b|adiar\b|postergar\b|mudar data\b|nova data\b)/i.test(cleanText);
+    const isOption3 = /^(3\b|3️⃣|atraso\b|em atraso\b|manter em atraso\b|deixar em atraso\b|n[aã]o paguei\b|n[aã]o\b|pendente\b)/i.test(cleanText);
+
+    if (isOption1) {
+      if (billId) {
+        await supabase
+          .from('payables_receivables')
+          .update({
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+          })
+          .eq('id', billId);
+      }
+
+      if (client?.id) {
+        await supabase.from('cash_ledger_entries').insert({
+          client_id: client.id,
+          entry_date: new Date().toISOString().split('T')[0],
+          description: `Pagamento ${counterparty} (Liquidado D+1)`,
+          amount: isInc ? billAmount : -billAmount,
+          entry_type: isInc ? 'income' : 'expense',
+          dre_group: 'despesa_operacional',
+          status: 'realizado',
+          origin_profile: ((currentPayload as Record<string, unknown>).origin_profile as string) || 'PJ',
+          entry_nature: 'OPERATIONAL',
+        });
+      }
+
+      await supabase
+        .from('bot_action_confirmations')
+        .update({ status: 'CONFIRMED' })
+        .eq('id', pendingAction.id);
+
+      const valFmt = billAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      let reply = `✅ *Baixa Confirmada com Sucesso!*\n\nO pagamento de *${valFmt}* (${counterparty}) foi liquidado e baixado no seu Livro Caixa.`;
+
+      // Gancho diário de saldo com cooldown de 24h
+      const now = new Date();
+      let shouldAskBalance = false;
+      if (client?.id) {
+        const lastPromptAt = client.last_balance_prompt_at ? new Date(client.last_balance_prompt_at) : null;
+        if (!lastPromptAt || now.getTime() - lastPromptAt.getTime() >= 24 * 60 * 60 * 1000) {
+          shouldAskBalance = true;
+          await supabase
+            .from('clients')
+            .update({ last_balance_prompt_at: now.toISOString() })
+            .eq('id', client.id);
+        }
+      }
+
+      if (shouldAskBalance) {
+        reply += `\n\n💡 _Teve alguma outra movimentação bancária não registrada hoje? Se quiser calibrar seu saldo, basta digitar: "meu saldo hoje é R$ X"._`;
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: reply,
+      });
+
+      return { handled: true, status: 'CONFIRMED' };
+    }
+
+    if (isOption2) {
+      const inlineDateMatch = rawText.match(/(\d{1,2})(?:\/(\d{1,2}))?(?:\/(\d{2,4}))?/);
+      if (inlineDateMatch && cleanText.length > 3) {
+        const today = new Date();
+        const d = parseInt(inlineDateMatch[1], 10);
+        const m = inlineDateMatch[2] ? parseInt(inlineDateMatch[2], 10) : today.getMonth() + 1;
+        let y = inlineDateMatch[3] ? parseInt(inlineDateMatch[3], 10) : today.getFullYear();
+        if (y < 100) y += 2000;
+        const newDueDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+        if (billId) {
+          await supabase
+            .from('payables_receivables')
+            .update({
+              current_due_date: newDueDate,
+              status: 'postponed',
+            })
+            .eq('id', billId);
+        }
+
+        await supabase
+          .from('bot_action_confirmations')
+          .update({ status: 'CONFIRMED' })
+          .eq('id', pendingAction.id);
+
+        const [ny, nm, nd] = newDueDate.split('-');
+        await sendEvolutionText({
+          phone,
+          text: `🗓️ *Vencimento Prorrogado!*\n\nO agendamento de *${counterparty}* foi prorrogado para o dia *${nd}/${nm}/${ny}* com sucesso.`,
+        });
+
+        return { handled: true, status: 'CONFIRMED' };
+      }
+
+      await supabase
+        .from('bot_action_confirmations')
+        .update({
+          status: 'AWAITING_POSTPONE_DATE',
+          expires_at: addMinutes(new Date(), 60).toISOString(),
+        })
+        .eq('id', pendingAction.id);
+
+      await sendEvolutionText({
+        phone,
+        text: `🗓️ *Para qual nova data deseja prorrogar este agendamento?*\n\nBasta digitar o dia (ex: *15*, *20/11* ou *próxima segunda*).`,
+      });
+
+      return { handled: true, status: 'AWAITING_POSTPONE_DATE' };
+    }
+
+    if (isOption3) {
+      if (billId) {
+        await supabase
+          .from('payables_receivables')
+          .update({
+            status: 'overdue',
+          })
+          .eq('id', billId);
+      }
+
+      await supabase
+        .from('bot_action_confirmations')
+        .update({ status: 'CONFIRMED' })
+        .eq('id', pendingAction.id);
+
+      const valFmt = billAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      await sendEvolutionText({
+        phone,
+        text: `⚠️ *Anotado!*\n\nA conta de *${counterparty}* (${valFmt}) foi mantida como *em atraso* e seguirá com destaque no seu termômetro financeiro e relatórios até a sua quitação.`,
+      });
+
+      return { handled: true, status: 'CONFIRMED' };
+    }
+
+    await sendEvolutionText({
+      phone,
+      text: `Por favor, escolha uma das opções sobre o agendamento de *${counterparty}*:\n\n[1] Sim, foi pago\n[2] Não, quero prorrogar a data\n[3] Não, manter como em atraso`,
+    });
+    return { handled: true, status: 'PENDING' };
+  }
 
   // ── ESTADO: AGUARDANDO DETALHES DE PAGAMENTO DA NOTA FISCAL (AWAITING_INVOICE_DETAILS) ──
   if (pendingAction.status === 'AWAITING_INVOICE_DETAILS') {
@@ -509,8 +708,8 @@ export async function handlePendingConfirmation(params: {
     if (dateMatch && dateMatch[1]) {
       const parts = dateMatch[1].split('/');
       const today = new Date();
-      let day = parseInt(parts[0], 10);
-      let month = parts[1] ? parseInt(parts[1], 10) : today.getMonth() + 1;
+      const day = parseInt(parts[0], 10);
+      const month = parts[1] ? parseInt(parts[1], 10) : today.getMonth() + 1;
       let year = parts[2] ? parseInt(parts[2], 10) : today.getFullYear();
       if (year < 100) year += 2000;
 
@@ -765,6 +964,40 @@ export async function handlePendingConfirmation(params: {
       if (resolvedInsts.length > 0) {
         successMsg = `✅ Lançamento parcelado gravado com sucesso! As ${resolvedInsts.length} parcelas foram provisionadas no seu Livro Caixa.`;
       }
+    }
+
+    // GANCHO DIÁRIO DE SALDO COM COOLDOWN DE 24H (TAREFA 4)
+    let shouldAskDailyBalance = false;
+    const nowBalanceCheck = new Date();
+    if (client?.id) {
+      const lastPromptAt = client.last_balance_prompt_at ? new Date(client.last_balance_prompt_at) : null;
+      if (!lastPromptAt || nowBalanceCheck.getTime() - lastPromptAt.getTime() >= 24 * 60 * 60 * 1000) {
+        shouldAskDailyBalance = true;
+        await supabase
+          .from('clients')
+          .update({ last_balance_prompt_at: nowBalanceCheck.toISOString() })
+          .eq('id', client.id);
+      }
+    } else {
+      const { data: lead } = await supabase
+        .from('trial_leads')
+        .select('last_balance_prompt_at')
+        .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+        .limit(1)
+        .maybeSingle();
+
+      const lastPromptAt = lead?.last_balance_prompt_at ? new Date(lead.last_balance_prompt_at) : null;
+      if (!lastPromptAt || nowBalanceCheck.getTime() - lastPromptAt.getTime() >= 24 * 60 * 60 * 1000) {
+        shouldAskDailyBalance = true;
+        await supabase
+          .from('trial_leads')
+          .update({ last_balance_prompt_at: nowBalanceCheck.toISOString() })
+          .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+      }
+    }
+
+    if (shouldAskDailyBalance) {
+      successMsg += `\n\n💡 _Teve alguma outra movimentação bancária não registrada hoje? Se quiser calibrar seu saldo, basta digitar: "meu saldo hoje é R$ X"._`;
     }
 
     await sendEvolutionText({

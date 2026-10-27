@@ -27,6 +27,12 @@ export interface Client {
   whatsapp_number: string;
   is_admin: boolean;
   status: 'active' | 'suspended' | 'canceled';
+  is_mixed_profile?: boolean;
+  initial_bank_balance?: number;
+  initial_investments_balance?: number;
+  initial_cash_in_hand?: number;
+  last_balance_update_date?: string | null;
+  last_balance_prompt_at?: string | null;
   created_at: string;
 }
 
