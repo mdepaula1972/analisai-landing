@@ -516,6 +516,96 @@ export async function getOnboardingState(params: {
 }
 
 /**
+ * Atualização resiliente de trial_leads:
+ * Atualiza campos existentes com segurança e isola colunas de migrations recentes em try/catch,
+ * armazenando também no doc_data (JSONB) para garantir persistência sem quebras de schema.
+ */
+async function safeUpdateLead(
+  supabase: any,
+  leadId: string,
+  coreUpdates: {
+    onboarding_step?: OnboardingStep;
+    profile_type?: ProfileType;
+    tax_regime?: string;
+    annual_revenue_baseline?: number | null;
+    doc_data?: any;
+    terms_accepted_at?: string;
+  },
+  optionalColumns?: {
+    is_mixed_profile?: boolean;
+    initial_balance?: number;
+    last_balance_prompt_at?: string;
+  }
+) {
+  // Mescla colunas opcionais dentro do doc_data como garantia definitiva de persistência
+  const existingDocData = (coreUpdates.doc_data && typeof coreUpdates.doc_data === 'object') ? coreUpdates.doc_data : {};
+  if (optionalColumns && Object.keys(optionalColumns).length > 0) {
+    coreUpdates.doc_data = {
+      ...existingDocData,
+      ...optionalColumns,
+    };
+  }
+
+  const res = await supabase
+    .from('trial_leads')
+    .update(coreUpdates)
+    .eq('id', leadId);
+
+  if (optionalColumns && Object.keys(optionalColumns).length > 0) {
+    try {
+      await supabase
+        .from('trial_leads')
+        .update(optionalColumns)
+        .eq('id', leadId);
+    } catch {
+      // Colunas da migration 025 ainda não aplicadas; já persistidas no doc_data
+    }
+  }
+
+  return res;
+}
+
+/**
+ * Atualização resiliente de clients:
+ * Atualiza campos cadastrais com segurança e isola colunas de migrations recentes em try/catch.
+ */
+async function safeUpdateClient(
+  supabase: any,
+  clientId: string,
+  coreUpdates: {
+    profile_type?: ProfileType;
+    tax_type?: string;
+    tax_regime?: string;
+    annual_revenue_baseline?: number | null;
+    terms_accepted_at?: string;
+  },
+  optionalColumns?: {
+    is_mixed_profile?: boolean;
+    initial_bank_balance?: number;
+    last_balance_update_date?: string;
+    last_balance_prompt_at?: string;
+  }
+) {
+  const res = await supabase
+    .from('clients')
+    .update(coreUpdates)
+    .eq('id', clientId);
+
+  if (optionalColumns && Object.keys(optionalColumns).length > 0) {
+    try {
+      await supabase
+        .from('clients')
+        .update(optionalColumns)
+        .eq('id', clientId);
+    } catch {
+      // Colunas da migration 025 ainda não aplicadas
+    }
+  }
+
+  return res;
+}
+
+/**
  * Inicia o Onboarding enviando a mensagem de boas-vindas com a pergunta PF x PJ
  */
 export async function startOnboarding(params: {
@@ -537,32 +627,28 @@ export async function startOnboarding(params: {
   // Registra no trial_leads o início do onboarding
   const { data: existingLead } = await supabase
     .from('trial_leads')
-    .select('id')
+    .select('id, doc_data')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
   if (existingLead) {
-    await supabase
-      .from('trial_leads')
-      .update({
-        onboarding_step: 'awaiting_pf_or_pj',
-        terms_accepted_at: nowIso,
-      })
-      .eq('id', existingLead.id);
+    await safeUpdateLead(supabase, existingLead.id, {
+      onboarding_step: 'awaiting_pf_or_pj',
+      terms_accepted_at: nowIso,
+      doc_data: existingLead.doc_data,
+    });
   } else {
     await supabase.from('trial_leads').insert({
       whatsapp_number: cleanPhone,
       onboarding_step: 'awaiting_pf_or_pj',
       terms_accepted_at: nowIso,
       first_interaction_at: nowIso,
+      doc_data: {},
     });
   }
 
   if (client?.id) {
-    await supabase
-      .from('clients')
-      .update({ terms_accepted_at: nowIso })
-      .eq('id', client.id);
+    await safeUpdateClient(supabase, client.id, { terms_accepted_at: nowIso });
   }
 
   await sendEvolutionText({
@@ -583,6 +669,7 @@ export async function processOnboardingResponse(params: {
   const { phone, cleanPhone, rawText, client } = params;
   const clean = rawText.trim().toLowerCase();
   const supabase = createServiceRoleClient();
+  const nowIso = new Date().toISOString();
 
   let altPhone = cleanPhone;
   if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
@@ -591,22 +678,156 @@ export async function processOnboardingResponse(params: {
     altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
   }
 
-  const { data: lead } = await supabase
+  let { data: lead } = await supabase
     .from('trial_leads')
     .select('id, onboarding_step, profile_type, doc_data')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
+  // Se o lead ainda não existe na base (primeiro contato do novo número), cria imediatamente!
+  if (!lead && !client?.id) {
+    const { data: newLead } = await supabase
+      .from('trial_leads')
+      .insert({
+        whatsapp_number: cleanPhone,
+        onboarding_step: 'awaiting_pf_or_pj',
+        terms_accepted_at: nowIso,
+        first_interaction_at: nowIso,
+        doc_data: {},
+      })
+      .select('id, onboarding_step, profile_type, doc_data')
+      .maybeSingle();
+
+    if (newLead) {
+      lead = newLead;
+    }
+  }
+
   const currentStep: OnboardingStep = (lead?.onboarding_step as OnboardingStep) || 'awaiting_pf_or_pj';
+
+  // Se já completou, não intercepta
+  if (currentStep === 'completed') {
+    return { handled: false, completed: true, profile: lead?.profile_type as ProfileType };
+  }
+
+  // ── RECONHECIMENTO DE SAUDAÇÃO INICIAL ──
+  const isGreetingOnly =
+    /^(oi\b|ol[aá]\b|bom dia\b|boa tarde\b|boa noite\b|ola\b|e a[ií]\b|menu\b|ajuda\b|come[çc]ar\b|start\b|ol[aá]!\b)/i.test(clean) &&
+    clean.length <= 25;
+
+  if (currentStep === 'awaiting_pf_or_pj' && isGreetingOnly) {
+    if (lead?.id) {
+      await safeUpdateLead(supabase, lead.id, {
+        onboarding_step: 'awaiting_pf_or_pj',
+        terms_accepted_at: nowIso,
+        doc_data: lead.doc_data,
+      });
+    }
+    await sendEvolutionText({
+      phone,
+      text: getWelcomeAndPfPjMessage(),
+    });
+    return { handled: true, completed: false };
+  }
 
   // ── ETAPA 1: ESCOLHA ENTRE PF, PJ OU AMBOS ──
   if (currentStep === 'awaiting_pf_or_pj') {
+    // Recuperação contextual rápida caso o usuário já responda um perfil específico ou regime
+    const isLiberalDirect =
+      /^(liberal\b|aut[oô]nomo\b|freelancer\b|m[eé]dico\b|advogado\b|dentista\b|arquiteto\b|corretor\b|consultor\b|psic[oó]logo\b|honor[aá]rios\b)/i.test(clean);
+
+    const isFamilyDirect =
+      /^(fam[ií]lia\b|casal\b|casa\b|dom[eé]stico\b|filhos\b|resid[eê]ncia\b|escola\b)/i.test(clean);
+
+    const isIndividualDirect =
+      /^([uú]nico\b|pessoal\b|individual\b|s[oó] meu\b|apenas eu\b|minhas contas\b)/i.test(clean);
+
+    const isPjRegimeDirect =
+      /^(mei\b|simples\b|microempresa\b|epp\b|lucro presumido\b)/i.test(clean);
+
+    if (isLiberalDirect) {
+      if (lead?.id) {
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pf_liberal',
+          tax_regime: 'pf',
+          onboarding_step: 'awaiting_initial_balance',
+          doc_data: lead.doc_data,
+        });
+      }
+      if (client?.id) {
+        await safeUpdateClient(supabase, client.id, { profile_type: 'pf_liberal', tax_type: 'CPF' });
+      }
+      await sendEvolutionText({
+        phone,
+        text: `${getOnboardingCompletionMessage('pf_liberal')}\n\n${getInitialBalancePromptMessage()}`,
+      });
+      return { handled: true, completed: false, profile: 'pf_liberal' };
+    }
+
+    if (isFamilyDirect) {
+      if (lead?.id) {
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pf_family',
+          tax_regime: 'pf',
+          onboarding_step: 'awaiting_initial_balance',
+          doc_data: lead.doc_data,
+        });
+      }
+      if (client?.id) {
+        await safeUpdateClient(supabase, client.id, { profile_type: 'pf_family', tax_type: 'CPF' });
+      }
+      await sendEvolutionText({
+        phone,
+        text: `${getOnboardingCompletionMessage('pf_family')}\n\n${getInitialBalancePromptMessage()}`,
+      });
+      return { handled: true, completed: false, profile: 'pf_family' };
+    }
+
+    if (isIndividualDirect) {
+      if (lead?.id) {
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pf_individual',
+          tax_regime: 'pf',
+          onboarding_step: 'awaiting_initial_balance',
+          doc_data: lead.doc_data,
+        });
+      }
+      if (client?.id) {
+        await safeUpdateClient(supabase, client.id, { profile_type: 'pf_individual', tax_type: 'CPF' });
+      }
+      await sendEvolutionText({
+        phone,
+        text: `${getOnboardingCompletionMessage('pf_individual')}\n\n${getInitialBalancePromptMessage()}`,
+      });
+      return { handled: true, completed: false, profile: 'pf_individual' };
+    }
+
+    if (isPjRegimeDirect) {
+      const chosenRegime = clean.includes('mei') ? 'mei' : clean.includes('epp') ? 'simples_epp' : clean.includes('presumido') ? 'outro' : 'simples_me';
+      if (lead?.id) {
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pj',
+          tax_regime: chosenRegime,
+          onboarding_step: 'awaiting_initial_balance',
+          doc_data: lead.doc_data,
+        });
+      }
+      if (client?.id) {
+        await safeUpdateClient(supabase, client.id, { profile_type: 'pj', tax_regime: chosenRegime, tax_type: 'CNPJ' });
+      }
+      await sendEvolutionText({
+        phone,
+        text: `${getPjOnboardingCompletionMessage(chosenRegime)}\n\n${getInitialBalancePromptMessage()}`,
+      });
+      return { handled: true, completed: false, profile: 'pj' };
+    }
+
     const isAmbos =
       /^(3\b|3\.|ambos\b|ambas\b|misturo\b|misturado\b|os dois\b|as duas\b|pf e pj\b|pj e pf\b)/i.test(clean) ||
       clean === '3' || clean === 'ambos';
 
     const isPj =
-      /^(1\b|1\.|pj\b|empresa\b|cnpj\b|jur[ií]dica\b|mei\b|microempresa\b|comercial\b|neg[oó]cio\b)/i.test(clean) ||
+      /^(1\b|1\.|pj\b|empresa\b|cnpj\b|jur[ií]dica\b|microempresa\b|comercial\b|neg[oó]cio\b)/i.test(clean) ||
       clean === '1' || clean === 'pj';
 
     const isPf =
@@ -615,20 +836,24 @@ export async function processOnboardingResponse(params: {
 
     if (isAmbos) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
+        await safeUpdateLead(
+          supabase,
+          lead.id,
+          {
             profile_type: 'pj',
-            is_mixed_profile: true,
             onboarding_step: 'awaiting_pj_regime',
-          })
-          .eq('id', lead.id);
+            doc_data: lead.doc_data,
+          },
+          { is_mixed_profile: true }
+        );
       }
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({ profile_type: 'pj', tax_type: 'CNPJ', is_mixed_profile: true })
-          .eq('id', client.id);
+        await safeUpdateClient(
+          supabase,
+          client.id,
+          { profile_type: 'pj', tax_type: 'CNPJ' },
+          { is_mixed_profile: true }
+        );
       }
 
       await sendEvolutionText({
@@ -641,20 +866,24 @@ export async function processOnboardingResponse(params: {
 
     if (isPj) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
+        await safeUpdateLead(
+          supabase,
+          lead.id,
+          {
             profile_type: 'pj',
-            is_mixed_profile: false,
             onboarding_step: 'awaiting_pj_regime',
-          })
-          .eq('id', lead.id);
+            doc_data: lead.doc_data,
+          },
+          { is_mixed_profile: false }
+        );
       }
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({ profile_type: 'pj', tax_type: 'CNPJ', is_mixed_profile: false })
-          .eq('id', client.id);
+        await safeUpdateClient(
+          supabase,
+          client.id,
+          { profile_type: 'pj', tax_type: 'CNPJ' },
+          { is_mixed_profile: false }
+        );
       }
 
       await sendEvolutionText({
@@ -668,19 +897,23 @@ export async function processOnboardingResponse(params: {
     if (isPf) {
       // Avança para a pergunta didática de subtipos da PF
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
+        await safeUpdateLead(
+          supabase,
+          lead.id,
+          {
             onboarding_step: 'awaiting_pf_subtype',
-            is_mixed_profile: false,
-          })
-          .eq('id', lead.id);
+            doc_data: lead.doc_data,
+          },
+          { is_mixed_profile: false }
+        );
       }
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({ is_mixed_profile: false })
-          .eq('id', client.id);
+        await safeUpdateClient(
+          supabase,
+          client.id,
+          {},
+          { is_mixed_profile: false }
+        );
       }
 
       await sendEvolutionText({
@@ -737,20 +970,15 @@ export async function processOnboardingResponse(params: {
 
     if (chosenProfile) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
-            profile_type: chosenProfile,
-            onboarding_step: 'awaiting_initial_balance',
-            tax_regime: 'pf',
-          })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: chosenProfile,
+          onboarding_step: 'awaiting_initial_balance',
+          tax_regime: 'pf',
+          doc_data: lead.doc_data,
+        });
       }
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({ profile_type: chosenProfile, tax_type: 'CPF' })
-          .eq('id', client.id);
+        await safeUpdateClient(supabase, client.id, { profile_type: chosenProfile, tax_type: 'CPF' });
       }
 
       await sendEvolutionText({
@@ -810,24 +1038,19 @@ export async function processOnboardingResponse(params: {
 
     if (chosenRegime) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
-            profile_type: 'pj',
-            tax_regime: chosenRegime,
-            onboarding_step: 'awaiting_initial_balance',
-          })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pj',
+          tax_regime: chosenRegime,
+          onboarding_step: 'awaiting_initial_balance',
+          doc_data: lead.doc_data,
+        });
       }
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({
-            profile_type: 'pj',
-            tax_regime: chosenRegime,
-            tax_type: 'CNPJ',
-          })
-          .eq('id', client.id);
+        await safeUpdateClient(supabase, client.id, {
+          profile_type: 'pj',
+          tax_regime: chosenRegime,
+          tax_type: 'CNPJ',
+        });
       }
 
       await sendEvolutionText({
@@ -843,19 +1066,16 @@ export async function processOnboardingResponse(params: {
     if (inference) {
       const existingDocData = (lead?.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
-            profile_type: 'pj',
-            onboarding_step: 'awaiting_pj_regime_confirmation',
-            doc_data: {
-              ...existingDocData,
-              suggested_regime: inference.suggestedRegime,
-              estimated_monthly: inference.monthlyAmount,
-              estimated_annual: inference.annualAmount,
-            },
-          })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pj',
+          onboarding_step: 'awaiting_pj_regime_confirmation',
+          doc_data: {
+            ...existingDocData,
+            suggested_regime: inference.suggestedRegime,
+            estimated_monthly: inference.monthlyAmount,
+            estimated_annual: inference.annualAmount,
+          },
+        });
       }
 
       await sendEvolutionText({
@@ -926,26 +1146,21 @@ export async function processOnboardingResponse(params: {
 
     if (resolvedRegime) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
-            profile_type: 'pj',
-            tax_regime: resolvedRegime,
-            onboarding_step: 'awaiting_initial_balance',
-            annual_revenue_baseline: docData.estimated_annual || null,
-          })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          profile_type: 'pj',
+          tax_regime: resolvedRegime,
+          onboarding_step: 'awaiting_initial_balance',
+          annual_revenue_baseline: docData.estimated_annual || null,
+          doc_data: docData,
+        });
       }
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({
-            profile_type: 'pj',
-            tax_regime: resolvedRegime,
-            tax_type: 'CNPJ',
-            annual_revenue_baseline: docData.estimated_annual || null,
-          })
-          .eq('id', client.id);
+        await safeUpdateClient(supabase, client.id, {
+          profile_type: 'pj',
+          tax_regime: resolvedRegime,
+          tax_type: 'CNPJ',
+          annual_revenue_baseline: docData.estimated_annual || null,
+        });
       }
 
       await sendEvolutionText({
@@ -959,10 +1174,10 @@ export async function processOnboardingResponse(params: {
     const isNegative = /^(n[aã]o\b|n\b|errado\b|incorreto\b)/i.test(clean);
     if (isNegative) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({ onboarding_step: 'awaiting_pj_regime' })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          onboarding_step: 'awaiting_pj_regime',
+          doc_data: docData,
+        });
       }
       await sendEvolutionText({
         phone,
@@ -975,17 +1190,14 @@ export async function processOnboardingResponse(params: {
     const newInference = inferRevenueAndRegime(clean);
     if (newInference) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
-            doc_data: {
-              ...docData,
-              suggested_regime: newInference.suggestedRegime,
-              estimated_monthly: newInference.monthlyAmount,
-              estimated_annual: newInference.annualAmount,
-            },
-          })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          doc_data: {
+            ...docData,
+            suggested_regime: newInference.suggestedRegime,
+            estimated_monthly: newInference.monthlyAmount,
+            estimated_annual: newInference.annualAmount,
+          },
+        });
       }
       await sendEvolutionText({
         phone,
@@ -1020,12 +1232,18 @@ Podemos definir seu enquadramento como sugerido?
     const [d, m, y] = brDateFormatter.format(new Date()).split('/');
     const today = `${y}-${m}-${d}`;
 
+    const existingDocData = (lead?.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
+
     if (isSkip) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({ onboarding_step: 'completed' })
-          .eq('id', lead.id);
+        await safeUpdateLead(supabase, lead.id, {
+          onboarding_step: 'completed',
+          doc_data: {
+            ...existingDocData,
+            initial_balance: 0,
+            balance_calibrated: false,
+          },
+        });
       }
       await sendEvolutionText({
         phone,
@@ -1061,23 +1279,31 @@ Podemos definir seu enquadramento como sugerido?
 
     if (parsedVal !== null) {
       if (lead?.id) {
-        await supabase
-          .from('trial_leads')
-          .update({
-            initial_balance: parsedVal,
+        await safeUpdateLead(
+          supabase,
+          lead.id,
+          {
             onboarding_step: 'completed',
-          })
-          .eq('id', lead.id);
+            doc_data: {
+              ...existingDocData,
+              initial_balance: parsedVal,
+              balance_calibrated: true,
+            },
+          },
+          { initial_balance: parsedVal }
+        );
       }
 
       if (client?.id) {
-        await supabase
-          .from('clients')
-          .update({
+        await safeUpdateClient(
+          supabase,
+          client.id,
+          {},
+          {
             initial_bank_balance: parsedVal,
             last_balance_update_date: today,
-          })
-          .eq('id', client.id);
+          }
+        );
 
         try {
           await supabase.from('cash_ledger_entries').insert({
@@ -1105,7 +1331,7 @@ Podemos definir seu enquadramento como sugerido?
       return { handled: true, completed: true };
     }
 
-    // Se não for nem skip nem número (ex: mandou mensagem de texto sem número), orienta amigavelmente
+    // Se não for nem skip nem número, orienta amigavelmente
     await sendEvolutionText({
       phone,
       text: `Por favor, informe apenas o valor aproximado do seu saldo em reais (ex: *"5.000"* ou *"1200"*).\n\n_Ou digite *[Pular]* para avançar sem saldo inicial._`,

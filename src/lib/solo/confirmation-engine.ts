@@ -490,10 +490,14 @@ export async function handlePendingConfirmation(params: {
         const lastPromptAt = client.last_balance_prompt_at ? new Date(client.last_balance_prompt_at) : null;
         if (!lastPromptAt || now.getTime() - lastPromptAt.getTime() >= 24 * 60 * 60 * 1000) {
           shouldAskBalance = true;
-          await supabase
-            .from('clients')
-            .update({ last_balance_prompt_at: now.toISOString() })
-            .eq('id', client.id);
+          try {
+            await supabase
+              .from('clients')
+              .update({ last_balance_prompt_at: now.toISOString() })
+              .eq('id', client.id);
+          } catch {
+            // Coluna opcional ainda não migrada
+          }
         }
       }
 
@@ -973,26 +977,48 @@ export async function handlePendingConfirmation(params: {
       const lastPromptAt = client.last_balance_prompt_at ? new Date(client.last_balance_prompt_at) : null;
       if (!lastPromptAt || nowBalanceCheck.getTime() - lastPromptAt.getTime() >= 24 * 60 * 60 * 1000) {
         shouldAskDailyBalance = true;
-        await supabase
-          .from('clients')
-          .update({ last_balance_prompt_at: nowBalanceCheck.toISOString() })
-          .eq('id', client.id);
+        try {
+          await supabase
+            .from('clients')
+            .update({ last_balance_prompt_at: nowBalanceCheck.toISOString() })
+            .eq('id', client.id);
+        } catch {
+          // Coluna opcional
+        }
       }
     } else {
       const { data: lead } = await supabase
         .from('trial_leads')
-        .select('last_balance_prompt_at')
+        .select('id, doc_data')
         .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
         .limit(1)
         .maybeSingle();
 
-      const lastPromptAt = lead?.last_balance_prompt_at ? new Date(lead.last_balance_prompt_at) : null;
+      const existingDocData = (lead?.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
+      const leadPromptStr = existingDocData.last_balance_prompt_at;
+      const lastPromptAt = leadPromptStr ? new Date(leadPromptStr) : null;
       if (!lastPromptAt || nowBalanceCheck.getTime() - lastPromptAt.getTime() >= 24 * 60 * 60 * 1000) {
         shouldAskDailyBalance = true;
-        await supabase
-          .from('trial_leads')
-          .update({ last_balance_prompt_at: nowBalanceCheck.toISOString() })
-          .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`);
+        if (lead?.id) {
+          await supabase
+            .from('trial_leads')
+            .update({
+              doc_data: {
+                ...existingDocData,
+                last_balance_prompt_at: nowBalanceCheck.toISOString(),
+              },
+            })
+            .eq('id', lead.id);
+
+          try {
+            await supabase
+              .from('trial_leads')
+              .update({ last_balance_prompt_at: nowBalanceCheck.toISOString() })
+              .eq('id', lead.id);
+          } catch {
+            // Coluna opcional
+          }
+        }
       }
     }
 

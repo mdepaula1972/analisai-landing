@@ -2341,19 +2341,36 @@ Acesse seus gráficos, fluxo da semana e saldos em tempo real pelo link seguro:
         // Degustação (trial_leads)
         const { data: lead } = await supabase
           .from('trial_leads')
-          .select('id, initial_balance, doc_data')
+          .select('id, doc_data')
           .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
           .limit(1)
           .maybeSingle();
 
         if (lead) {
+          const existingDocData = (lead.doc_data && typeof lead.doc_data === 'object') ? lead.doc_data : {};
+          const nowIso = new Date().toISOString();
           await supabase
             .from('trial_leads')
             .update({
-              initial_balance: reportedBalance,
-              last_balance_prompt_at: new Date().toISOString(),
+              doc_data: {
+                ...existingDocData,
+                initial_balance: reportedBalance,
+                last_balance_prompt_at: nowIso,
+              },
             })
             .eq('id', lead.id);
+
+          try {
+            await supabase
+              .from('trial_leads')
+              .update({
+                initial_balance: reportedBalance,
+                last_balance_prompt_at: nowIso,
+              })
+              .eq('id', lead.id);
+          } catch {
+            // Colunas da migration 025 ainda não aplicadas; já persistidas no doc_data
+          }
         }
 
         const saldoFmt = reportedBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
