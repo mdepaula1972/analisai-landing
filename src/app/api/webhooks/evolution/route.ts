@@ -1335,6 +1335,15 @@ async function handleSupplierRename(
     return { success: true, oldName: directRes.oldBill.supplier_name, newName: cleanNewName };
   }
 
+  // 3. Fallback inteligente: altera a última conta cadastrada recente
+  if (trialBills && trialBills.length > 0) {
+    const last = trialBills[trialBills.length - 1];
+    const trialRes = await updateTrialBill(cleanPhone, last.id || last.supplier_name, { supplier_name: cleanNewName });
+    if (trialRes.updated) {
+      return { success: true, oldName: last.supplier_name || 'Última conta', newName: cleanNewName };
+    }
+  }
+
   return { success: false, oldName: currentNameQuery, newName: cleanNewName };
 }
 
@@ -1786,6 +1795,186 @@ ${resultLines.join('\n')}
     }
   }
 
+  // C.1) Correção direta do último lançamento sem citar o nome antigo (ex: "corrigir nome para Brdid", "o nome é Brdid")
+  const directRenameMatch =
+    clean.match(/^(?:mudar|alterar|trocar|corrigir|renomear)\s+(?:o\s+)?nome\s+para\s+(.+)/i) ||
+    clean.match(/^(?:o\s+)?nome\s+[eé]\s+(.+)/i) ||
+    clean.match(/^(?:mudar|alterar|trocar|corrigir)\s+para\s+(.+)/i);
+
+  if (directRenameMatch) {
+    const newName = directRenameMatch[1].replace(/[?.!]+$/, '').trim();
+    if (newName.length >= 2) {
+      // 1. Tenta pegar a última conta de trial_leads
+      const { getTrialBills, updateTrialBill } = await import('@/lib/solo/trial');
+      const trialBills = await getTrialBills(cleanPhone);
+      if (trialBills && trialBills.length > 0) {
+        const lastBill = trialBills[trialBills.length - 1];
+        const oldName = lastBill.supplier_name || lastBill.counterparty_name || 'Conta';
+        const res = await updateTrialBill(cleanPhone, lastBill.id || oldName, { supplier_name: newName });
+        if (res.updated) {
+          await sendEvolutionText({
+            phone,
+            text: `✅ *Nome da Conta Atualizado!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• De: *${oldName}*
+• Para: *${newName}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Atualizei o último lançamento cadastrado no seu Livro Caixa!`,
+          });
+          await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+          return true;
+        }
+      }
+
+      // 2. Se for cliente assinante
+      if (client?.id) {
+        const supabase = createServiceRoleClient();
+        const { data: lastClientBill } = await supabase
+          .from('payables_receivables')
+          .select('id, counterparty_name')
+          .eq('client_id', client.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastClientBill) {
+          await supabase
+            .from('payables_receivables')
+            .update({ counterparty_name: newName })
+            .eq('id', lastClientBill.id);
+
+          await sendEvolutionText({
+            phone,
+            text: `✅ *Nome da Conta Atualizado!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• De: *${lastClientBill.counterparty_name}*
+• Para: *${newName}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Atualizei o último lançamento cadastrado no seu Livro Caixa!`,
+          });
+          await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
+          return true;
+        }
+      }
+    }
+  }
+
+  // C.2) Baixa em Recebimentos em Linguagem Natural ("já recebi", "recebi da mar brasil", "caiu o pix", "atualiza que recebi")
+  const isReceivedIntent =
+    /^(?:já\s+)?recebi(?:\s+(?:da|do|de|o\s+valor\s+d[ao]|o\s+cliente))?(\s+.*)?$/i.test(clean) ||
+    /^(?:já\s+)?caiu\s+(?:o\s+dinheiro|na\s+conta|o\s+pix|o\s+pagamento)(\s+.*)?$/i.test(clean) ||
+    /^(?:atualiza\s+que\s+eu\s+)?(?:já\s+)?recebi(\s+.*)?$/i.test(clean) ||
+    /^(?:o\s+)?cliente\s+(?:já\s+)?pagou(\s+.*)?$/i.test(clean) ||
+    /^(?:dar\s+baixa|baixar|marcar\s+como\s+pago)\s+(?:no\s+recebimento|na\s+receita)(\s+.*)?$/i.test(clean);
+
+  if (isReceivedIntent) {
+    let targetQuery = clean
+      .replace(/^(?:já\s+)?recebi(?:\s+(?:da|do|de|o\s+valor\s+d[ao]|o\s+cliente))?\s*/i, '')
+      .replace(/^(?:atualiza\s+que\s+eu\s+)?(?:já\s+)?recebi\s*/i, '')
+      .replace(/^(?:já\s+)?caiu\s+(?:o\s+dinheiro|na\s+conta|o\s+pix|o\s+pagamento)\s*(?:d[ao]|de)?\s*/i, '')
+      .replace(/^(?:o\s+)?cliente\s+(?:já\s+)?pagou\s*/i, '')
+      .replace(/[?.!]+$/, '')
+      .trim();
+
+    // Se for lead na degustação:
+    const { markTrialBillAsPaidOrReceived } = await import('@/lib/solo/trial');
+    const trialRes = await markTrialBillAsPaidOrReceived({
+      phone: cleanPhone,
+      query: targetQuery,
+      targetType: 'receivable',
+    });
+
+    if (trialRes.success) {
+      await sendEvolutionText({ phone, text: trialRes.message });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+      return true;
+    }
+
+    // Se for cliente assinante:
+    const { markReceivableAsPaid } = await import('@/lib/solo/friendly-collection');
+    const clientRes = await markReceivableAsPaid(cleanPhone, targetQuery || '');
+    if (clientRes.success) {
+      await sendEvolutionText({ phone, text: clientRes.message });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+      return true;
+    }
+  }
+
+  // C.3) Baixa em Pagamentos em Linguagem Natural ("já paguei", "paguei a sabesp", "tá pago", "acabei de pagar")
+  const isPaidIntent =
+    /^(?:já\s+)?paguei(?:\s+(?:a|o|a\s+conta\s+d[ao]|o\s+boleto\s+d[ao]))?(\s+.*)?$/i.test(clean) ||
+    /^(?:tá|ta|esta|está)\s+pago(?:\s+(?:a|o))?(\s+.*)?$/i.test(clean) ||
+    /^(?:acabei\s+de\s+pagar)(?:\s+(?:a|o))?(\s+.*)?$/i.test(clean) ||
+    /^(?:dar\s+baixa|baixar|liquidar|quitar)\s+(?:no\s+boleto|na\s+conta|o\s+pagamento)?(\s+.*)?$/i.test(clean);
+
+  if (isPaidIntent) {
+    let targetQuery = clean
+      .replace(/^(?:já\s+)?paguei(?:\s+(?:a|o|a\s+conta\s+d[ao]|o\s+boleto\s+d[ao]))?\s*/i, '')
+      .replace(/^(?:tá|ta|esta|está)\s+pago(?:\s+(?:a|o))?\s*/i, '')
+      .replace(/^(?:acabei\s+de\s+pagar)(?:\s+(?:a|o))?\s*/i, '')
+      .replace(/^(?:dar\s+baixa|baixar|liquidar|quitar)\s*(?:no\s+boleto|na\s+conta|o\s+pagamento)?\s*(?:d[ao]|de)?\s*/i, '')
+      .replace(/[?.!]+$/, '')
+      .trim();
+
+    // Se for lead na degustação:
+    const { markTrialBillAsPaidOrReceived } = await import('@/lib/solo/trial');
+    const trialRes = await markTrialBillAsPaidOrReceived({
+      phone: cleanPhone,
+      query: targetQuery,
+      targetType: 'payable',
+    });
+
+    if (trialRes.success) {
+      await sendEvolutionText({ phone, text: trialRes.message });
+      await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+      return true;
+    }
+
+    // Se for cliente assinante:
+    if (client?.id) {
+      const supabase = createServiceRoleClient();
+      const { data: bills } = await supabase
+        .from('payables_receivables')
+        .select('id, counterparty_name, amount, due_date')
+        .eq('client_id', client.id)
+        .eq('type', 'payable')
+        .in('status', ['open', 'postponed']);
+
+      if (bills && bills.length > 0) {
+        let match = targetQuery ? findBestBillMatch(bills, targetQuery) : bills[0];
+        if (match) {
+          await supabase
+            .from('payables_receivables')
+            .update({ status: 'paid' })
+            .eq('id', match.id);
+
+          await supabase.from('cash_ledger_entries').insert({
+            client_id: client.id,
+            entry_date: new Date().toISOString().split('T')[0],
+            description: `Pagamento de ${match.counterparty_name}`,
+            amount: -Math.abs(match.amount),
+            entry_type: 'expense',
+            dre_group: 'despesa_operacional',
+            status: 'realizado',
+          });
+
+          const formattedVal = Number(match.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          await sendEvolutionText({
+            phone,
+            text: `✅ *Pagamento Confirmado no Livro Caixa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Conta: *${match.counterparty_name}*
+• Valor: *${formattedVal}*
+• Status: **PAGO**
+📅 Atualizamos seu fluxo de caixa e seus relatórios do mês!`,
+          });
+          await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+          return true;
+        }
+      }
+    }
+  }
+
   if (
     clean.includes('excluir esta conta') ||
     clean.includes('excluir uma conta') ||
@@ -1964,6 +2153,55 @@ async function handleConversationalNaturalLanguageRouter(params: {
   const trialStatus = await checkTrialStatus(cleanPhone);
   const isAdmin = Boolean(client?.is_admin || isAdminPhone);
 
+  // Carrega contas reais do banco de dados (trial ou cliente) para dar visão completa à IA
+  let userBills: any[] = [];
+  try {
+    if (client?.id) {
+      const { data: dbBills } = await supabase
+        .from('payables_receivables')
+        .select('id, counterparty_name, amount, due_date, type, status, created_at')
+        .eq('client_id', client.id)
+        .in('status', ['open', 'postponed', 'overdue'])
+        .order('due_date', { ascending: true })
+        .limit(20);
+      userBills = (dbBills || []).map((b) => ({
+        id: b.id,
+        supplier_name: b.counterparty_name,
+        amount: b.amount,
+        due_date: b.due_date,
+        entry_type: b.type,
+        status: b.status,
+        created_at: b.created_at,
+      }));
+    } else {
+      const { getTrialBills } = await import('@/lib/solo/trial');
+      const trialBills = await getTrialBills(cleanPhone);
+      userBills = trialBills || [];
+    }
+  } catch (loadErr) {
+    console.warn('[Router Context Load Warning]:', loadErr);
+  }
+
+  // Prepara resumo das contas e a última conta para o cérebro IA
+  const activeBillsList = userBills.filter((b) => !b.is_paid && b.status !== 'paid');
+  const activeBillsSummary = activeBillsList.slice(0, 10).map((b, idx) => {
+    const name = b.supplier_name || b.counterparty_name || 'Conta';
+    const amt = Number(b.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const type = (b.entry_type || 'payable') === 'receivable' ? 'A RECEBER (receita)' : 'A PAGAR (despesa)';
+    const due = b.due_date ? `Venc: ${b.due_date}` : 'Sem vencimento';
+    return `[${idx + 1}] "${name}" | ${amt} | ${due} | Tipo: ${type}`;
+  }).join('\n');
+
+  let lastBillSummary = '';
+  if (userBills.length > 0) {
+    const last = userBills[userBills.length - 1];
+    const lastName = last.supplier_name || last.counterparty_name || 'Conta';
+    const lastAmt = Number(last.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const lastType = (last.entry_type || 'payable') === 'receivable' ? 'A Receber' : 'A Pagar';
+    const lastDue = last.due_date ? `Venc: ${last.due_date}` : '';
+    lastBillSummary = `"${lastName}" de ${lastAmt} (${lastType} ${lastDue})`;
+  }
+
   const context: UserConversationalContext = {
     userId: client?.id || cleanPhone,
     userName: client?.name || body?.data?.pushName || 'Usuário',
@@ -1972,7 +2210,9 @@ async function handleConversationalNaturalLanguageRouter(params: {
     userType: client ? (isOperator ? 'operator' : 'subscriber') : 'trial',
     plan: client?.plan || (client?.id ? 'solo' : 'trial'),
     companyName: client?.company_name || undefined,
-    hasOpenBills: trialStatus.docsCount > 0,
+    hasOpenBills: userBills.length > 0,
+    activeBillsSummary: activeBillsSummary || undefined,
+    lastBillSummary: lastBillSummary || undefined,
   };
 
   try {
@@ -2195,6 +2435,108 @@ ${resultLines.join('\n')}
         });
         return true;
       }
+    }
+
+    // 7.1 Baixa em Recebimento (Linguagem Natural orientada ao DB)
+    if (decision.intent === 'MARK_RECEIVABLE_AS_RECEIVED') {
+      const supQuery = decision.mark_paid_params?.supplier_or_customer || '';
+
+      // Se for lead na degustação:
+      const { markTrialBillAsPaidOrReceived } = await import('@/lib/solo/trial');
+      const trialRes = await markTrialBillAsPaidOrReceived({
+        phone: cleanPhone,
+        query: supQuery,
+        targetType: 'receivable',
+      });
+
+      if (trialRes.success) {
+        await sendEvolutionText({ phone, text: trialRes.message });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+        return true;
+      }
+
+      // Se for cliente assinante:
+      const { markReceivableAsPaid } = await import('@/lib/solo/friendly-collection');
+      const clientRes = await markReceivableAsPaid(cleanPhone, supQuery);
+      if (clientRes.success) {
+        await sendEvolutionText({ phone, text: clientRes.message });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+        return true;
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: `⚠️ *Não localizei nenhuma conta a receber em aberto* com o nome *"${supQuery || 'informado'}"*. Digite *Contas* para ver seus lançamentos.`,
+      });
+      return true;
+    }
+
+    // 7.2 Baixa em Pagamento / Despesa (Linguagem Natural orientada ao DB)
+    if (decision.intent === 'MARK_BILL_AS_PAID') {
+      const supQuery = decision.mark_paid_params?.supplier_or_customer || '';
+
+      // Se for lead na degustação:
+      const { markTrialBillAsPaidOrReceived } = await import('@/lib/solo/trial');
+      const trialRes = await markTrialBillAsPaidOrReceived({
+        phone: cleanPhone,
+        query: supQuery,
+        targetType: 'payable',
+      });
+
+      if (trialRes.success) {
+        await sendEvolutionText({ phone, text: trialRes.message });
+        await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+        return true;
+      }
+
+      // Se for cliente assinante:
+      if (client?.id) {
+        const { data: bills } = await supabase
+          .from('payables_receivables')
+          .select('id, counterparty_name, amount, due_date')
+          .eq('client_id', client.id)
+          .eq('type', 'payable')
+          .in('status', ['open', 'postponed']);
+
+        if (bills && bills.length > 0) {
+          const match = supQuery ? findBestBillMatch(bills, supQuery) : bills[0];
+          if (match) {
+            await supabase
+              .from('payables_receivables')
+              .update({ status: 'paid' })
+              .eq('id', match.id);
+
+            await supabase.from('cash_ledger_entries').insert({
+              client_id: client.id,
+              entry_date: new Date().toISOString().split('T')[0],
+              description: `Pagamento de ${match.counterparty_name}`,
+              amount: -Math.abs(match.amount),
+              entry_type: 'expense',
+              dre_group: 'despesa_operacional',
+              status: 'realizado',
+            });
+
+            const formattedVal = Number(match.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            await sendEvolutionText({
+              phone,
+              text: `✅ *Pagamento Confirmado no Livro Caixa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Conta: *${match.counterparty_name}*
+• Valor: *${formattedVal}*
+• Status: **PAGO**
+📅 Atualizamos seu fluxo de caixa e seus relatórios do mês!`,
+            });
+            await sendActionSequenceMenu(phone, 'O que deseja fazer agora?');
+            return true;
+          }
+        }
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: `⚠️ *Não localizei nenhuma conta a pagar em aberto* com o nome *"${supQuery || 'informado'}"*. Digite *Contas* para ver seus lançamentos.`,
+      });
+      return true;
     }
 
     // 8. Relatório em PDF (Livro Caixa / DRE)

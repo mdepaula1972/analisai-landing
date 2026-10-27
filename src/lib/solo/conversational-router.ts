@@ -11,6 +11,8 @@ export interface UserConversationalContext {
   plan: string;
   companyName?: string;
   hasOpenBills?: boolean;
+  activeBillsSummary?: string;
+  lastBillSummary?: string;
 }
 
 export type ConversationalIntentType =
@@ -21,6 +23,8 @@ export type ConversationalIntentType =
   | 'EDIT_BILL'
   | 'DELETE_BILL'
   | 'RECORD_FINANCIAL_ENTRY'
+  | 'MARK_RECEIVABLE_AS_RECEIVED'
+  | 'MARK_BILL_AS_PAID'
   | 'REQUEST_PDF_REPORT'
   | 'REQUEST_ACCOUNTING_CLOSING'
   | 'CASH_FLOW_ADVICE'
@@ -58,6 +62,12 @@ export interface RoutedDecision {
   };
   delete_params?: {
     supplier_query?: string;
+  };
+  mark_paid_params?: {
+    supplier_or_customer?: string;
+    amount?: number | null;
+    is_income?: boolean;
+    bill_id?: string;
   };
   financial_entries?: Array<{
     supplier_or_customer: string;
@@ -152,7 +162,9 @@ DADOS DO USUÁRIO:
 - Admin: ${context.isAdmin ? 'SIM' : 'NÃO'}
 - Plano: ${context.plan}
 - Empresa: ${context.companyName || 'Não informada'}
-- Possui contas cadastradas: ${context.hasOpenBills ? 'SIM' : 'NÃO'}`;
+- Possui contas cadastradas: ${context.hasOpenBills ? 'SIM' : 'NÃO'}
+${context.activeBillsSummary ? `\nCONTAS ATIVAS NO BANCO DE DADOS DESTE USUÁRIO:\n${context.activeBillsSummary}` : ''}
+${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA IMEDIATA):\n${context.lastBillSummary}` : ''}`;
 
   for (const modelName of candidateModels) {
     try {
@@ -173,6 +185,8 @@ DADOS DO USUÁRIO:
                   'EDIT_BILL',
                   'DELETE_BILL',
                   'RECORD_FINANCIAL_ENTRY',
+                  'MARK_RECEIVABLE_AS_RECEIVED',
+                  'MARK_BILL_AS_PAID',
                   'REQUEST_PDF_REPORT',
                   'REQUEST_ACCOUNTING_CLOSING',
                   'CASH_FLOW_ADVICE',
@@ -289,6 +303,16 @@ DADOS DO USUÁRIO:
                 },
                 nullable: true,
               },
+              mark_paid_params: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  supplier_or_customer: { type: SchemaType.STRING, nullable: true },
+                  amount: { type: SchemaType.NUMBER, nullable: true },
+                  is_income: { type: SchemaType.BOOLEAN, nullable: true },
+                  bill_id: { type: SchemaType.STRING, nullable: true },
+                },
+                nullable: true,
+              },
               financial_entries: {
                 type: SchemaType.ARRAY,
                 items: {
@@ -359,38 +383,38 @@ DADOS DO USUÁRIO:
           } as any),
         },
         systemInstruction: `Você é o Cérebro Central de Compreensão e Roteamento de Linguagem Natural do AnalisAí, o assistente financeiro no WhatsApp.
-Sua missão é entender com perfeição o que o usuário quer fazer, a partir de áudios transcritos ou mensagens de texto em português brasileiro falado natural, SEM EXIGIR NENHUM COMANDO FIXO OU '!'.
+Sua missão é entender com perfeição o que o usuário quer fazer, a partir de áudios transcritos ou mensagens de texto em português brasileiro falado natural por pessoas simples, SEM EXIGIR NENHUM COMANDO FIXO OU '!'.
 
 Categorias de Intenção:
+- MARK_RECEIVABLE_AS_RECEIVED: Dar baixa em conta a receber / receita (ex: "já recebi", "recebi da mar brasil", "caiu o dinheiro", "cliente me pagou", "já recebi os 2750", "atualiza que eu já recebi", "mar brasil pagou").
+  ↳ Se o usuário disser "já recebi" ou "atualiza que recebi" e houver contas a receber na lista acima, classifique como MARK_RECEIVABLE_AS_RECEIVED e identifique o cliente em mark_paid_params.supplier_or_customer (ex: "Mar Brasil") e o valor se citado. NUNCA classifique como RECORD_FINANCIAL_ENTRY quando o usuário estiver avisando que já recebeu uma conta já existente!
+- MARK_BILL_AS_PAID: Dar baixa em conta a pagar / despesa (ex: "já paguei", "paguei a sabesp", "tá pago", "acabei de pagar", "paguei a contabilivre", "dar baixa no boleto", "pagamento realizado").
+  ↳ Identifique o credor em mark_paid_params.supplier_or_customer (ex: "Sabesp").
+- EDIT_BILL: Alterar valor, vencimento ou renomear fornecedores (ex: "mudar vencimento da sabesp pro dia 20", "mudar valor do aluguel pra 1600", "corrigir nome para Brdid", "o nome é Brdid e não Br Digi", "muda o nome pra Brdid").
+  ↳ REGRA DE MEMÓRIA DO ÚLTIMO LANÇAMENTO: Se o usuário disser "corrigir nome para X", "mudar para X" ou "o nome é X" sem dizer o nome antigo, consulte a ÚLTIMA CONTA CADASTRADA indicada acima e use o nome dela como current_name_query e X como new_name!
 - INVITE_GUEST: Convidar alguém para testar, enviar convite VIP, liberar acesso livre para amigo/parceiro (ex: "convidar o Luizão no zap 14 99894-7271", "manda um convite pro Luizão testar", "libera o zap do meu amigo").
-  ↳ Se o usuário for Administrador, o target_role deve ser 'qa_test'. Se for para operador da empresa, 'team_operator'.
 - TEAM_MANAGEMENT: Gestão de operadores da empresa (ex: "quem tá na minha equipe?", "adiciona o Luizão na minha equipe", "remover operador", "silencia os avisos da Maria").
 - QUERY_BILLS: Consultar contas agendadas (ex: "ver minhas contas", "o que tenho que pagar essa semana?", "contas de hoje", "quais boletos vencem esse mês?", "minhas contas", "1", "um").
 - GET_PAYMENT_CODE: Pedir linha digitável, código de barras ou Pix para pagar/antecipar (ex: "pagar sabesp", "código da vivo", "passa o pix do aluguel", "2", "dois").
-- EDIT_BILL: Alterar valor, vencimento ou renomear fornecedores (ex: "mudar vencimento da sabesp pro dia 20", "mudar valor do aluguel pra 1600", "onde tá Contalivre é Contabilivre, Persi com S é com C", "corrija os fornecedores").
 - DELETE_BILL: Excluir ou cancelar uma conta (ex: "excluir conta da Sabesp", "apagar boleto do fornecedor").
-- RECORD_FINANCIAL_ENTRY: Lançar despesa ou receita nova (ex: "gastei 45 de gasolina", "recebi 800 do cliente Pedro", "anota pagar Vivo 120 dia 22", "aluguel 1500 dia 5").
+- RECORD_FINANCIAL_ENTRY: Lançar despesa ou receita nova que ainda NÃO existe (ex: "gastei 45 de gasolina", "recebi 800 do cliente Pedro hoje à tarde", "anota pagar Vivo 120 dia 22", "aluguel 1500 dia 5").
 - ADJUST_BALANCE: Calibrar ou atualizar o saldo bancário da conta corrente / caixa (ex: "meu saldo hoje é R$ 2500", "saldo atual 2500", "ajustar saldo para 4000", "saldo hoje é 1200", "calibrar saldo 3500").
 - REQUEST_PDF_REPORT: Solicitar relatório, Livro Caixa ou DRE em PDF (ex: "me manda o relatório", "quero o livro caixa em PDF", "gerar PDF").
 - REQUEST_ACCOUNTING_CLOSING: Solicitar pacote de fechamento contábil para o contador ou apuração mensal (ex: "fechamento do mês passado", "gerar arquivo pro meu contador", "pacote fiscal de setembro", "!fechamento", "extrato contábil em csv", "fechamento de 09/2026").
 - CASH_FLOW_ADVICE: Dúvidas financeiras e de caixa (ex: "qual conta devo atrasar?", "meu caixa fecha positivo?", "o que fazer se faltar dinheiro?").
 - VIEW_PLANS_PRICING: Consultar planos, valores, upgrade, assinar (ex: "quanto custa?", "quais os planos?", "como assinar?").
 - ADMIN_SIMULATION: Exclusivo para administradores testando cenários (ex: "simular plano start", "resetar meus contadores", "gerar contas de teste", "estourar limite").
-  ↳ Se o usuário NÃO for Admin, is_applicable = false, e explique educadamente.
 - REQUEST_DASHBOARD_ACCESS: Solicitar link do painel visual, gráficos, PWA ou dashboard (ex: "!painel", "painel", "dashboard", "graficos", "gráficos", "ver resumo visual", "ver meus gráficos", "link do painel", "abrir dashboard", "abrir painel", "app", "pwa").
 - GENERAL_CONVERSATION: Saudações ("oi", "olá", "bom dia"), perguntas sobre como o AnalisAí funciona, ou bate-papo informal.
 
 DIRETRIZES CRÍTICAS SOBRE NOTAS FISCAIS, BOLETOS E IMAGENS:
 - O AnalisAí POSSUI PROCESSAMENTO E LEITURA AUTOMÁTICA DE IMAGENS E PDFS DE NOTAS FISCAIS (NF-e, NFC-e, NFS-e, DANFE), BOLETOS, RECIBOS E EXTRATOS BANCÁRIOS 100% ATIVO, OPERACIONAL E EM PRODUÇÃO!
 - É EXPRESSAMENTE PROIBIDO dizer que o processamento de imagens de NF ou documentos "não está ativo", "não é suportado" ou "está desativado".
-- Se o usuário perguntar se pode enviar foto/PDF de Nota Fiscal, se o robô lê NF, ou avisar que vai mandar uma nota (ex: "posso mandar nota fiscal?", "você lê foto de NF?", "segue nota fiscal", "processar nota fiscal"):
-  ↳ Responda em conversational_reply com entusiasmo acolhedor orientando o envio imediato:
-  "O processamento automático de Notas Fiscais e boletos está 100% ativo! 📄✨ Pode me enviar a foto ou arquivo PDF da sua Nota Fiscal aqui que nossa IA lê o fornecedor, valores e datas na hora e já organiza no seu fluxo de caixa!"
 
 REGRAS DE PERMISSÃO POR PAPEL:
-- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos (RECORD_FINANCIAL_ENTRY). Para relatórios (REQUEST_PDF_REPORT), fechamento contábil (REQUEST_ACCOUNTING_CLOSING), consultas de contas (QUERY_BILLS), exclusões (DELETE_BILL), edições (EDIT_BILL), ajustes de saldo (ADJUST_BALANCE) ou conselhos (CASH_FLOW_ADVICE), defina is_applicable = false.
+- Se Tipo for 'operator': Permitido EXCLUSIVAMENTE para enviar lançamentos (RECORD_FINANCIAL_ENTRY). Para relatórios, fechamento contábil, consultas de contas, exclusões, edições, ajustes de saldo ou conselhos, defina is_applicable = false.
 
-Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
+Seja humanizado, acolhedor, tolerante com erros de digitação e variações fonéticas.`,
       });
 
       const res = await model.generateContent(prompt);
@@ -421,6 +445,7 @@ Seja preciso, tolerante com erros de digitação e variações fonéticas.`,
         payment_code_params: parsed.payment_code_params || undefined,
         edit_params: parsed.edit_params || undefined,
         delete_params: parsed.delete_params || undefined,
+        mark_paid_params: parsed.mark_paid_params || undefined,
         financial_entries: parsed.financial_entries || undefined,
         balance_adjustment_params: parsed.balance_adjustment_params || undefined,
         report_params: parsed.report_params || undefined,

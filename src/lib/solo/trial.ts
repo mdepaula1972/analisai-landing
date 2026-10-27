@@ -38,8 +38,8 @@ _"Opa! Estou usando o AnalisAí para organizar minhas contas e pagar tudo sem es
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Cadastre sua chave Pix enviando: *!pix sua_chave*`;
 }
-export const MAX_BETA_VIP_USERS = 50;
-export const BETA_VIP_DOCS_LIMIT = 10;
+export const MAX_BETA_VIP_USERS = 5000;
+export const BETA_VIP_DOCS_LIMIT = 100;
 export const BETA_VIP_DAYS = 30;
 
 import { createServiceRoleClient } from '@/lib/supabase-server';
@@ -95,15 +95,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
   }
 
   if (!data) {
-    // Verifica se ainda há vagas abertas no lote das 50 Vagas VIP
-    const { count } = await supabase
-      .from('trial_leads')
-      .select('*', { count: 'exact', head: true });
-
-    const totalLeads = count || 0;
-    const isVipEligible = totalLeads < MAX_BETA_VIP_USERS;
-    // Se VIP: 10 contas. Se cota VIP esgotada: 5 contas na Degustação Express (nunca menos que 5)
-    const initialLimit = isVipEligible ? BETA_VIP_DOCS_LIMIT : 5;
+    // Degustação Completa de 30 Dias: cota de segurança de até 100 documentos
+    const initialLimit = BETA_VIP_DOCS_LIMIT; // 100 documentos
 
     return {
       hasUsedTrial: false,
@@ -113,8 +106,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
     };
   }
 
-  // Garante que nenhum lead existente ou novo fique com cota inferior a 5 contas
-  const docsLimit = Math.max(Number(data.trial_docs_limit) || 5, 5);
+  // Cota de segurança oculta de até 100 documentos durante os 30 dias corridos
+  const docsLimit = Math.max(Number(data.trial_docs_limit) || BETA_VIP_DOCS_LIMIT, BETA_VIP_DOCS_LIMIT);
   const docsCount = Number(data.trial_docs_count) || (data.doc_processed ? 1 : 0);
   const remainingDocs = Math.max(0, docsLimit - docsCount);
 
@@ -193,7 +186,7 @@ export async function recordTrialUsage(
     }
   }
 
-  const newLimit = grantedLimit || Math.max(detectedLimit, 5);
+  const newLimit = grantedLimit || Math.max(detectedLimit, BETA_VIP_DOCS_LIMIT);
 
   let altPhone = cleanPhone;
   if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
@@ -688,9 +681,6 @@ _(Até 15 lançamentos/mês, livro caixa oficial e lembretes diários pontuais n
 • *2️⃣ AnalisAí Solo — R$ 87,99/mês* (30 lançamentos/mês + Inteligência de Caixa):
 👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
 
-🎁 *Dica de Ouro — Mensalidade Grátis:*
-Indique 3 amigos empresários e a sua assinatura fica 100% por nossa conta enquanto eles estiverem ativos!
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 *(Suas contas e relatórios continuam guardados a sete chaves aguardando sua confirmação.)*`;
   }
@@ -709,9 +699,6 @@ _(Até 30 lançamentos/mês, comandos por áudio e texto, consultor de caixa e D
 💡 *Seu volume é menor e prefere pagar ainda menos?*
 • *2️⃣ AnalisAí Start — R$ 39,90/mês* (Até 15 lançamentos/mês):
 👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
-
-🎁 *Dica de Ouro — Mensalidade Grátis:*
-Indique 3 amigos ou parceiros empresariais para o AnalisAí e sua assinatura fica 100% gratuita!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 *(Suas contas e relatórios continuam guardados a sete chaves aguardando sua confirmação.)*`;
@@ -1043,9 +1030,6 @@ Para que você tenha visão de tudo o que o robô faz no dia a dia da sua empres
 
 4️⃣ 📑 *Relatórios Contábeis e DRE em PDF (Incluso em todos os planos):*
 • Digite *Relatório* e receba seu Livro Caixa oficial em segundos para controle ou envio ao contador.
-
-5️⃣ 🎁 *Mensalidade 100% Grátis por Indicação:*
-• Ao assinar seu plano (1ª mensalidade paga), indique 3 parceiros que ativem um plano: suas faturas seguintes ficam **100% ISENTAS** enquanto os 3 continuarem ativos!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 *Escolha o plano ideal e ative seu assistente agora mesmo:*
@@ -1581,5 +1565,120 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
   text += `_(Você também pode enviar qualquer um desses comandos por áudio!)_`;
 
   return text;
+}
+
+/**
+ * Dá baixa em uma conta a pagar ou conta a receber no Livro Caixa da degustação gratuita
+ * Busca com tolerância fonética, nome do fornecedor/cliente, valor ou última conta
+ */
+export async function markTrialBillAsPaidOrReceived(params: {
+  phone: string;
+  query?: string;
+  targetType?: 'payable' | 'receivable';
+}): Promise<{
+  success: boolean;
+  message: string;
+  bill?: any;
+  isIncome?: boolean;
+}> {
+  const supabase = createServiceRoleClient();
+  const cleanPhone = params.phone.replace(/\D/g, '');
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('id, bills_list')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  if (!lead || !Array.isArray(lead.bills_list) || lead.bills_list.length === 0) {
+    return {
+      success: false,
+      message: '⚠️ Não encontrei nenhuma conta cadastrada no seu Livro Caixa para dar baixa.',
+    };
+  }
+
+  const cleanQuery = (params.query || '').toLowerCase().trim();
+  const bills = lead.bills_list;
+
+  let matchedIndex = -1;
+
+  // 1. Busca por nome do fornecedor/cliente
+  if (cleanQuery.length >= 2) {
+    matchedIndex = bills.findIndex((b: any) => {
+      const name = (b.supplier_name || b.counterparty_name || '').toLowerCase();
+      return name.includes(cleanQuery) || cleanQuery.includes(name);
+    });
+
+    // Se não achou por nome, tenta por valor numérico
+    if (matchedIndex === -1) {
+      const numMatch = cleanQuery.match(/\d+([.,]\d{2})?/);
+      if (numMatch) {
+        const val = parseFloat(numMatch[0].replace(',', '.'));
+        matchedIndex = bills.findIndex((b: any) => Math.abs((Number(b.amount) || 0) - val) < 0.1);
+      }
+    }
+  }
+
+  // 2. Se não passou query ou não encontrou e o usuário disse apenas "já recebi" ou "já paguei":
+  if (matchedIndex === -1) {
+    if (params.targetType === 'receivable') {
+      const recIdx = bills.findLastIndex((b: any) => (b.entry_type || 'payable') === 'receivable' && !b.is_paid);
+      if (recIdx !== -1) matchedIndex = recIdx;
+    } else if (params.targetType === 'payable') {
+      const payIdx = bills.findLastIndex((b: any) => (b.entry_type || 'payable') === 'payable' && !b.is_paid);
+      if (payIdx !== -1) matchedIndex = payIdx;
+    } else {
+      matchedIndex = bills.length - 1;
+    }
+  }
+
+  if (matchedIndex === -1) {
+    return {
+      success: false,
+      message: '⚠️ Não identifiquei qual conta você deseja dar baixa. Digite *Contas* para ver seus lançamentos abertos.',
+    };
+  }
+
+  const targetBill = bills[matchedIndex];
+  const isIncome = (targetBill.entry_type || 'payable') === 'receivable';
+
+  // Marca como pago / recebido
+  bills[matchedIndex] = {
+    ...targetBill,
+    is_paid: true,
+    status: 'paid',
+    reconciled_at: new Date().toISOString(),
+  };
+
+  await supabase
+    .from('trial_leads')
+    .update({ bills_list: bills })
+    .eq('id', lead.id);
+
+  const supName = targetBill.supplier_name || targetBill.counterparty_name || 'Conta';
+  const valFmt = Number(targetBill.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  return {
+    success: true,
+    bill: bills[matchedIndex],
+    isIncome,
+    message: isIncome
+      ? `🎉 *Recebimento Confirmado no Livro Caixa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ O recebimento de *${valFmt}* de *${supName}* foi marcado como **PAGO/RECEBIDO**!
+📈 Sua receita foi consolidada e qualquer aviso de pendência foi baixado com sucesso.`
+      : `✅ *Pagamento Confirmado no Livro Caixa!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Conta: *${supName}*
+• Valor: *${valFmt}*
+• Status: **PAGO**
+📅 Atualizamos seu fluxo de caixa e seus relatórios do mês!`,
+  };
 }
 
