@@ -44,14 +44,14 @@ export async function escalateToHumanConsultant(
     .eq('status', 'open');
 
   const totalDespesas = (entries || [])
-    .filter((e) => e.entry_type === 'expense')
-    .reduce((acc, e) => acc + Math.abs(Number(e.amount)), 0);
+    .filter((e: any) => e.entry_type === 'expense')
+    .reduce((acc: number, e: any) => acc + Math.abs(Number(e.amount)), 0);
 
   const totalReceitas = (entries || [])
-    .filter((e) => e.entry_type === 'income')
-    .reduce((acc, e) => acc + Number(e.amount), 0);
+    .filter((e: any) => e.entry_type === 'income')
+    .reduce((acc: number, e: any) => acc + Number(e.amount), 0);
 
-  const totalContasAbertas = (openBills || []).reduce((acc, b) => acc + Number(b.amount), 0);
+  const totalContasAbertas = (openBills || []).reduce((acc: number, b: any) => acc + Number(b.amount), 0);
 
   const sub = Array.isArray(client.subscriptions) ? client.subscriptions[0] : client.subscriptions;
   const planName = (sub as any)?.plans?.name || 'AnalisAí Solo';

@@ -1,7 +1,7 @@
 import { SchemaType } from '@google/generative-ai';
 import { getGeminiClient } from './gemini';
 import { validateOperatorPermissions } from './team-guard';
-import { ActiveFinancialSnapshot } from './active-context';
+import { ActiveFinancialAccountItem, ActiveFinancialSnapshot } from './active-context';
 
 export interface UserConversationalContext {
   userId: string;
@@ -19,6 +19,7 @@ export interface UserConversationalContext {
 
 export type ConversationalIntentType =
   | 'SETTLE_ACCOUNT'
+  | 'UNDO_LAST_ACTION'
   | 'CLARIFICATION_NEEDED'
   | 'NEW_ENTRY'
   | 'POSTPONE_ACCOUNT'
@@ -30,9 +31,6 @@ export type ConversationalIntentType =
   | 'GET_PAYMENT_CODE'
   | 'EDIT_BILL'
   | 'DELETE_BILL'
-  | 'RECORD_FINANCIAL_ENTRY'
-  | 'MARK_RECEIVABLE_AS_RECEIVED'
-  | 'MARK_BILL_AS_PAID'
   | 'REQUEST_PDF_REPORT'
   | 'REQUEST_ACCOUNTING_CLOSING'
   | 'CASH_FLOW_ADVICE'
@@ -52,6 +50,7 @@ export interface RoutedDecision {
   target_amount?: number;
   target_description?: string;
   reply_text?: string;
+  candidate_accounts?: ActiveFinancialAccountItem[];
   invite_params?: {
     phone?: string;
     name?: string;
@@ -113,22 +112,391 @@ export interface RoutedDecision {
 export function parseBalanceNumber(rawStr: string): number {
   let clean = rawStr.trim().replace(/^r\$\s*/i, '');
   if (clean.includes(',') && clean.includes('.')) {
-    // 2.500,50 -> 2500.50
     clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (clean.includes(',')) {
-    // 2500,50 -> 2500.50
     clean = clean.replace(',', '.');
   } else if (clean.includes('.')) {
     const parts = clean.split('.');
     if (parts.length > 2) {
       clean = clean.replace(/\./g, '');
     } else if (parts[1] && parts[1].length === 3) {
-      // 2.500 -> 2500
       clean = parts[0] + parts[1];
     }
   }
   const num = parseFloat(clean);
   return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+}
+
+function normalizeForMatch(str: string): string {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/**
+ * Detecta se a mensagem é um pedido de estorno / desfazer a última ação ou baixa.
+ */
+export function isUndoLastActionMessage(text: string): boolean {
+  const clean = text.trim();
+  return (
+    /^(?:!|\/)?(?:desfazer|desfaz|desfazer\s+(?:a\s+)?(?:baixa|pagamento|recebimento|[uú]ltim[ao]\s+a[çc][aã]o)|estornar(?:\s+baixa)?|errei\s+o\s+pagamento|errei\s+a\s+baixa|n[aã]o\s+paguei\s+ainda|ainda\s+n[aã]o\s+paguei|n[aã]o\s+recebi\s+ainda|reabrir\s+(?:a\s+)?conta|voltar\s+(?:a\s+)?conta\s+para\s+pendente)[!?.]*$/i.test(
+      clean
+    ) ||
+    /\b(?:desfazer\s+baixa|errei\s+o\s+pagamento|n[aã]o\s+paguei\s+ainda|reabrir\s+(?:a\s+)?conta)\b/i.test(clean)
+  );
+}
+
+/**
+ * Detecta se a mensagem possui verbos de baixa / liquidação de contas.
+ * Exclui pedidos de download de arquivo (ex: "baixar relatório", "baixar pdf") e comandos de estorno/desfazer.
+ */
+export function isSettlementVerbMessage(text: string): boolean {
+  const clean = text.trim();
+  if (isUndoLastActionMessage(clean)) {
+    return false;
+  }
+  if (/\b(?:n[aã]o\s+paguei|ainda\s+n[aã]o\s+paguei|n[aã]o\s+recebi|desfazer|reabrir)\b/i.test(clean)) {
+    return false;
+  }
+  if (
+    /\b(?:baixar|baixa)\s+(?:o\s+|meu\s+|um\s+)?(?:relat[oó]rio|pdf|extrato|livro\s+caixa|app|aplicativo|comprovante|fechamento|arquivo)\b/i.test(
+      clean
+    )
+  ) {
+    return false;
+  }
+
+  return /\b(?:baixar|dar\s+baixa|baixa\s+n[ao]|baixa\s+d[eao]|baixei|liquidar|liquidei|liquidado|quitar|quitei|quitado|paguei|j[aá]\s+paguei|t[aá]\s+pago|est[aá]\s+pago|marcar\s+como\s+(?:pago|paga|recebido|recebida)|recebi|j[aá]\s+recebi|recebido|recebida)\b/i.test(
+    clean
+  );
+}
+
+/**
+ * Extrai pistas de dia do mês (ex: "dia 25", "do dia 25", "25/10") e valor monetário da frase de baixa.
+ */
+function extractSettlementClues(text: string): {
+  dayOfMonth: number | null;
+  month: number | null;
+  amountHint: number | null;
+  isOverdue: boolean;
+  isTodayDue: boolean;
+  isReceivableHint: boolean;
+  isPayableHint: boolean;
+  nameTokens: string[];
+} {
+  const clean = text.trim();
+  let dayOfMonth: number | null = null;
+  let month: number | null = null;
+
+  // 1. Data no formato DD/MM ou DD/MM/YYYY
+  const slashDateMatch = clean.match(/\b(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?\b/);
+  if (slashDateMatch) {
+    const d = parseInt(slashDateMatch[1], 10);
+    const m = parseInt(slashDateMatch[2], 10);
+    if (d >= 1 && d <= 31) dayOfMonth = d;
+    if (m >= 1 && m <= 12) month = m;
+  }
+
+  // 2. "dia 25", "do dia 25", "no dia 25", "vencimento 25", "vencida em 25"
+  if (dayOfMonth === null) {
+    const dayMatch = clean.match(
+      /(?:dia|vencimento|vencid[ao]\s+(?:em|dia)|venceu\s+(?:em|dia)|do\s+dia|de\s+dia)\s*(\d{1,2})\b/i
+    );
+    if (dayMatch) {
+      const d = parseInt(dayMatch[1], 10);
+      if (d >= 1 && d <= 31) dayOfMonth = d;
+    }
+  }
+
+  // 3. Valor monetário explícito (removendo antes trechos de data para não confundir "dia 25" com R$ 25)
+  const textWithoutDates = clean
+    .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, ' ')
+    .replace(/(?:dia|vencimento|vencid[ao]\s+em|venceu\s+em)\s*\d{1,2}\b/gi, ' ');
+
+  let amountHint: number | null = null;
+  const explicitMoneyMatch = textWithoutDates.match(
+    /(?:r\$\s*(\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*reais|(?:valor|boleto|conta)\s+de\s+(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?))/i
+  );
+  if (explicitMoneyMatch) {
+    const rawNum = explicitMoneyMatch[1] || explicitMoneyMatch[2] || explicitMoneyMatch[3];
+    if (rawNum) {
+      const parsed = parseBalanceNumber(rawNum);
+      if (parsed > 0) amountHint = parsed;
+    }
+  }
+
+  const isOverdue = /\b(?:atrasad[ao]s?|vencid[ao]s?|em\s+atraso|passad[ao]s?|j[aá]\s+venceu)\b/i.test(clean);
+  const isTodayDue = /\b(?:conta\s+de\s+hoje|venc(?:e|endo|imento)\s+hoje|de\s+hoje)\b/i.test(clean);
+
+  // Nota: "conta" é neutro (serve tanto para conta a receber quanto conta a pagar!)
+  const isReceivableHint =
+    /\b(?:a\s+receber|receber|receb[ií]vel|receb[ií]veis|receita|cliente|venda|honor[aá]rio|recebi|recebido|recebida|recebimento|pagou)\b/i.test(
+      clean
+    );
+  const isPayableHint =
+    /\b(?:a\s+pagar|paguei|t[aá]\s+pago|est[aá]\s+pago|despesa|boleto|fornecedor|fatura)\b/i.test(clean) &&
+    !isReceivableHint;
+
+  // Extrai tokens de nome de cliente/fornecedor (se houver)
+  const stopWords = new Set([
+    'baixar',
+    'dar',
+    'baixa',
+    'baixei',
+    'liquidar',
+    'liquidei',
+    'liquidado',
+    'quitar',
+    'quitei',
+    'quitado',
+    'paguei',
+    'pago',
+    'paga',
+    'recebi',
+    'recebido',
+    'recebida',
+    'recebimento',
+    'receber',
+    'pagar',
+    'conta',
+    'contas',
+    'boleto',
+    'boletos',
+    'fatura',
+    'faturas',
+    'lancamento',
+    'parcela',
+    'parcelas',
+    'atrasada',
+    'atrasado',
+    'atrasadas',
+    'atrasados',
+    'atraso',
+    'vencida',
+    'vencido',
+    'vencidas',
+    'vencidos',
+    'venceu',
+    'vencimento',
+    'unica',
+    'unico',
+    'recorrente',
+    'mensal',
+    'aberta',
+    'aberto',
+    'pendente',
+    'cliente',
+    'fornecedor',
+    'despesa',
+    'receita',
+    'valor',
+    'reais',
+    'hoje',
+    'ontem',
+    'dia',
+    'mes',
+    'ano',
+    'que',
+    'estava',
+    'esta',
+    'foi',
+    'como',
+    'marcar',
+    'ja',
+    'ta',
+    'meu',
+    'minha',
+    'meus',
+    'minhas',
+    'do',
+    'da',
+    'dos',
+    'das',
+    'de',
+    'no',
+    'na',
+    'nos',
+    'nas',
+    'em',
+    'para',
+    'pro',
+    'pra',
+    'por',
+    'com',
+    'um',
+    'uma',
+    'uns',
+    'umas',
+    'o',
+    'a',
+    'os',
+    'as',
+    'e',
+    'ou',
+    'favor',
+    'quero',
+    'preciso',
+    'pode',
+    'ultimo',
+    'ultima',
+    'recente',
+  ]);
+
+  const normalizedWords = normalizeForMatch(textWithoutDates)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !stopWords.has(w));
+
+  return {
+    dayOfMonth,
+    month,
+    amountHint,
+    isOverdue,
+    isTodayDue,
+    isReceivableHint,
+    isPayableHint,
+    nameTokens: normalizedWords,
+  };
+}
+
+/**
+ * Resolve de forma determinística o comando de baixa/liquidação contra o snapshot ativo.
+ * Retorna uma RoutedDecision imediata se encontrar 1 conta, >1 contas, ou 0 contas (quando não requer desempate semântico difuso).
+ */
+export function resolveSettlementFromSnapshot(
+  userText: string,
+  snapshot: ActiveFinancialSnapshot
+): RoutedDecision | null {
+  const clues = extractSettlementClues(userText);
+  const allOpen: ActiveFinancialAccountItem[] = [
+    ...snapshot.allOpenReceivables,
+    ...snapshot.allOpenPayables,
+  ];
+
+  // Se não há absolutamente nenhuma conta aberta no snapshot:
+  if (allOpen.length === 0) {
+    return {
+      intent: 'SETTLE_ACCOUNT',
+      confidence: 1.0,
+      is_applicable: true,
+      reply_text:
+        'Não localizei nenhuma conta aberta com esses critérios no momento. Deseja que eu liste todas as suas contas abertas?',
+    };
+  }
+
+  // 1. Filtra por tipo (receivable vs payable) APENAS se o usuário deu pista explícita de tipo
+  let candidates: ActiveFinancialAccountItem[] = allOpen;
+  if (clues.isReceivableHint && !clues.isPayableHint) {
+    candidates = snapshot.allOpenReceivables;
+  } else if (clues.isPayableHint && !clues.isReceivableHint) {
+    candidates = snapshot.allOpenPayables;
+  }
+
+  // 2. Filtra por dia do mês (ex: "dia 25") e/ou status de atraso ("atrasada")
+  if (clues.dayOfMonth !== null) {
+    const byDayAndOverdue = clues.isOverdue
+      ? candidates.filter((c) => c.day_of_month === clues.dayOfMonth && c.is_overdue)
+      : [];
+
+    if (byDayAndOverdue.length > 0) {
+      candidates = byDayAndOverdue;
+    } else {
+      // Fallback para day_of_month mesmo que a data recorrente esteja projetada
+      candidates = candidates.filter((c) => c.day_of_month === clues.dayOfMonth);
+      // Se não achou no subconjunto tipado (ex: usuário disse "paguei" para uma conta ou vice-versa), tenta no pool geral pelo dia
+      if (candidates.length === 0) {
+        const allByDay = allOpen.filter(
+          (c) => c.day_of_month === clues.dayOfMonth && (!clues.isOverdue || c.is_overdue)
+        );
+        if (allByDay.length > 0) {
+          candidates = allByDay;
+        } else {
+          candidates = allOpen.filter((c) => c.day_of_month === clues.dayOfMonth);
+        }
+      }
+    }
+  } else if (clues.isOverdue) {
+    const overdueSubset = candidates.filter((c) => c.is_overdue);
+    if (overdueSubset.length > 0) {
+      candidates = overdueSubset;
+    } else {
+      // Se não havia no tipo restrito, verifica em todas as atrasadas do snapshot
+      candidates = allOpen.filter((c) => c.is_overdue);
+    }
+  } else if (clues.isTodayDue) {
+    candidates = candidates.filter((c) => c.is_today);
+  }
+
+  // 3. Filtra por valor monetário se informado
+  if (clues.amountHint !== null && candidates.length > 0) {
+    const byAmount = candidates.filter((c) => Math.abs(c.amount - clues.amountHint!) < 1.0);
+    if (byAmount.length > 0 || clues.nameTokens.length === 0) {
+      candidates = byAmount;
+    }
+  }
+
+  // 4. Filtra por tokens de nome do favorecido/cliente se informados
+  if (clues.nameTokens.length > 0 && candidates.length > 0) {
+    const byName = candidates.filter((c) => {
+      const normDesc = normalizeForMatch(c.description);
+      return clues.nameTokens.some((tok) => normDesc.includes(tok) || tok.includes(normDesc));
+    });
+
+    if (byName.length > 0) {
+      candidates = byName;
+    } else if (clues.dayOfMonth === null && !clues.isOverdue && clues.amountHint === null) {
+      // O usuário citou um nome que não bateu literalmente (ex: "conta de luz" -> "CPFL").
+      // Deixa o Gemini tentar o match semântico sobre o snapshot!
+      return null;
+    } else {
+      candidates = [];
+    }
+  }
+
+  // 5. Decisão baseada na quantidade de contas candidatas encontradas
+  if (candidates.length === 1) {
+    const match = candidates[0];
+    return {
+      intent: 'SETTLE_ACCOUNT',
+      confidence: 1.0,
+      is_applicable: true,
+      target_account_id: match.id,
+      target_type: match.type,
+      target_description: match.description,
+      target_amount: match.amount,
+    };
+  }
+
+  if (candidates.length > 1) {
+    const listStr = candidates
+      .map(
+        (c, idx) =>
+          `*[${idx + 1}]* *${c.description}* — R$ ${c.amount.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} (Venc: ${c.formatted_date || c.due_date})`
+      )
+      .join('\n');
+
+    return {
+      intent: 'CLARIFICATION_NEEDED',
+      confidence: 0.98,
+      is_applicable: true,
+      candidate_accounts: candidates,
+      reply_text: `Encontrei mais de uma conta em aberto com esses critérios:\n\n${listStr}\n\nQual delas você deseja dar baixa? Responda com o número *[1]*, *[2]* ou o nome da conta!`,
+    };
+  }
+
+  // candidates.length === 0:
+  return {
+    intent: 'SETTLE_ACCOUNT',
+    confidence: 1.0,
+    is_applicable: true,
+    reply_text:
+      'Não localizei nenhuma conta aberta com esses critérios no momento. Deseja que eu liste todas as suas contas abertas?',
+  };
 }
 
 /**
@@ -142,9 +510,23 @@ export async function routeConversationalIntent(
 ): Promise<RoutedDecision> {
   const cleanUserText = userText.trim();
 
+  // ── FAST PATH 0: Comando de Estorno / Desfazer Baixa Recente (UNDO_LAST_ACTION) ──
+  // Gatilhos: "desfazer", "desfazer baixa", "errei o pagamento", "não paguei ainda", "reabrir conta"
+  if (isUndoLastActionMessage(cleanUserText)) {
+    const isOperator = context.userType === 'operator';
+    const permCheck = validateOperatorPermissions(isOperator ? 'operator' : 'admin', 'UNDO_LAST_ACTION');
+    return {
+      intent: 'UNDO_LAST_ACTION',
+      confidence: 1.0,
+      is_applicable: permCheck.allowed,
+      inapplicable_message: permCheck.refusalMessage,
+    };
+  }
+
   // ── FAST PATH 1: Calibração ou Ajuste de Saldo de Caixa (Tarefa 5) ──
   // Mensagens como: "meu saldo hoje é X", "saldo atual 2500", "ajustar saldo para 4000", "calibrar saldo 1500"
-  const balanceRegex = /^(?:(?:ol[aá]|oi|bom dia|boa tarde|boa noite)[\s,!.]*)?(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)|(?:ajustar|calibrar|atualizar|definir)\s+(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)))/i;
+  const balanceRegex =
+    /^(?:(?:ol[aá]|oi|bom dia|boa tarde|boa noite)[\s,!.]*)?(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)|(?:ajustar|calibrar|atualizar|definir)\s+(?:(?:meu\s+)?saldo\s*(?:hoje|atual|em conta|banc[aá]rio)?\s*(?:[eé]|de|em|pra|para)?\s*(?:r\$)?\s*(-?[\d.,]+)))/i;
   const balanceMatch = cleanUserText.match(balanceRegex);
   if (balanceMatch) {
     const rawVal = balanceMatch[1] || balanceMatch[2];
@@ -164,67 +546,26 @@ export async function routeConversationalIntent(
     }
   }
 
-  // ── FAST PATH 2: Resolução Semântica Determinística de Baixas e Liquidações com Snapshot Ativo ──
-  // Frases como: "dar baixa na única conta atrasada a receber", "baixa na conta a receber atrasada"
-  const isSettlementPhrasing = /(?:dar\s+baixa|baixar|liquidar|quitar|marcar\s+como\s+(?:pago|recebido)|j[aá]\s+(?:recebi|paguei)|t[aá]\s+pago)/i.test(cleanUserText);
-  if (isSettlementPhrasing && context.snapshot) {
-    const isOverdue = /(?:atrasad[ao]|vencid[ao]|em\s+atraso|passad[ao]|j[aá]\s+venceu)/i.test(cleanUserText);
-    const isReceivable = /(?:receber|receb[ií]vel|receita|cliente|venda|honor[aá]rio)/i.test(cleanUserText);
-    const isPayable = /(?:pagar|despesa|boleto|fornecedor|conta)/i.test(cleanUserText) && !isReceivable;
-
-    if (isOverdue && isReceivable) {
-      if (context.snapshot.overdueReceivables.length === 1) {
-        const item = context.snapshot.overdueReceivables[0];
-        return {
-          intent: 'SETTLE_ACCOUNT',
-          confidence: 1.0,
-          is_applicable: true,
-          target_account_id: item.id,
-          target_type: 'receivable',
-          target_description: item.description,
-          target_amount: item.amount,
-        };
-      } else if (context.snapshot.overdueReceivables.length > 1) {
-        const listStr = context.snapshot.overdueReceivables
-          .map((r, i) => `${i + 1}️⃣ *${r.description}* (R$ ${r.amount.toFixed(2)} - Vencimento ${r.due_date})`)
-          .join('\n');
-        return {
-          intent: 'CLARIFICATION_NEEDED',
-          confidence: 0.95,
-          is_applicable: true,
-          reply_text: `Encontrei mais de uma conta a receber em atraso:\n\n${listStr}\n\nQual delas você deseja dar baixa? Envie o número ou o nome!`,
-        };
+  // ── FAST PATH 2: Prioridade Absoluta para Verbos de Liquidação com Snapshot Ativo ──
+  // Se a mensagem contiver termos como: "baixar", "dar baixa", "liquidar", "paguei", "quitei", "recebi", "recebido":
+  // A intenção primária DEVE ser classificada como SETTLE_ACCOUNT (ou CLARIFICATION_NEEDED se >1), NUNCA como NEW_ENTRY.
+  const hasSettlementVerb = isSettlementVerbMessage(cleanUserText);
+  if (hasSettlementVerb && context.snapshot) {
+    const resolved = resolveSettlementFromSnapshot(cleanUserText, context.snapshot);
+    if (resolved) {
+      if (context.userType === 'operator') {
+        const permCheck = validateOperatorPermissions('operator', resolved.intent);
+        if (!permCheck.allowed) {
+          resolved.is_applicable = false;
+          resolved.inapplicable_message = permCheck.refusalMessage;
+        }
       }
-    }
-
-    if (isOverdue && isPayable) {
-      if (context.snapshot.overduePayables.length === 1) {
-        const item = context.snapshot.overduePayables[0];
-        return {
-          intent: 'SETTLE_ACCOUNT',
-          confidence: 1.0,
-          is_applicable: true,
-          target_account_id: item.id,
-          target_type: 'payable',
-          target_description: item.description,
-          target_amount: item.amount,
-        };
-      } else if (context.snapshot.overduePayables.length > 1) {
-        const listStr = context.snapshot.overduePayables
-          .map((p, i) => `${i + 1}️⃣ *${p.description}* (R$ ${p.amount.toFixed(2)} - Vencimento ${p.due_date})`)
-          .join('\n');
-        return {
-          intent: 'CLARIFICATION_NEEDED',
-          confidence: 0.95,
-          is_applicable: true,
-          reply_text: `Encontrei mais de uma conta a pagar em atraso:\n\n${listStr}\n\nQual delas você pagou? Envie o número ou o nome!`,
-        };
-      }
+      return resolved;
     }
   }
 
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
 
   const snapshotPrompt = context.snapshot
     ? `\nSITUAÇÃO ATIVA DE CONTAS NO BANCO DE DADOS (CONSULTE ANTES DE DECIDIR):
@@ -263,6 +604,7 @@ ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA I
                 type: SchemaType.STRING,
                 enum: [
                   'SETTLE_ACCOUNT',
+                  'UNDO_LAST_ACTION',
                   'CLARIFICATION_NEEDED',
                   'NEW_ENTRY',
                   'POSTPONE_ACCOUNT',
@@ -274,9 +616,6 @@ ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA I
                   'GET_PAYMENT_CODE',
                   'EDIT_BILL',
                   'DELETE_BILL',
-                  'RECORD_FINANCIAL_ENTRY',
-                  'MARK_RECEIVABLE_AS_RECEIVED',
-                  'MARK_BILL_AS_PAID',
                   'REQUEST_PDF_REPORT',
                   'REQUEST_ACCOUNTING_CLOSING',
                   'CASH_FLOW_ADVICE',
@@ -501,28 +840,37 @@ ${context.lastBillSummary ? `\nÚLTIMA CONTA CADASTRADA RECENTEMENTE (MEMÓRIA I
         systemInstruction: `Você é o Cérebro Central de Compreensão e Roteamento de Linguagem Natural do AnalisAí, o assistente financeiro no WhatsApp.
 Sua missão é entender com perfeição o que o usuário quer fazer, a partir de áudios transcritos ou mensagens de texto em português brasileiro falado natural por pessoas simples, SEM EXIGIR NENHUM COMANDO FIXO OU '!'.
 
-INSTRUÇÕES DE RESOLUÇÃO SEMÂNTICA DE CONTAS (CRÍTICO):
-1. Quando o usuário quiser dar baixa, liquidar ou marcar como pago/recebido:
-   - "dar baixa na única conta atrasada a receber", "recebi da mar brasil", "paguei a vivo", "tá pago o boleto de 98"
-   - SEMPRE consulte a "SITUAÇÃO ATIVA DE CONTAS NO BANCO DE DADOS" fornecida acima!
-   - Se houver correspondência inequívoca para um único registro (ex: existe apenas 1 conta atrasada a receber e ele pediu para baixar a única atrasada, ou citou o fornecedor/cliente de uma conta aberta), retorne:
-     intent: "SETTLE_ACCOUNT",
-     target_account_id: "<id da conta>",
-     target_type: "payable" ou "receivable",
-     target_description: "<descrição/nome da conta>",
-     target_amount: <valor numérico da conta>.
-   - Se houver mais de uma conta candidata e faltar clareza para desempate, retorne:
-     intent: "CLARIFICATION_NEEDED",
-     reply_text: "Encontrei as seguintes contas abertas: [liste-as com número e valor amigavelmente]. Qual delas você deseja baixar?"
+REGRA DE OURO PARA BAIXAS / LIQUIDAÇÕES:
+Quando o usuário pedir para "baixar", "liquidar" ou disser que "recebeu/pagou":
+1. Filtre as contas do snapshot usando as pistas fornecidas (ex: "dia 25", "atrasada", "a receber", "cliente X").
+2. Se encontrar EXATAMENTE UMA conta que atenda aos critérios:
+   - Retorne imediatamente:
+     {
+       "intent": "SETTLE_ACCOUNT",
+       "target_account_id": "<ID_DA_CONTA>",
+       "target_description": "<DESCRICAO>",
+       "target_amount": <VALOR>,
+       "target_type": "receivable" | "payable"
+     }
+   - NÃO pergunte valor nem favorecido.
+3. Se encontrar ZERO contas:
+   - Responda informando que não localizou nenhuma conta aberta com esses critérios e pergunte se ele deseja listar todas as contas abertas.
+4. Se encontrar mais de uma conta candidata:
+   - Retorne intent: "CLARIFICATION_NEEDED" listando as contas candidatas com números [1], [2] para o usuário escolher.
 
-2. Outras Categorias de Intenção:
+PROIBIÇÃO ABSOLUTA EM VERBOS DE LIQUIDAÇÃO:
+- Se a mensagem contiver termos como "baixar", "dar baixa", "liquidar", "paguei", "quitei", "recebi", "recebido", a intenção primária DEVE ser classificada como "SETTLE_ACCOUNT" (preenchendo target_type = "payable" | "receivable") ou "CLARIFICATION_NEEDED" se houver múltiplas candidatas, NUNCA como "NEW_ENTRY".
+- É estritamente PROIBIDO disparar perguntas de preenchimento de campos (ex: "qual o valor?", "quem é o cliente?") antes de verificar o snapshot de pendências.
+
+Outras Categorias de Intenção:
+- UNDO_LAST_ACTION: Desfazer ou estornar a última baixa realizada (ex: "desfazer", "desfazer baixa", "errei o pagamento", "não paguei ainda", "reabrir conta").
 - EDIT_BILL: Alterar valor, vencimento ou renomear fornecedores. Se disser "o nome é X" consulte a ÚLTIMA CONTA CADASTRADA.
 - INVITE_GUEST: Convidar alguém para testar, enviar convite VIP.
 - TEAM_MANAGEMENT: Gestão de operadores da empresa.
 - QUERY_BILLS: Consultar contas agendadas (ex: "ver minhas contas", "o que tenho a pagar hoje?").
 - GET_PAYMENT_CODE: Pedir linha digitável, código de barras ou Pix para pagar/antecipar.
 - DELETE_BILL / CANCEL_ACCOUNT: Excluir ou cancelar uma conta.
-- RECORD_FINANCIAL_ENTRY / NEW_ENTRY: Lançar despesa ou receita nova que ainda NÃO existe no banco.
+- NEW_ENTRY: Lançar despesa ou receita nova que ainda NÃO existe no banco (somente quando NÃO for comando de baixa/liquidação), preenchendo financial_entries.
 - ADJUST_BALANCE: Calibrar ou atualizar o saldo bancário da conta corrente / caixa.
 - REQUEST_PDF_REPORT: Solicitar relatório, Livro Caixa ou DRE em PDF.
 - REQUEST_ACCOUNTING_CLOSING: Solicitar pacote de fechamento contábil.
@@ -542,9 +890,43 @@ Seja humanizado, acolhedor, tolerante com erros de digitação e variações fon
       const text = res.response.text();
       const parsed = JSON.parse(text);
 
-      const intent = (parsed.intent || 'GENERAL_CONVERSATION') as ConversationalIntentType;
+      let rawIntent = String(parsed.intent || 'GENERAL_CONVERSATION');
+      let targetType: 'payable' | 'receivable' | undefined = parsed.target_type || undefined;
+
+      // Normaliza intenções legadas para o padrão canônico unificado
+      if (rawIntent === 'MARK_RECEIVABLE_AS_RECEIVED') {
+        rawIntent = 'SETTLE_ACCOUNT';
+        targetType = 'receivable';
+      } else if (rawIntent === 'MARK_BILL_AS_PAID') {
+        rawIntent = 'SETTLE_ACCOUNT';
+        targetType = 'payable';
+      } else if (rawIntent === 'RECORD_FINANCIAL_ENTRY') {
+        rawIntent = 'NEW_ENTRY';
+      }
+
+      let intent = rawIntent as ConversationalIntentType;
       let isApplicable = Boolean(parsed.is_applicable);
       let inapplicableMessage = parsed.inapplicable_message || undefined;
+      let replyText = parsed.reply_text || parsed.conversational_reply || undefined;
+
+      // Barreira final obrigatória: se a mensagem contém verbo de liquidação, NUNCA permitir desvio para NEW_ENTRY
+      if (hasSettlementVerb) {
+        if (intent !== 'SETTLE_ACCOUNT' && intent !== 'CLARIFICATION_NEEDED') {
+          intent = 'SETTLE_ACCOUNT';
+        }
+        if (intent === 'SETTLE_ACCOUNT' && !parsed.target_account_id) {
+          // Garante que nunca pergunte valor ou nome de cliente como se fosse novo cadastro
+          const asksForNewEntryFields =
+            replyText &&
+            /(?:qual\s+(?:[eé]\s+)?o\s+valor|quem\s+[eé]\s+o\s+(?:cliente|fornecedor)|informe\s+o\s+valor)/i.test(
+              replyText
+            );
+          if (!replyText || asksForNewEntryFields) {
+            replyText =
+              'Não localizei nenhuma conta aberta com esses critérios no momento. Deseja que eu liste todas as suas contas abertas?';
+          }
+        }
+      }
 
       // Interceptor de permissões rígido para operadores
       if (context.userType === 'operator') {
@@ -560,11 +942,22 @@ Seja humanizado, acolhedor, tolerante com erros de digitação e variações fon
         confidence: Number(parsed.confidence) || 0.9,
         is_applicable: isApplicable,
         inapplicable_message: inapplicableMessage,
-        target_account_id: parsed.target_account_id || undefined,
-        target_type: parsed.target_type || undefined,
-        target_amount: parsed.target_amount ? Number(parsed.target_amount) : undefined,
-        target_description: parsed.target_description || undefined,
-        reply_text: parsed.reply_text || undefined,
+        target_account_id: parsed.target_account_id || parsed.mark_paid_params?.bill_id || undefined,
+        target_type:
+          targetType ||
+          (parsed.mark_paid_params?.is_income !== undefined
+            ? parsed.mark_paid_params.is_income
+              ? 'receivable'
+              : 'payable'
+            : undefined),
+        target_amount: parsed.target_amount
+          ? Number(parsed.target_amount)
+          : parsed.mark_paid_params?.amount
+          ? Number(parsed.mark_paid_params.amount)
+          : undefined,
+        target_description:
+          parsed.target_description || parsed.mark_paid_params?.supplier_or_customer || undefined,
+        reply_text: replyText,
         invite_params: parsed.invite_params || undefined,
         team_params: parsed.team_params || undefined,
         bills_query_params: parsed.bills_query_params || undefined,
@@ -572,7 +965,7 @@ Seja humanizado, acolhedor, tolerante com erros de digitação e variações fon
         edit_params: parsed.edit_params || undefined,
         delete_params: parsed.delete_params || undefined,
         mark_paid_params: parsed.mark_paid_params || undefined,
-        financial_entries: parsed.financial_entries || undefined,
+        financial_entries: hasSettlementVerb ? undefined : parsed.financial_entries || undefined,
         balance_adjustment_params: parsed.balance_adjustment_params || undefined,
         report_params: parsed.report_params || undefined,
         closing_params: parsed.closing_params || undefined,
@@ -582,6 +975,17 @@ Seja humanizado, acolhedor, tolerante com erros de digitação e variações fon
     } catch (err) {
       console.warn(`[routeConversationalIntent] Erro no modelo ${modelName}:`, err);
     }
+  }
+
+  // Fallback seguro se todos os modelos falharem em comando de baixa
+  if (hasSettlementVerb) {
+    return {
+      intent: 'SETTLE_ACCOUNT',
+      confidence: 0.9,
+      is_applicable: true,
+      reply_text:
+        'Não localizei nenhuma conta aberta com esses critérios no momento. Deseja que eu liste todas as suas contas abertas?',
+    };
   }
 
   return {

@@ -46,7 +46,7 @@ export async function getParametrizedTaxRegimeLimits(
     return cachedLimits[regimeCode];
   }
 
-  const fallbackMeiLimit = Number(process.env.MEI_ANNUAL_LIMIT) || 140000;
+  const fallbackMeiLimit = Number(process.env.MEI_ANNUAL_LIMIT) || 81000;
 
   const defaultConfigs: Record<string, CachedRegimeLimit> = {
     mei: {
@@ -87,8 +87,16 @@ export async function getParametrizedTaxRegimeLimits(
       for (const row of dbLimits) {
         const key = (row.regime || '').toLowerCase();
         const baseKey = key.includes('mei') ? 'mei' : key.includes('epp') ? 'simples_epp' : 'simples_me';
-        const annLim = Number(row.annual_limit) || defaultConfigs[baseKey].annualLimit;
-        const tolLim = Number(row.tolerance_limit) || Math.round(annLim * 1.2);
+        const rawAnnLim = Number(row.annual_limit);
+        const annLim =
+          baseKey === 'mei' && (!rawAnnLim || rawAnnLim === 140000)
+            ? fallbackMeiLimit
+            : rawAnnLim || defaultConfigs[baseKey].annualLimit;
+        const rawTolLim = Number(row.tolerance_limit);
+        const tolLim =
+          baseKey === 'mei' && (!rawTolLim || rawTolLim === 168000)
+            ? Math.round(annLim * 1.2)
+            : rawTolLim || Math.round(annLim * 1.2);
 
         parsed[baseKey] = {
           code: baseKey as any,
@@ -117,9 +125,9 @@ export const TAX_CONFIGS = {
   mei: {
     code: 'mei' as const,
     name: 'MEI (Microempreendedor Individual)',
-    annualLimit: Number(process.env.MEI_ANNUAL_LIMIT) || 140000,
-    toleranceLimit: Math.round((Number(process.env.MEI_ANNUAL_LIMIT) || 140000) * 1.2),
-    monthlyAverageMax: Math.round((Number(process.env.MEI_ANNUAL_LIMIT) || 140000) / 12),
+    annualLimit: Number(process.env.MEI_ANNUAL_LIMIT) || 81000,
+    toleranceLimit: Math.round((Number(process.env.MEI_ANNUAL_LIMIT) || 81000) * 1.2),
+    monthlyAverageMax: Math.round((Number(process.env.MEI_ANNUAL_LIMIT) || 81000) / 12),
   },
   simples_me: {
     code: 'simples_me' as const,
@@ -267,12 +275,13 @@ export async function getTaxRevenueTracking(params: {
   const maxSafeMonthlyAvg = remaining / monthsRemaining;
 
   // Risco e cor
+  const exceedsProportionalMonthlyAvg = currentMonthlyAvg > config.monthlyAverageMax;
   let riskLevel: 'green' | 'yellow' | 'orange' | 'red' = 'green';
   if (totalRevenue > config.annualLimit) {
     riskLevel = 'red';
   } else if (percentage >= 90) {
     riskLevel = 'orange';
-  } else if (percentage >= 75) {
+  } else if (percentage >= 75 || (activeRegimeCode === 'mei' && exceedsProportionalMonthlyAvg)) {
     riskLevel = 'yellow';
   } else {
     riskLevel = 'green';
@@ -342,6 +351,16 @@ Ou apenas me diga: *"Minha média é 10 mil no caixa"*, que eu oriento a melhor 
     } else {
       statusMessage += `\n🟢 *Tudo Saudável e no Rumo Certo:*\n`;
       statusMessage += `Seu faturamento está equilibrado e super confortável dentro da faixa do ${config.name}. Siga acelerando!`;
+    }
+
+    if (activeRegimeCode === 'mei' && exceedsProportionalMonthlyAvg) {
+      const proportionalLimitFmt = (currentMonth * config.monthlyAverageMax).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      });
+      statusMessage += `\n\n⚠️ *Aviso Preventivo de Média Proporcional (MEI):*\n`;
+      statusMessage += `Seu faturamento acumulado até o mês ${currentMonth} (${totalFmt}) ultrapassou a média proporcional de *${monthlyAllowedLimitFmt}/mês* (referência proporcional acumulada de ${proportionalLimitFmt}).\n`;
+      statusMessage += `Monitore os próximos meses com atenção para manter-se dentro do teto legal de *R$ 81.000,00/ano* (margem de tolerância de 20%: *R$ 97.200,00*).`;
     }
 
     statusMessage += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;

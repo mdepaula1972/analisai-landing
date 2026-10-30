@@ -77,10 +77,18 @@ export interface ExtractedDocumentData {
   is_financial_doc?: boolean;
   doc_type: 'nfe' | 'nfse' | 'boleto' | 'recibo' | 'cupom' | 'das_mei' | 'outro';
   counterparty_name: string;
+  counterparty?: string | null;
+  raw_ocr_text?: string | null;
+  notes?: string | null;
+  critical_notes?: string | null;
+  bank_name?: string | null;
+  has_boleto_layout?: boolean | null;
   tax_id?: string | null;
   total_amount: number;
   due_date?: string | null;
   issue_date?: string | null;
+  invoice_number_ref?: string | null;
+  digitable_line?: string | null;
   barcode_or_pix?: string | null;
   barcode?: string | null;
   pix_code?: string | null;

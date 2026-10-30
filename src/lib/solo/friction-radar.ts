@@ -180,10 +180,10 @@ Nenhuma fricção, dúvida ou anomalia registrada nos últimos ${days} dias!
 O sistema está operando com fluidez total. 🚀`;
   }
 
-  const questions = insights.filter((i) => i.event_type === 'question');
-  const frictions = insights.filter((i) => i.event_type === 'friction' || i.event_type === 'onboarding_hesitation');
-  const praises = insights.filter((i) => i.event_type === 'praise');
-  const unsupported = insights.filter((i) => i.event_type === 'unsupported');
+  const questions = insights.filter((i: any) => i.event_type === 'question');
+  const frictions = insights.filter((i: any) => i.event_type === 'friction' || i.event_type === 'onboarding_hesitation');
+  const praises = insights.filter((i: any) => i.event_type === 'praise');
+  const unsupported = insights.filter((i: any) => i.event_type === 'unsupported');
 
   let report = `🔍 *Radar de Aprendizado & Fricções do AnalisAí:*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━

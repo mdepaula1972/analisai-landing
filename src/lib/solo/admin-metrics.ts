@@ -272,7 +272,7 @@ export async function collectAdminMetrics(): Promise<AdminMetricsData> {
 
   return {
     summary: {
-      totalClients: clients.filter((c) => !c.is_admin).length,
+      totalClients: clients.filter((c: any) => !c.is_admin).length,
       activeSubscribers: payingClientIds.size,
       mrrCents,
       mrrFormatted,

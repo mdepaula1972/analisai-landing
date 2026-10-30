@@ -70,11 +70,11 @@ export async function GET(req: NextRequest) {
         .gte('cycle_end', sixtyDaysAgo);
 
       const overflowCycles = (pastCycles || []).filter(
-        (c) => c.hit_doc_limit || c.hit_bot_limit || c.hit_analysis_limit
+        (c: any) => c.hit_doc_limit || c.hit_bot_limit || c.hit_analysis_limit
       );
 
       const recentDeclined = (pastCycles || []).some(
-        (c) => c.upsell_declined_at && new Date(c.upsell_declined_at) > subDays(new Date(), 45)
+        (c: any) => c.upsell_declined_at && new Date(c.upsell_declined_at) > subDays(new Date(), 45)
       );
 
       // Se atingiu o limite em 2 ciclos e não recusou recentemente

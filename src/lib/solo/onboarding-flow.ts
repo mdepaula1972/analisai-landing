@@ -353,7 +353,7 @@ export function getPjOnboardingCompletionMessage(regime: 'mei' | 'simples_me' | 
 A partir de agora, suas finanças serão geridas com inteligência tributária:
 • 📑 *Leitura de notas fiscais, boletos e recibos* com extração automática
 • ⏰ *Lembretes na véspera às 10h* com Pix copia-e-cola para não pagar juros
-• 🌡️ *Termômetro MEI:* Radar ativo no faturamento para monitorar o teto anual de até R$ 81 mil (~R$ 6.750/mês)
+• 🌡️ *Termômetro MEI:* Radar ativo no faturamento para monitorar o teto anual de *R$ 81.000,00* (média proporcional de *R$ 6.750,00/mês* e tolerância de 20% até *R$ 97.200,00*)
 • 📊 *Livro Caixa e DRE* prontos para você acompanhar e enviar ao contador
 
 📸 *Para começar agora mesmo:*

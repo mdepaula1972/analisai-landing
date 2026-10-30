@@ -31,16 +31,14 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     let coletaId = crypto.randomUUID();
+    const isValidUUID =
+      Boolean(pedido_id) &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        pedido_id
+      );
 
     if (supabaseUrl && supabaseServiceKey) {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-      // Se temos pedido_id válido em formato UUID, tenta associar
-      const isValidUUID =
-        pedido_id &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          pedido_id
-        );
 
       const dadosExtraidos = {
         nome_negocio,

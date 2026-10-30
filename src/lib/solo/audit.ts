@@ -10,7 +10,9 @@ export interface RecordAuditParams {
     | 'DELETE_BILL'
     | 'ADD_TEAM_MEMBER'
     | 'REMOVE_TEAM_MEMBER'
-    | 'UPDATE_TEAM_MEMBER';
+    | 'UPDATE_TEAM_MEMBER'
+    | 'TEAM_MEMBER_ACTIVATED'
+    | 'UNAUTHORIZED_ACCESS_ATTEMPT';
   entityType: 'payables_receivables' | 'cash_ledger_entries' | 'client_team_members';
   entityId?: string;
   details: Record<string, any>;

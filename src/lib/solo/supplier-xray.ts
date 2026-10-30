@@ -37,7 +37,7 @@ export async function runSupplierSearchWithGrounding(
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
-    tools: [{ googleSearch: {} }],
+    tools: [{ googleSearch: {} } as any],
     systemInstruction: `Você é o Auditor Especialista de Compras e Suprimentos do AnalisAí.
 Sua meta é encontrar alternativas reais de fornecedores para pequenas empresas brasileiras, visando redução de custos e melhores prazos.
 UTILIZE A BUSCA DO GOOGLE para encontrar empresas ativas, contatos reais e diferenciais.

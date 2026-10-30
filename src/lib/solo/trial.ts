@@ -1,43 +1,6 @@
 
 import { ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_DISPLAY } from '@/lib/solo/constants';
 
-/**
- * Retorna o link de convite oficial para o parceiro indicar contatos
- * Aponta diretamente para o robô oficial do AnalisAí: (13) 92009-9874
- */
-export function getPioneerShareLink(phone: string): string {
-  const clean = phone.replace(/\D/g, '');
-  const text = encodeURIComponent(`Olá! Vim por indicação do Analisador ${clean} para testar o AnalisAí.`);
-  return `https://wa.me/${OFFICIAL_BOT_WHATSAPP}?text=${text}`;
-}
-
-export function getPioneerShareMessage(phone: string): string {
-  const clean = phone.replace(/\D/g, '');
-  const link = getPioneerShareLink(phone);
-  return `⚡ *Painel do Analisador • AnalisAí* ⚡
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Transforme suas conexões em renda mensal no Pix e use o AnalisAí de graça!
-
-🎯 *Seu Selo:* *Analisador em Ação*
-🎁 *Meta para Selo Oficial:* Traga 3 parceiros pagantes e conquiste o **Selo Analisador Oficial** com a **assinatura Solo 100% GRATUITA todo mês**!
-
-💰 *Comissões Recorrentes por Plano (~20%/mês no Pix):*
-• *Plano Start (R$ 39,90):* +R$ 8,00 / mês
-• *Plano Solo (R$ 87,99):* +R$ 18,00 / mês
-• *Plano Solo Plus (R$ 157,99):* +R$ 32,00 / mês
-• *Plano Pro (R$ 297,00):* +R$ 60,00 / mês
-• *Plano Super (R$ 597,00):* +R$ 120,00 / mês
-_(A comissão cai na sua conta todo mês enquanto seu indicado mantiver o plano ativo!)_
-
-🔗 *Seu Link Exclusivo de Analisador:*
-${link}
-
-📲 *Mensagem para copiar e enviar:*
-_"Opa! Estou usando o AnalisAí para organizar minhas contas e pagar tudo sem estresse direto pelo WhatsApp. Você pode testar de graça agora enviando uma foto de conta ou boleto para o robô oficial: ${link}"_
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 Cadastre sua chave Pix enviando: *!pix sua_chave*`;
-}
 export const MAX_BETA_VIP_USERS = 5000;
 export const BETA_VIP_DOCS_LIMIT = 100;
 export const BETA_VIP_DAYS = 30;
@@ -249,11 +212,13 @@ export async function recordTrialUsage(
   }
 
   // Se for uma conta definitiva com valor real e existir uma provisão prévia para o mesmo fornecedor ou serviço, concilia!
-  // REGRA CRÍTICA: NUNCA reconcilia se a conta existente for uma conta real (duas contas reais são despesas distintas!)
+  // REGRA CRÍTICA: NUNCA reconcilia se a conta existente for uma conta real nem se forem parcelas distintas!
   let reconciled = false;
-  if (!isProvision && numAmount && numAmount > 0) {
+  const isInstallmentEntry = /\(parc\.?\s*\d+\/\d+\)/i.test(supplierCandidate);
+  if (!isProvision && !isInstallmentEntry && numAmount && numAmount > 0) {
     const existingIndex = billsList.findIndex((b: any) => {
       if (!b.is_provision) return false;
+      if (b.due_date && docData.due_date && b.due_date !== docData.due_date) return false;
 
       const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase().trim();
       const candName = supplierCandidate.toLowerCase().trim();
@@ -280,6 +245,7 @@ export async function recordTrialUsage(
         category: categoryCandidate || old.category,
         payer_name: docData.payer_name || old.payer_name || null,
         payer_tax_id: docData.payer_tax_id || old.payer_tax_id || null,
+        entry_type: docData.entry_type || old.entry_type || 'payable',
         is_provision: false,
         reconciled_at: new Date().toISOString(),
       };
@@ -310,13 +276,14 @@ export async function recordTrialUsage(
           due_date: inst.due_date || null,
           barcode_or_pix: inst.barcode_or_pix || barcodeOrPixCandidate,
           category: categoryCandidate,
+          entry_type: docData.entry_type || 'payable',
           payer_name: docData.payer_name || null,
           payer_tax_id: docData.payer_tax_id || null,
           payer_tax_type: docData.payer_tax_type || null,
           is_provision: isProvision,
           is_past: isPast,
           is_insurance: Boolean(docData.is_insurance),
-          status: isPast ? 'pending_past_confirmation' : 'open',
+          status: isPast ? 'overdue' : 'open',
           reminder_eve_sent: false,
           reminder_due_sent: false,
           created_at: new Date().toISOString(),
@@ -330,12 +297,14 @@ export async function recordTrialUsage(
         due_date: docData.due_date || null,
         barcode_or_pix: barcodeOrPixCandidate,
         category: categoryCandidate,
+        entry_type: docData.entry_type || 'payable',
         payer_name: docData.payer_name || null,
         payer_tax_id: docData.payer_tax_id || null,
         payer_tax_type: docData.payer_tax_type || null,
         is_provision: isProvision,
         is_insurance: Boolean(docData.is_insurance),
         is_rent: Boolean(docData.is_rent),
+        status: 'open',
         reminder_eve_sent: false,
         reminder_due_sent: false,
         created_at: new Date().toISOString(),
@@ -343,7 +312,7 @@ export async function recordTrialUsage(
     }
   }
 
-  await supabase
+  const { error: upsertErr } = await supabase
     .from('trial_leads')
     .upsert(
       {
@@ -354,9 +323,6 @@ export async function recordTrialUsage(
         amount: effectiveAmount,
         due_date: effectiveDueDate,
         barcode_or_pix: barcodeOrPixCandidate,
-        category: categoryCandidate,
-        payer_name: docData.payer_name || (leadRecord as any)?.payer_name || null,
-        payer_tax_id: docData.payer_tax_id || (leadRecord as any)?.payer_tax_id || null,
         trial_docs_count: reconciled ? (leadRecord as any)?.trial_docs_count || newCount : newCount,
         trial_docs_limit: newLimit,
         interested_plan: suggestedPlan,
@@ -367,6 +333,10 @@ export async function recordTrialUsage(
       },
       { onConflict: 'whatsapp_number' }
     );
+
+  if (upsertErr) {
+    console.error('[recordTrialUsage] Erro ao gravar em trial_leads:', upsertErr);
+  }
 
   return { isDuplicate: false };
 }
@@ -1075,7 +1045,14 @@ export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de conf
  * Formata uma lista de contas de forma elegante para mensagens do WhatsApp
  */
 export function formatBillsList(bills: any[]): string {
-  return bills
+  const sortedBills = [...(bills || [])].sort((a, b) => {
+    const timeA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const timeB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    if (timeA !== timeB) return timeA - timeB;
+    return Number(b.amount ?? b.total_amount ?? 0) - Number(a.amount ?? a.total_amount ?? 0);
+  });
+
+  return sortedBills
     .map((b) => {
       const fornecedor = b.supplier_name || b.counterparty_name || 'Conta / Fornecedor';
       const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
@@ -1386,7 +1363,7 @@ export async function getTrialBills(phone: string): Promise<any[]> {
 export async function updateTrialBill(
   phone: string,
   identifier: string,
-  updates: Partial<{ amount: number; due_date: string; is_provision: boolean; is_paid: boolean; supplier_name: string }>
+  updates: Partial<{ amount: number; due_date: string; is_provision: boolean; is_paid: boolean; supplier_name: string; status: string; notes: string; barcode_or_pix: string | null }>
 ): Promise<{ updated: boolean; oldBill?: any; newBill?: any }> {
   const supabase = createServiceRoleClient();
   const cleanPhone = phone.replace(/\D/g, '');
@@ -1417,9 +1394,17 @@ export async function updateTrialBill(
   if (index === -1) return { updated: false };
 
   const oldBill = { ...lead.bills_list[index] };
+  const finalUpdates = { ...updates };
+  if (finalUpdates.supplier_name && oldBill.supplier_name) {
+    const parcMatch = String(oldBill.supplier_name).match(/\(Parc\.?\s*\d+\/\d+\)/i);
+    if (parcMatch && !/\(Parc\.?\s*\d+\/\d+\)/i.test(finalUpdates.supplier_name)) {
+      finalUpdates.supplier_name = `${finalUpdates.supplier_name.trim()} ${parcMatch[0]}`;
+    }
+  }
+
   const newBill = {
     ...oldBill,
-    ...updates,
+    ...finalUpdates,
     updated_at: new Date().toISOString(),
   };
 
@@ -1485,38 +1470,93 @@ export async function deleteTrialBill(
 /**
  * Formata as contas de degustação em mensagem executiva WhatsApp, separando contas a pagar e contas a receber
  */
-export function formatTrialBillsListMessage(billsList: any[], periodLabel: string = 'Suas Contas Salvas'): string {
-  if (!billsList || billsList.length === 0) {
-    return `📋 *${periodLabel} (Degustação VIP)*
+export function formatTrialBillsListMessage(billsList: any[], periodLabel: string = 'Agenda Financeira Consolidada'): string {
+  const activeBills = (billsList || []).filter((b) => !b.is_paid && b.status !== 'paid');
+
+  if (activeBills.length === 0) {
+    return `📋 *Agenda Financeira Consolidada*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Você não possui nenhum lançamento agendado para o período consultado.
+Você não possui nenhum lançamento pendente para o período consultado.
 
 Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pagar internet R$ 90 dia 21 e receber cliente R$ 1.500 dia 25"*) para agendar! 🚀`;
   }
 
-  const payables = billsList.filter((b) => (b.entry_type || 'payable') !== 'receivable' && !b.is_provision);
-  const receivables = billsList.filter((b) => (b.entry_type || 'payable') === 'receivable' && !b.is_provision);
-  const provisions = billsList.filter((b) => b.is_provision);
+  const brFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const [dStr, mStr, yStr] = brFormatter.format(new Date()).split('/');
+  const todayIso = `${yStr}-${mStr}-${dStr}`;
+  const todayMs = Date.parse(`${todayIso}T12:00:00Z`);
 
-  let totalPayables = 0;
+  const formatBrDate = (isoDate?: string | null): string => {
+    if (!isoDate) return 'Data a confirmar';
+    const clean = String(isoDate).slice(0, 10);
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return formatDueDateDetails(isoDate);
+  };
+
+  const getOverdueDays = (isoDate?: string | null): number => {
+    if (!isoDate) return 0;
+    const clean = String(isoDate).slice(0, 10);
+    const dueMs = Date.parse(`${clean}T12:00:00Z`);
+    if (isNaN(dueMs) || dueMs >= todayMs) return 0;
+    return Math.max(1, Math.round((todayMs - dueMs) / (1000 * 60 * 60 * 24)));
+  };
+
+  const sortByDue = (a: any, b: any) => {
+    const timeA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const timeB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    if (timeA !== timeB) return timeA - timeB;
+    return Number(b.amount ?? b.total_amount ?? 0) - Number(a.amount ?? a.total_amount ?? 0);
+  };
+
+  const allPayables = activeBills.filter((b) => (b.entry_type || 'payable') !== 'receivable');
+  const overduePayables = allPayables.filter((b) => b.due_date && String(b.due_date).slice(0, 10) < todayIso).sort(sortByDue);
+  const upcomingPayables = allPayables.filter((b) => !b.due_date || String(b.due_date).slice(0, 10) >= todayIso).sort(sortByDue);
+  const receivables = activeBills.filter((b) => (b.entry_type || 'payable') === 'receivable').sort(sortByDue);
+
+  let totalOverduePayables = 0;
+  let totalUpcomingPayables = 0;
   let totalReceivables = 0;
-  let totalProvisions = 0;
 
-  let text = `📋 *${periodLabel} (Degustação VIP)*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  let text = `📋 *Agenda Financeira Consolidada*\n\n`;
 
-  if (payables.length > 0) {
-    text += `🔴 *CONTAS A PAGAR / DESPESAS (${payables.length}):*\n`;
-    for (const b of payables) {
+  if (overduePayables.length > 0) {
+    text += `🔴 *CONTAS A PAGAR VENCIDAS (${overduePayables.length}):*\n`;
+    for (const b of overduePayables) {
       const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
-      const val = Number(rawVal || 0);
-      totalPayables += val;
-      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
-      const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
-      const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
+      const val = Math.abs(Number(rawVal || 0));
+      totalOverduePayables += val;
+      const valFmt = val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const dueFmt = formatBrDate(b.due_date);
+      const overdueDays = getOverdueDays(b.due_date);
       const sup = b.supplier_name || b.counterparty_name || 'Conta';
-      const catLabel = b.category ? formatCategoryLabel(b.category) : null;
-      const catInfo = catLabel ? ` | 📂 ${catLabel}` : '';
-      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}${catInfo}\n`;
+      text += `• *${sup}*\n  💰 R$ ${valFmt} | 📅 ${dueFmt} (⚠️ Vencido há ${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'})\n`;
+      if (b.barcode_or_pix) {
+        text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${sup.toLowerCase().split(' ')[0]}* para copiar)_\n`;
+      }
+    }
+    text += `\n`;
+  }
+
+  if (upcomingPayables.length > 0) {
+    text += `🔴 *CONTAS A PAGAR / DESPESAS — PRÓXIMOS 30 DIAS (${upcomingPayables.length}):*\n`;
+    for (const b of upcomingPayables) {
+      const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
+      const val = Math.abs(Number(rawVal || 0));
+      totalUpcomingPayables += val;
+      const valFmt = val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const dueFmt = formatBrDate(b.due_date);
+      const isDueToday = b.due_date && String(b.due_date).slice(0, 10) === todayIso;
+      const todayBadge = isDueToday ? ' (🔔 Vence HOJE!)' : '';
+      const sup = b.supplier_name || b.counterparty_name || 'Conta';
+      text += `• *${sup}*\n  💰 R$ ${valFmt} | 📅 ${dueFmt}${todayBadge}\n`;
       if (b.barcode_or_pix) {
         text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${sup.toLowerCase().split(' ')[0]}* para copiar)_\n`;
       }
@@ -1528,58 +1568,25 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
     text += `🟢 *CONTAS A RECEBER / RECEITAS (${receivables.length}):*\n`;
     for (const b of receivables) {
       const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
-      const val = Number(rawVal || 0);
+      const val = Math.abs(Number(rawVal || 0));
       totalReceivables += val;
-      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
-      const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
-      const recTag = b.is_recurring ? ' 🔄 _(Mensal)_' : '';
-      const sup = b.supplier_name || b.counterparty_name || 'Origem';
-      const catLabel = b.category ? formatCategoryLabel(b.category) : null;
-      const catInfo = catLabel ? ` | 📂 ${catLabel}` : '';
-      text += `• *${sup}*${recTag}\n  💰 ${valFmt} | 📅 ${dueFmt}${catInfo}\n`;
+      const valFmt = val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const dueFmt = formatBrDate(b.due_date);
+      const overdueDays = getOverdueDays(b.due_date);
+      const overdueBadge = overdueDays > 0 ? ` (⚠️ Vencido há ${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'})` : '';
+      const sup = b.supplier_name || b.counterparty_name || 'Cliente';
+      text += `• *${sup}*\n  💰 R$ ${valFmt} | 📅 ${dueFmt}${overdueBadge}\n`;
     }
     text += `\n`;
   }
 
-  if (provisions.length > 0) {
-    text += `📌 *PROVISÕES / ESTIMATIVAS (${provisions.length}):*\n`;
-    for (const b of provisions) {
-      const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
-      const val = Number(rawVal || 0);
-      totalProvisions += val;
-      const valFmt = val > 0 ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
-      const dueFmt = b.due_date ? formatDueDateDetails(b.due_date) : 'Data a confirmar';
-      const typeStr = (b.entry_type || 'payable') === 'receivable' ? 'Receita Prevista' : 'Despesa Estimada';
-      const sup = b.supplier_name || b.counterparty_name || 'Conta';
-      const catLabel = b.category ? formatCategoryLabel(b.category) : null;
-      const catInfo = catLabel ? ` | 📂 ${catLabel}` : '';
-      text += `• *${sup}* _(${typeStr})_\n  💰 Estimativa: ${valFmt} | 📅 ${dueFmt}${catInfo}\n`;
-    }
-    text += `\n`;
-  }
-
-  const netBalance = totalReceivables - totalPayables;
-  const netBalanceFmt = (netBalance >= 0 ? '+' : '') + netBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const totalPagarPendente = totalOverduePayables + totalUpcomingPayables;
+  const totalPagarFmt = totalPagarPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const totalReceberFmt = totalReceivables.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  if (receivables.length > 0 && payables.length > 0) {
-    text += `🔴 *Total a Pagar:* *${totalPayables.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
-    text += `🟢 *Total a Receber:* *${totalReceivables.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
-    text += `💰 *Saldo Líquido Previsto:* *${netBalanceFmt}*\n`;
-  } else if (receivables.length > 0) {
-    text += `🟢 *Total a Receber:* *${totalReceivables.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
-  } else {
-    text += `🔴 *Total a Pagar:* *${(totalPayables + totalProvisions).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}*\n`;
-  }
-
-  text += `⏰ *Fique tranquilo:* Às 10h da véspera de cada vencimento, te envio o lembrete aqui para você manter seu fluxo em dia!\n\n`;
-  text += `💡 *Ações Rápidas (Texto ou Voz):*\n`;
-  text += `• *Copiar Código:* Digite *"pagar [nome]"* para receber a linha digitável/Pix;\n`;
-  text += `• *Alterar Valor:* *"Mudar valor da [nome] para [valor]"*;\n`;
-  text += `• *Alterar Vencimento:* *"Mudar vencimento da [nome] para dia [dia]"*;\n`;
-  text += `• *Excluir:* *"Excluir conta da [nome]"*;\n`;
-  text += `• *Outros Períodos:* Envie *"contas semana"*, *"contas mês"* ou *"todas as contas"*.\n`;
-  text += `_(Você também pode enviar qualquer um desses comandos por áudio!)_`;
+  text += `🔴 Total a Pagar Pendente: R$ ${totalPagarFmt}\n`;
+  text += `🟢 Total a Receber: R$ ${totalReceberFmt}`;
 
   return text;
 }

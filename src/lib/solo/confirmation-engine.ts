@@ -1,18 +1,19 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
-import { recordTrialUsage } from '@/lib/solo/trial';
+import { recordTrialUsage, updateTrialBill } from '@/lib/solo/trial';
 import { parseConversationalCorrections, parseInvoicePaymentResolution } from '@/lib/solo/gemini';
+import { isUndoLastActionMessage } from '@/lib/solo/conversational-router';
 import { addMinutes } from 'date-fns';
 
 export interface PendingConfirmationPayload {
   amount: number;
   counterparty_name: string;
   description?: string;
-  due_date?: string; // YYYY-MM-DD
-  entry_date?: string; // YYYY-MM-DD
+  due_date?: string | null; // YYYY-MM-DD
+  entry_date?: string | null; // YYYY-MM-DD
   issue_date?: string | null;
-  entry_type: 'payable' | 'receivable' | 'income' | 'expense';
+  entry_type: 'payable' | 'receivable' | 'income' | 'expense' | 'other';
   category_name?: string;
   dre_group?: string;
   entity_scope?: 'PJ' | 'PF';
@@ -21,6 +22,8 @@ export interface PendingConfirmationPayload {
   pix_key_type?: string | null;
   document_id?: string | null;
   bill_id?: string | null;
+  target_account_id?: string | null;
+  target_source?: 'payables_receivables' | 'trial_leads';
   is_provision?: boolean;
   installments_count?: number | null;
   is_installment?: boolean;
@@ -146,6 +149,230 @@ export function formatPaymentMethodLabel(method?: string | null): string {
 }
 
 /**
+ * Formata a linha digitável ou chave Pix em bloco dedicado exclusivo para cópia em 1 toque no celular
+ */
+export function formatOneTouchPaymentCodeMessage(favorecido: string, rawCode: string): string {
+  const trimmed = (rawCode || '').trim();
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  const isNumericBoletoLine =
+    !trimmed.startsWith('000201') &&
+    !/[a-zA-Z@]/.test(trimmed) &&
+    digitsOnly.length >= 20;
+  const linhaDigitavelPura = isNumericBoletoLine ? digitsOnly : trimmed;
+  const cleanFav = (favorecido || 'Fornecedor').trim();
+
+  return `📋 *Linha Digitável (${cleanFav}):*\n\n${linhaDigitavelPura}\n\n_(Toque e segure sobre os números acima para copiar e colar no app do seu banco)_`;
+}
+
+/**
+ * Executa o estorno / desfazer da última baixa realizada nos últimos 15 minutos (UNDO_LAST_ACTION).
+ */
+export async function executeUndoLastSettlement(params: {
+  client?: any;
+  phone: string;
+  cleanPhone: string;
+}): Promise<{ success: boolean; message: string }> {
+  const { client, phone, cleanPhone } = params;
+  const supabase = createServiceRoleClient();
+
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  const fifteenMinAgoIso = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+
+  let query = supabase
+    .from('bot_action_confirmations')
+    .select('*')
+    .in('status', ['confirmed', 'CONFIRMED'])
+    .in('action_type', ['SETTLE_ACCOUNT', 'settle_account', 'D1_SETTLEMENT_CHECK'])
+    .gte('created_at', fifteenMinAgoIso)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (client?.id) {
+    query = query.or(`client_id.eq.${client.id},phone_number.eq.${cleanPhone},phone_number.eq.${altPhone}`);
+  } else {
+    query = query.or(`phone_number.eq.${cleanPhone},phone_number.eq.${altPhone}`);
+  }
+
+  const { data: confirmedRows } = await query;
+  const lastAction = confirmedRows?.[0];
+
+  if (!lastAction) {
+    const noUndoMsg = `ℹ️ Não localizei nenhuma baixa confirmada nos últimos 15 minutos para desfazer.\n\n💡 Digite *contas* para consultar sua agenda financeira.`;
+    await sendEvolutionText({ phone, text: noUndoMsg });
+    return { success: false, message: noUndoMsg };
+  }
+
+  const payload = (lastAction.proposed_payload || lastAction.extracted_payload || {}) as Record<string, any>;
+  const targetIdStr = String(
+    payload.target_account_id || payload.billId || payload.bill_id || lastAction.target_entity_id || ''
+  );
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdStr);
+  const favorecido = String(payload.target_description || payload.counterparty_name || 'Fornecedor');
+  const valorNum = Math.abs(Number(payload.target_amount ?? payload.amount ?? 0));
+  const settledLedgerId = payload.settled_ledger_id ? String(payload.settled_ledger_id) : null;
+
+  // 1. Volta a conta em payables_receivables para status = 'pending' e limpa paid_at = null
+  if (isUuid) {
+    const { error: prUpdateErr } = await supabase
+      .from('payables_receivables')
+      .update({
+        status: 'pending',
+        paid_at: null,
+      } as any)
+      .eq('id', targetIdStr);
+
+    if (prUpdateErr) {
+      const { error: prFallbackErr } = await supabase
+        .from('payables_receivables')
+        .update({ status: 'pending' })
+        .eq('id', targetIdStr);
+
+      if (prFallbackErr) {
+        await supabase
+          .from('payables_receivables')
+          .update({ status: 'open' })
+          .eq('id', targetIdStr);
+      }
+    }
+  } else if (client?.id && favorecido) {
+    const { data: paidBill } = await supabase
+      .from('payables_receivables')
+      .select('id')
+      .eq('client_id', client.id)
+      .eq('status', 'paid')
+      .ilike('counterparty_name', `%${favorecido}%`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (paidBill?.id) {
+      const { error: prErr } = await supabase
+        .from('payables_receivables')
+        .update({ status: 'pending', paid_at: null } as any)
+        .eq('id', paidBill.id);
+      if (prErr) {
+        await supabase
+          .from('payables_receivables')
+          .update({ status: 'pending' })
+          .eq('id', paidBill.id);
+      }
+    }
+  }
+
+  // 1.b Também reabre em trial_leads.bills_list caso exista registro de degustação
+  const { data: lead } = await supabase
+    .from('trial_leads')
+    .select('id, bills_list')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+
+  if (lead && Array.isArray(lead.bills_list)) {
+    const bills = [...lead.bills_list];
+    let targetIdx = -1;
+
+    if (targetIdStr) {
+      targetIdx = bills.findIndex((b: any) => String(b.id || '') === targetIdStr);
+    }
+
+    if (targetIdx === -1 && targetIdStr.startsWith('trial_')) {
+      const idxCand = parseInt(targetIdStr.replace('trial_', ''), 10);
+      if (!isNaN(idxCand) && bills[idxCand]) {
+        targetIdx = idxCand;
+      }
+    }
+
+    if (targetIdx === -1 && favorecido) {
+      const qDesc = favorecido.toLowerCase().trim();
+      targetIdx = bills.findIndex((b: any) => {
+        const bName = (b.supplier_name || b.counterparty_name || '').toLowerCase();
+        return (b.is_paid || b.status === 'paid') && bName && (bName.includes(qDesc) || qDesc.includes(bName));
+      });
+    }
+
+    if (targetIdx >= 0) {
+      bills[targetIdx] = {
+        ...bills[targetIdx],
+        is_paid: false,
+        status: 'pending',
+        paid_at: null,
+        reconciled_at: null,
+      };
+      await supabase
+        .from('trial_leads')
+        .update({ bills_list: bills })
+        .eq('id', lead.id);
+    }
+  }
+
+  // 2. Remove ou estorna o lançamento correspondente em cash_ledger_entries
+  if (targetIdStr.startsWith('ledger_') && client?.id) {
+    const ledgerId = targetIdStr.replace(/^ledger_/, '');
+    await supabase
+      .from('cash_ledger_entries')
+      .update({ status: 'previsto' })
+      .eq('id', ledgerId)
+      .eq('client_id', client.id);
+  } else if (settledLedgerId) {
+    await supabase.from('cash_ledger_entries').delete().eq('id', settledLedgerId);
+  } else if (client?.id) {
+    const { data: recentLedger } = await supabase
+      .from('cash_ledger_entries')
+      .select('id, amount, description')
+      .eq('client_id', client.id)
+      .gte('created_at', fifteenMinAgoIso)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const matchedLedger = (recentLedger || []).find((entry: any) => {
+      const amtMatches = valorNum > 0 && Math.abs(Math.abs(Number(entry.amount || 0)) - valorNum) < 0.05;
+      const descMatches =
+        favorecido &&
+        String(entry.description || '')
+          .toLowerCase()
+          .includes(favorecido.toLowerCase());
+      return amtMatches || descMatches;
+    });
+
+    if (matchedLedger?.id) {
+      await supabase.from('cash_ledger_entries').delete().eq('id', matchedLedger.id);
+    }
+  }
+
+  // Marca a confirmação como revertida/cancelada para evitar duplo desfazer
+  const { error: revErr } = await supabase
+    .from('bot_action_confirmations')
+    .update({ status: 'reverted' })
+    .eq('id', lastAction.id);
+  if (revErr) {
+    await supabase
+      .from('bot_action_confirmations')
+      .update({ status: 'CANCELLED' })
+      .eq('id', lastAction.id);
+  }
+
+  // 3. Responde no WhatsApp com o formato exato
+  const valorFmt = valorNum.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const undoReply = `↩️ *Baixa desfeita com sucesso!*\n\nA conta de *R$ ${valorFmt}* (${favorecido}) voltou para o status de *Pendente* na sua agenda e o lançamento foi removido do Livro Caixa.`;
+
+  await sendEvolutionText({
+    phone,
+    text: undoReply,
+  });
+
+  return { success: true, message: undoReply };
+}
+
+/**
  * 2.3. Layout do Card de Conferência (Template WhatsApp)
  */
 export function formatConfirmationCard(payload: PendingConfirmationPayload): string {
@@ -266,7 +493,13 @@ _(Aguardando sua confirmação para registrar no caixa)_`;
 export async function createPendingConfirmation(params: {
   clientId?: string | null;
   phoneNumber: string;
-  actionType?: 'CASH_ENTRY' | 'PAYABLE_BILL' | 'RECEIVABLE_BILL' | 'INVOICE_CONSULTATIVE_PROMPT';
+  actionType?:
+    | 'CASH_ENTRY'
+    | 'PAYABLE_BILL'
+    | 'RECEIVABLE_BILL'
+    | 'INVOICE_CONSULTATIVE_PROMPT'
+    | 'ATTACH_BOLETO_TO_EXISTING_BILL'
+    | 'EXACT_DUPLICATE_CONFIRMATION';
   payload: PendingConfirmationPayload;
   sendWhatsAppCard?: boolean;
   initialStatus?: 'PENDING' | 'AWAITING_INVOICE_DETAILS';
@@ -296,7 +529,7 @@ export async function createPendingConfirmation(params: {
     .in('status', ['PENDING', 'pending', 'AWAITING_CORRECTION', 'AWAITING_INVOICE_DETAILS']);
 
   // Insere tanto em extracted_payload quanto em proposed_payload (compatibilidade)
-  const { data: record, error } = await supabase
+  let { data: record, error } = await supabase
     .from('bot_action_confirmations')
     .insert({
       client_id: params.clientId || null,
@@ -311,7 +544,24 @@ export async function createPendingConfirmation(params: {
     .single();
 
   if (error) {
-    console.error('[createPendingConfirmation] Erro ao gravar pendência:', error);
+    // Fallback caso a constraint do banco exija status 'PENDING'
+    const fallbackRes = await supabase
+      .from('bot_action_confirmations')
+      .insert({
+        client_id: params.clientId || null,
+        phone_number: cleanPhone,
+        action_type: determinedActionType,
+        extracted_payload: params.payload,
+        proposed_payload: params.payload,
+        status: 'PENDING',
+        expires_at: expiresAt,
+      })
+      .select('id')
+      .single();
+    record = fallbackRes.data;
+    if (fallbackRes.error) {
+      console.error('[createPendingConfirmation] Erro ao gravar pendência:', fallbackRes.error);
+    }
   }
 
   const cardMessage = formatConfirmationCard(params.payload);
@@ -344,7 +594,7 @@ export async function handlePendingConfirmation(params: {
   operatorRecord?: any;
 }): Promise<{ handled: boolean; status?: string }> {
   const { phone, cleanPhone, altPhone, rawText, client } = params;
-  if (!rawText || !rawText.trim()) {
+  if (!rawText || !rawText.trim() || isUndoLastActionMessage(rawText)) {
     return { handled: false };
   }
 
@@ -373,7 +623,7 @@ export async function handlePendingConfirmation(params: {
     return { handled: false };
   }
 
-  // Apenas processa se a ação for de lançamento financeiro, conferência D+1 ou provocação consultiva de NF
+  // Apenas processa se a ação for de lançamento financeiro, conferência D+1, vínculo de boleto/duplicidade ou provocação consultiva de NF
   const isFinancialConfirmation = [
     'CASH_ENTRY',
     'PAYABLE_BILL',
@@ -381,6 +631,8 @@ export async function handlePendingConfirmation(params: {
     'confirm_low_confidence_doc',
     'INVOICE_CONSULTATIVE_PROMPT',
     'D1_SETTLEMENT_CHECK',
+    'ATTACH_BOLETO_TO_EXISTING_BILL',
+    'EXACT_DUPLICATE_CONFIRMATION',
   ].includes(pendingAction.action_type);
 
   if (!isFinancialConfirmation) {
@@ -393,12 +645,143 @@ export async function handlePendingConfirmation(params: {
 
   const cleanText = rawText.trim().toLowerCase();
 
+  // ── AÇÃO ESPECIAL: VÍNCULO INTELIGENTE DE BOLETO À PARCELA DE NOTA FISCAL (ATTACH_BOLETO_TO_EXISTING_BILL) ──
+  if (pendingAction.action_type === 'ATTACH_BOLETO_TO_EXISTING_BILL') {
+    const targetAccountId = currentPayload.target_account_id || currentPayload.bill_id;
+    const billAmount = Math.abs(Number(currentPayload.amount || 0));
+    const counterparty = currentPayload.counterparty_name || 'Fornecedor';
+    const dueFmt = currentPayload.due_date ? formatDueDateDetails(currentPayload.due_date) : 'Data agendada';
+    const valFmt = billAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const isAttachOption1 =
+      /^(1\b|1️⃣|sim\b|s\b|vincular\b|anexar\b|unificar\b|ok\b|confirmar\b)/i.test(cleanText) && cleanText.length <= 45;
+    const isSeparateOption2 =
+      /^(2\b|2️⃣|n[aã]o,?\s*lan[çc]ar|lan[çc]ar\b|nova\b|separad[oa]\b)/i.test(cleanText) && cleanText.length <= 45;
+    const isCancelOption3 =
+      /^(3\b|3️⃣|cancelar\b|cancela\b|descartar\b|descarta\b)/i.test(cleanText) && cleanText.length <= 45;
+
+    if (isAttachOption1) {
+      const realIssuerName =
+        counterparty && !/^(emitente|fornecedor|agendamento)$/i.test(counterparty.trim())
+          ? counterparty.trim()
+          : undefined;
+
+      if (currentPayload.target_source === 'trial_leads' || (!client?.id && targetAccountId)) {
+        await updateTrialBill(cleanPhone, String(targetAccountId || counterparty), {
+          barcode_or_pix: currentPayload.barcode_or_pix || null,
+          is_provision: false,
+          status: 'pending',
+          ...(realIssuerName ? { supplier_name: realIssuerName } : {}),
+        });
+      } else if (client?.id && targetAccountId) {
+        const updateData: Record<string, any> = {
+          is_provision: false,
+          status: 'pending',
+        };
+        if (realIssuerName) {
+          updateData.counterparty_name = realIssuerName;
+        }
+        if (currentPayload.barcode_or_pix) {
+          updateData.barcode_or_pix = currentPayload.barcode_or_pix;
+        }
+        if (currentPayload.document_id) {
+          updateData.document_id = currentPayload.document_id;
+        }
+        await supabase
+          .from('payables_receivables')
+          .update(updateData)
+          .eq('id', targetAccountId);
+      }
+
+      await supabase
+        .from('bot_action_confirmations')
+        .update({ status: 'CONFIRMED' })
+        .eq('id', pendingAction.id);
+
+      const msg = `🔗 *Estimativa Convertida e Boleto Vinculado com Sucesso!*\n\nO boleto de *${valFmt}* (*${counterparty}*, vencimento em *${dueFmt}*) atualizou a parcela estimada da sua Nota Fiscal para agendamento definitivo sem duplicar o gasto no seu fluxo de caixa!`;
+
+      await sendEvolutionText({
+        phone,
+        text: msg,
+      });
+
+      const codeToCopy = currentPayload.barcode_or_pix || currentPayload.pix_key;
+      if (codeToCopy) {
+        await sendEvolutionText({
+          phone,
+          text: formatOneTouchPaymentCodeMessage(counterparty, codeToCopy),
+        });
+      }
+
+      return { handled: true, status: 'CONFIRMED' };
+    }
+
+    if (isCancelOption3) {
+      await supabase
+        .from('bot_action_confirmations')
+        .update({ status: 'CANCELLED' })
+        .eq('id', pendingAction.id);
+
+      await sendEvolutionText({
+        phone,
+        text: '❌ *Operação cancelada.* O seu agendamento original permanece intacto sem alterações.',
+      });
+
+      return { handled: true, status: 'CANCELLED' };
+    }
+
+    if (!isSeparateOption2) {
+      await sendEvolutionText({
+        phone,
+        text: `Por favor, escolha uma das opções para o boleto de *${valFmt}* (*${counterparty}*):\n\n*[1]* 🔗 Sim, atualizar agendamento existente\n*[2]* ➕ Não, lançar como despesa separada\n*[3]* ❌ Cancelar`,
+      });
+      return { handled: true, status: 'PENDING' };
+    }
+    // Se isSeparateOption2 for true, prossegue abaixo como confirmação de novo lançamento separado!
+  }
+
+  // ── AÇÃO ESPECIAL: CONFIRMAÇÃO DE POSSÍVEL DUPLICIDADE EXATA (EXACT_DUPLICATE_CONFIRMATION) ──
+  if (pendingAction.action_type === 'EXACT_DUPLICATE_CONFIRMATION') {
+    const billAmount = Math.abs(Number(currentPayload.amount || 0));
+    const counterparty = currentPayload.counterparty_name || 'Fornecedor';
+    const valFmt = billAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const isLaunchAnywayOption1 =
+      /^(1\b|1️⃣|sim\b|s\b|lan[çc]ar\b|mesmo assim\b)/i.test(cleanText) && cleanText.length <= 45;
+    const isCancelDuplicateOption2 =
+      /^(2\b|2️⃣|3\b|3️⃣|n[aã]o\b|n\b|cancelar\b|cancela\b|descartar\b|j[aá] est[aá]\b)/i.test(cleanText) &&
+      cleanText.length <= 45;
+
+    if (isCancelDuplicateOption2) {
+      await supabase
+        .from('bot_action_confirmations')
+        .update({ status: 'CANCELLED' })
+        .eq('id', pendingAction.id);
+
+      await sendEvolutionText({
+        phone,
+        text: `✅ *Lançamento duplicado descartado!*\n\nMantivemos apenas o agendamento original de *${counterparty}* (*${valFmt}*) ativo no seu fluxo de caixa.`,
+      });
+
+      return { handled: true, status: 'CANCELLED' };
+    }
+
+    if (!isLaunchAnywayOption1) {
+      await sendEvolutionText({
+        phone,
+        text: `Por favor, escolha uma das opções para a conta de *${valFmt}* (*${counterparty}*):\n\n*[1]* ➕ Lançar mesmo assim (conta repetida/diferente)\n*[2]* ❌ Cancelar (já está cadastrada)`,
+      });
+      return { handled: true, status: 'PENDING' };
+    }
+    // Se isLaunchAnywayOption1 for true, prossegue abaixo para gravar o novo lançamento!
+  }
+
   // ── AÇÃO ESPECIAL: CONFERÊNCIA INTERATIVA D+1 (LIQUIDAÇÃO / POSTERGAÇÃO) ──
   if (pendingAction.action_type === 'D1_SETTLEMENT_CHECK') {
     const billId = currentPayload.bill_id;
     const billAmount = Math.abs(Number(currentPayload.amount || 0));
     const counterparty = currentPayload.counterparty_name || 'Agendamento';
-    const rawType = (currentPayload as Record<string, unknown>).type;
+    const rawType = (currentPayload as unknown as Record<string, unknown>).type;
     const billType = currentPayload.entry_type === 'income' || rawType === 'receivable' ? 'receivable' : 'payable';
     const isInc = billType === 'receivable';
 
@@ -461,23 +844,40 @@ export async function handlePendingConfirmation(params: {
           .eq('id', billId);
       }
 
+      let settledLedgerId: string | null = null;
       if (client?.id) {
-        await supabase.from('cash_ledger_entries').insert({
-          client_id: client.id,
-          entry_date: new Date().toISOString().split('T')[0],
-          description: `Pagamento ${counterparty} (Liquidado D+1)`,
-          amount: isInc ? billAmount : -billAmount,
-          entry_type: isInc ? 'income' : 'expense',
-          dre_group: 'despesa_operacional',
-          status: 'realizado',
-          origin_profile: ((currentPayload as Record<string, unknown>).origin_profile as string) || 'PJ',
-          entry_nature: 'OPERATIONAL',
-        });
+        const { data: insertedLedger } = await supabase
+          .from('cash_ledger_entries')
+          .insert({
+            client_id: client.id,
+            entry_date: new Date().toISOString().split('T')[0],
+            description: `Pagamento ${counterparty} (Liquidado D+1)`,
+            amount: isInc ? billAmount : -billAmount,
+            entry_type: isInc ? 'income' : 'expense',
+            dre_group: 'despesa_operacional',
+            status: 'realizado',
+            origin_profile: ((currentPayload as unknown as Record<string, unknown>).origin_profile as string) || 'PJ',
+            entry_nature: 'OPERATIONAL',
+          })
+          .select('id')
+          .maybeSingle();
+        settledLedgerId = insertedLedger?.id || null;
       }
 
       await supabase
         .from('bot_action_confirmations')
-        .update({ status: 'CONFIRMED' })
+        .update({
+          status: 'CONFIRMED',
+          proposed_payload: {
+            ...currentPayload,
+            target_account_id: billId,
+            target_description: counterparty,
+            target_amount: billAmount,
+            target_type: billType,
+            settled_ledger_id: settledLedgerId,
+            confirmed_at: new Date().toISOString(),
+          },
+        })
         .eq('id', pendingAction.id);
 
       const valFmt = billAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -595,7 +995,10 @@ export async function handlePendingConfirmation(params: {
   }
 
   // ── ESTADO: AGUARDANDO DETALHES DE PAGAMENTO DA NOTA FISCAL (AWAITING_INVOICE_DETAILS) ──
-  if (pendingAction.status === 'AWAITING_INVOICE_DETAILS') {
+  if (
+    pendingAction.status === 'AWAITING_INVOICE_DETAILS' ||
+    pendingAction.action_type === 'INVOICE_CONSULTATIVE_PROMPT'
+  ) {
     // 1. Verifica se o usuário optou por cancelar
     if (
       /^(3\b|3️⃣|cancelar\b|cancela\b|descartar\b|descarta\b|n[aã]o\b|n\b|deixa\b|deixa pra l[aá]\b|apagar\b|excluir\b|errado\b)/i.test(
@@ -641,7 +1044,8 @@ export async function handlePendingConfirmation(params: {
       await supabase
         .from('bot_action_confirmations')
         .update({
-          status: 'AWAITING_INVOICE_DETAILS',
+          status: 'PENDING',
+          action_type: 'INVOICE_CONSULTATIVE_PROMPT',
           extracted_payload: partiallyUpdatedPayload,
           proposed_payload: partiallyUpdatedPayload,
           expires_at: addMinutes(new Date(), 30).toISOString(),
@@ -674,11 +1078,17 @@ export async function handlePendingConfirmation(params: {
       dre_group: resolution.category_override || currentPayload.dre_group,
     };
 
-    // Atualiza status para PENDING para que o usuário possa confirmar com [1]
+    const resolvedActionType =
+      updatedPayload.entry_type === 'receivable' || updatedPayload.entry_type === 'income'
+        ? 'RECEIVABLE_BILL'
+        : 'PAYABLE_BILL';
+
+    // Atualiza status para PENDING e action_type para que o usuário possa confirmar com [1]
     await supabase
       .from('bot_action_confirmations')
       .update({
         status: 'PENDING',
+        action_type: resolvedActionType,
         extracted_payload: updatedPayload,
         proposed_payload: updatedPayload,
         expires_at: addMinutes(new Date(), 30).toISOString(),
@@ -769,9 +1179,12 @@ export async function handlePendingConfirmation(params: {
 
   // ── ESTADO: PENDENTE DE CONFIRMAÇÃO (PENDING) ──
   const isConfirm =
-    /^(1\b|1️⃣|sim\b|s\b|confirmo\b|confirmar\b|salvar\b|pode salvar\b|correto\b|ok\b|positivo\b|com certeza\b|aprovar\b)/i.test(
+    pendingAction.action_type === 'ATTACH_BOLETO_TO_EXISTING_BILL' ||
+    pendingAction.action_type === 'EXACT_DUPLICATE_CONFIRMATION' ||
+    (/^(1\b|1️⃣|sim\b|s\b|confirmo\b|confirmar\b|salvar\b|pode salvar\b|correto\b|ok\b|positivo\b|com certeza\b|aprovar\b)/i.test(
       cleanText
-    ) && cleanText.length <= 40;
+    ) &&
+      cleanText.length <= 40);
 
   const isEdit =
     /^(2\b|2️⃣|corrigir\b|alterar\b|mudar\b|editar\b|ajustar\b|trocar\b|modificar\b)/i.test(cleanText) &&
@@ -835,9 +1248,11 @@ export async function handlePendingConfirmation(params: {
         }
 
         // Provisiona as parcelas futuras no Contas a Pagar (payables_receivables)
+        const todayIsoStr = new Date().toISOString().split('T')[0];
         if (currentPayload.upcoming_installments && currentPayload.upcoming_installments.length > 0) {
           const totInst = currentPayload.installments_count || ((currentPayload.past_installments?.length || 0) + currentPayload.upcoming_installments.length);
           for (const upcoming of currentPayload.upcoming_installments) {
+            const instStatus = upcoming.due_date && upcoming.due_date < todayIsoStr ? 'overdue' : 'open';
             await supabase.from('payables_receivables').insert({
               client_id: client.id,
               document_id: currentPayload.document_id || null,
@@ -846,9 +1261,9 @@ export async function handlePendingConfirmation(params: {
               amount: Math.abs(Number(upcoming.amount)),
               original_due_date: upcoming.due_date,
               current_due_date: upcoming.due_date,
-              status: 'open',
+              status: instStatus,
               barcode_or_pix: upcoming.barcode_or_pix || null,
-              is_provision: true,
+              is_provision: !upcoming.barcode_or_pix,
             });
           }
         } else {
@@ -856,6 +1271,7 @@ export async function handlePendingConfirmation(params: {
           const resolvedInstallments = resolveInstallmentsList(currentPayload);
           if (resolvedInstallments.length > 0) {
             for (const inst of resolvedInstallments) {
+              const instStatus = inst.due_date && inst.due_date < todayIsoStr ? 'overdue' : 'open';
               await supabase.from('payables_receivables').insert({
                 client_id: client.id,
                 document_id: currentPayload.document_id || null,
@@ -864,12 +1280,13 @@ export async function handlePendingConfirmation(params: {
                 amount: Math.abs(Number(inst.amount)),
                 original_due_date: inst.due_date,
                 current_due_date: inst.due_date,
-                status: 'open',
+                status: instStatus,
                 barcode_or_pix: inst.barcode_or_pix || null,
-                is_provision: true,
+                is_provision: !inst.barcode_or_pix,
               });
             }
           } else {
+            const singleStatus = entryDate < todayIsoStr ? 'overdue' : 'open';
             await supabase.from('cash_ledger_entries').insert({
               client_id: client.id,
               document_id: currentPayload.document_id || null,
@@ -888,15 +1305,24 @@ export async function handlePendingConfirmation(params: {
               amount: amountVal,
               original_due_date: entryDate,
               current_due_date: entryDate,
-              status: 'open',
+              status: singleStatus,
               barcode_or_pix: currentPayload.barcode_or_pix || null,
               is_provision: Boolean(currentPayload.is_provision),
             });
           }
         }
       }
-    } else {
-      // Trial Lead (Degustação gratuita)
+    }
+
+    // Sincroniza também em trial_leads.bills_list se for Lead em degustação (ou se já possuir registro em trial_leads)
+    const { data: existingTrialLead } = await supabase
+      .from('trial_leads')
+      .select('id')
+      .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (!client?.id || existingTrialLead?.id) {
       if (currentPayload.payment_condition === 'already_paid') {
         await recordTrialUsage(cleanPhone, {
           supplier_name: currentPayload.counterparty_name || 'Fornecedor',
@@ -919,6 +1345,7 @@ export async function handlePendingConfirmation(params: {
             entry_type: isInc ? 'receivable' : 'payable',
             category: dreGroup,
             barcode_or_pix: upcoming.barcode_or_pix || null,
+            is_provision: Boolean(currentPayload.is_provision && !upcoming.barcode_or_pix),
             document_type: currentPayload.description || 'Lançamento Parcelado',
           });
         }
@@ -934,6 +1361,7 @@ export async function handlePendingConfirmation(params: {
               entry_type: isInc ? 'receivable' : 'payable',
               category: dreGroup,
               barcode_or_pix: inst.barcode_or_pix || null,
+              is_provision: Boolean(currentPayload.is_provision && !inst.barcode_or_pix),
               document_type: currentPayload.description || 'Lançamento Parcelado',
             });
           }
@@ -948,6 +1376,7 @@ export async function handlePendingConfirmation(params: {
             barcode_or_pix: currentPayload.barcode_or_pix || null,
             pix_key: currentPayload.pix_key || null,
             pix_key_type: currentPayload.pix_key_type || null,
+            is_provision: Boolean(currentPayload.is_provision && !currentPayload.barcode_or_pix),
             document_type: currentPayload.description || 'Lançamento',
           });
         }
@@ -1043,10 +1472,12 @@ export async function handlePendingConfirmation(params: {
       }
     }
 
-    if (currentPayload.barcode_or_pix) {
+    const codeToCopy = currentPayload.barcode_or_pix || currentPayload.pix_key;
+    if (codeToCopy) {
+      const favLabel = currentPayload.counterparty_name || currentPayload.description || 'Fornecedor';
       await sendEvolutionText({
         phone,
-        text: `📋 *Código de Pagamento / Linha Digitável:*\n\`${currentPayload.barcode_or_pix}\``,
+        text: formatOneTouchPaymentCodeMessage(favLabel, codeToCopy),
       });
     }
 

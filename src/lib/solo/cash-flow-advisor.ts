@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createServiceRoleClient } from '@/lib/supabase-server';
+import { getVersionFooterBadge } from '@/lib/version';
 import { formatDueDateDetails } from './date-utils';
 import { getTrialBills, formatTrialBillsListMessage } from './trial';
 
@@ -340,11 +341,12 @@ export async function getUpcomingBillsSummary(
       .from('payables_receivables')
       .select('*')
       .eq('client_id', clientId)
-      .in('status', ['open', 'postponed'])
-      .order('current_due_date', { ascending: true });
+      .in('status', ['pending', 'open', 'overdue', 'postponed'])
+      .order('current_due_date', { ascending: true })
+      .order('amount', { ascending: false });
 
     if (dbBills && dbBills.length > 0) {
-      rawBills = dbBills.map((b) => ({
+      rawBills = dbBills.map((b: any) => ({
         supplier_name: b.counterparty_name || 'Fornecedor',
         amount: Number(b.amount || 0),
         due_date: b.current_due_date || b.original_due_date,
@@ -361,8 +363,9 @@ export async function getUpcomingBillsSummary(
   if (cleanPhone) {
     const trialBills = await getTrialBills(cleanPhone);
     if (trialBills && trialBills.length > 0) {
-      // Adiciona contas que ainda não existam em rawBills por ID ou combinação de fornecedor/vencimento
+      // Adiciona contas ativas (não pagas) que ainda não existam em rawBills por ID ou combinação de fornecedor/vencimento
       for (const tb of trialBills) {
+        if (tb.is_paid || tb.status === 'paid') continue;
         const tbSup = (tb.supplier_name || tb.counterparty_name || '').toLowerCase().trim();
         const alreadyExists = rawBills.some((rb) => {
           const rbSup = (rb.supplier_name || rb.counterparty_name || '').toLowerCase().trim();
@@ -414,6 +417,13 @@ Você não possui nenhuma conta cadastrada no momento.
     return b.due_date <= maxDueIso;
   });
 
+  filteredBills.sort((a, b) => {
+    const timeA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const timeB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    if (timeA !== timeB) return timeA - timeB;
+    return Number(b.amount || 0) - Number(a.amount || 0);
+  });
+
   let noticePrefix = '';
 
   // Se o usuário pediu um período curto (ex: 7 dias) e não tem contas no período, mostra todas as cadastradas
@@ -422,7 +432,7 @@ Você não possui nenhuma conta cadastrada no momento.
     filteredBills = rawBills;
   }
 
-  return noticePrefix + formatTrialBillsListMessage(filteredBills, `Agenda Financeira — ${period.periodLabel}`);
+  return noticePrefix + formatTrialBillsListMessage(filteredBills, 'Agenda Financeira Consolidada') + `\n\n${getVersionFooterBadge()}`;
 }
 
 /**

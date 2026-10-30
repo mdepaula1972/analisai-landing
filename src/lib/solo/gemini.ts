@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { ExtractedDocumentData } from '@/types/solo';
+import { isSettlementVerbMessage } from './conversational-router';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
 
@@ -20,7 +21,7 @@ export async function extractDocumentWithGemini(
   userInstruction?: string
 ): Promise<ExtractedDocumentData> {
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
   let lastError: any = null;
 
   for (const modelName of candidateModels) {
@@ -40,10 +41,35 @@ export async function extractDocumentWithGemini(
               doc_type: {
                 type: SchemaType.STRING,
                 enum: ['nfe', 'nfse', 'boleto', 'recibo', 'cupom', 'das_mei', 'outro'],
+                description:
+                  'Tipo estrito do documento. REGRA MANDATÓRIA: Se a imagem contiver logotipo ou nome de banco ("Banrisul", "Bradesco", "Itaú", "Banco do Brasil", "Caixa", "Santander", "Sicoob", "Sicredi", "Inter", etc.), código de banco (ex: 041-8, 237-2, 341-7, 001-9, 033-7, 104-0), "Recibo do Pagador", "Recibo do Sacado", "Ficha de Compensação", "Local de Pagamento", "Beneficiário / Cedente", "Nosso Número", "Vencimento" e "Valor do Documento", o doc_type DEVE ser obrigatoriamente "boleto". NUNCA classifique como "nfe" ou "nfse" mesmo que haja menção ao número de uma NF no campo de observação ou número do documento!',
+              },
+              has_boleto_layout: {
+                type: SchemaType.BOOLEAN,
+                description:
+                  'True se a imagem apresentar layout de boleto bancário (logotipo/nome de banco como Banrisul, Bradesco, Itaú, BB, Caixa, Santander, "Recibo do Pagador", "Ficha de Compensação", "Local de Pagamento", "Nosso Número", "Vencimento" e "Valor do Documento"), mesmo que a parte inferior do código de barras esteja cortada.',
+              },
+              bank_name: {
+                type: SchemaType.STRING,
+                description:
+                  'Nome ou código do banco se o documento contiver cabeçalho ou logotipo bancário (ex: "Banrisul 041-8", "Bradesco 237-2", "Itaú 341-7", "Banco do Brasil 001-9", "Caixa 104-0", "Santander 033-7", "Sicoob 756", "Sicredi 748").',
+                nullable: true,
+              },
+              raw_ocr_text: {
+                type: SchemaType.STRING,
+                description:
+                  'Transcrição literal do cabeçalho, títulos e campos-chave visíveis na imagem (ex: nome e código do banco como "Banrisul 041-8", "Recibo do Pagador", "Ficha de Compensação", "Autenticação Mecânica", "Linha Digitável", "Nosso Número", "Agência/Código do Beneficiário", "DANFE", etc.).',
+              },
+              notes: {
+                type: SchemaType.STRING,
+                description:
+                  'Instruções, observações do documento, referências a faturas/parcelas ou textos complementares impressos.',
+                nullable: true,
               },
               counterparty_name: {
                 type: SchemaType.STRING,
-                description: 'Nome do fornecedor, prestador, órgão emissor ou Receita Federal',
+                description:
+                  'Nome real do fornecedor, cedente/beneficiário, prestador ou órgão emissor (ex: "Refrigeração Dufrio", "Bitzer"). Se for boleto bancário, extraia o nome do Beneficiário/Cedente (fornecedor) ou, se não houver outro nome além do banco, o nome do banco. NUNCA retorne a palavra genérica "Emitente"!',
               },
               tax_id: {
                 type: SchemaType.STRING,
@@ -69,6 +95,18 @@ export async function extractDocumentWithGemini(
                 description: 'Mês e ano da competência tributária de apuração (ex: 10/2026), especialmente para guias de tributos como DAS-MEI',
                 nullable: true,
               },
+              invoice_number_ref: {
+                type: SchemaType.STRING,
+                description:
+                  'Número do documento ou Nota Fiscal de origem citado no boleto bancário (ex: campo "Número do Documento", "Nº do Documento", "000021644162", "216441/01").',
+                nullable: true,
+              },
+              digitable_line: {
+                type: SchemaType.STRING,
+                description:
+                  'Linha digitável numérica do boleto bancário (47 ou 48 dígitos) ou código de barras (44 dígitos), se visível no documento.',
+                nullable: true,
+              },
               barcode_or_pix: {
                 type: SchemaType.STRING,
                 description:
@@ -77,7 +115,7 @@ export async function extractDocumentWithGemini(
               },
               barcode: {
                 type: SchemaType.STRING,
-                description: 'Código de barras ou linha digitável de arrecadação governamental (iniciado pelo dígito 8)',
+                description: 'Código de barras ou linha digitável numérica do boleto bancário ou de arrecadação governamental (se visível)',
                 nullable: true,
               },
               pix_code: {
@@ -202,6 +240,7 @@ export async function extractDocumentWithGemini(
             required: [
               'is_financial_doc',
               'doc_type',
+              'raw_ocr_text',
               'counterparty_name',
               'total_amount',
               'confidence_score',
@@ -210,6 +249,11 @@ export async function extractDocumentWithGemini(
         },
         systemInstruction: `Você é o AnalisAí Solo, um assistente contábil e financeiro de inteligência artificial de elite.
 Sua missão é ler documentos financeiros (fotos, PDFs, comprovantes, faturas, carnês, extratos e boletos bancários brasileiros).
+
+REGRA MANDATÓRIA DE DISCRIMINAÇÃO — BOLETO BANCÁRIO vs NOTA FISCAL:
+- Se a imagem contiver logotipo ou nome de banco ("Banrisul", "Bradesco", "Itaú", "Banco do Brasil", "Caixa", "Santander", "Sicoob", "Sicredi", "Inter", etc.), código de banco (ex: "041-8", "237-2", "341-7", "001-9", "033-7", "104-0"), "Recibo do Pagador", "Recibo do Sacado", "Ficha de Compensação", "Local de Pagamento", "Agência / Código do Beneficiário", "Nosso Número", "Vencimento" e "Valor do Documento", o tipo \`doc_type\` DEVE ser classificado OBRIGATORIAMENTE como \`'boleto'\` e \`has_boleto_layout = true\`.
+- NUNCA classifique um boleto bancário como \`'nfe'\`, \`'nfse'\` ou \`'recibo'\`, mesmo que haja menção ao número de uma NF no campo de observação, "Número do Documento" (ex: "000021644162") ou a razão social completa do cedente/fornecedor (ex: Dufrio, Refrigeração Dufrio, Bitzer).
+- Extraia o campo \`invoice_number_ref\` com o número do documento/NF citado no boleto (ex: "000021644162" ou número da nota) e preencha \`barcode\`, \`digitable_line\` e \`barcode_or_pix\` se a linha digitável ou código de barras estiver visível.
 
 DIRETRIZES DE EXTRAÇÃO:
 1. Priorize com extrema precisão a identificação de:
@@ -269,12 +313,13 @@ DIRETRIZES DE EXTRAÇÃO:
     - DATA DE VENCIMENTO (due_date): Se a nota tiver quadro de faturas/duplicatas, capture o vencimento. Se não tiver vencimento explícito, preencha com a data de emissão.`,
       });
 
-      let promptText = 'Analise este documento fiscal/financeiro e retorne os dados contábeis estruturados.';
+      let promptText = `Analise este documento fiscal/financeiro e retorne os dados contábeis estruturados.
+REGRA MANDATÓRIA DE CLASSIFICAÇÃO: Se a imagem contiver logotipo ou nome de banco ("Banrisul", "Bradesco", "Itaú", "Banco do Brasil", "Caixa", "Santander", "Sicoob", "Sicredi", "Inter", etc.), código de banco (ex: "041-8"), "Recibo do Pagador", "Ficha de Compensação", "Local de Pagamento", "Nosso Número", "Vencimento" e "Valor do Documento", defina OBRIGATORIAMENTE doc_type = "boleto" e has_boleto_layout = true. NUNCA classifique um boleto bancário como "nfe" ou "nfse", mesmo que cite número de Nota Fiscal!`;
       if (userInstruction && userInstruction.trim().length > 0) {
         promptText += `\n\nLEGENDA / INSTRUÇÃO DO USUÁRIO ENVIADA JUNTO AO DOCUMENTO:\n"${userInstruction.trim()}"\nConsidere com máxima prioridade as instruções do usuário acima (ex: parcelamento, divisão de valores, condição de pagamento).`;
       }
 
-      const result = await model.generateContent([
+      const geminiResp = await model.generateContent([
         {
           inlineData: {
             data: fileBufferBase64,
@@ -286,8 +331,63 @@ DIRETRIZES DE EXTRAÇÃO:
         },
       ]);
 
-      const rawJson = result.response.text();
-      return JSON.parse(rawJson) as ExtractedDocumentData;
+      const rawJson = geminiResp.response.text();
+      const result = JSON.parse(rawJson) as ExtractedDocumentData;
+
+      if (!result.counterparty && result.counterparty_name) {
+        result.counterparty = result.counterparty_name;
+      }
+
+      // Garantias pós-processamento para Boletos Bancários e códigos de barras
+      if (!result.barcode_or_pix && result.digitable_line) {
+        result.barcode_or_pix = result.digitable_line;
+      } else if (!result.barcode_or_pix && result.barcode) {
+        result.barcode_or_pix = result.barcode;
+      }
+      if (!result.digitable_line && result.barcode_or_pix) {
+        result.digitable_line = result.barcode_or_pix;
+      }
+      if (!result.barcode && result.barcode_or_pix) {
+        result.barcode = result.barcode_or_pix;
+      }
+
+      // TRAVA DETERMINÍSTICA POR CÓDIGO (Ignora alucinação de doc_type se houver marcadores de boleto)
+      const rawTextUpper = (
+        (result.counterparty || result.counterparty_name || '') + ' ' +
+        (result.raw_ocr_text || '') + ' ' +
+        (result.notes || result.critical_notes || '') + ' ' +
+        (result.bank_name || '')
+      ).toUpperCase();
+
+      // Lista determinística de bancos e termos exclusivos de boletos
+      const BOLETO_STRONG_MARKERS = [
+        'BANRISUL', '041-8', '0418',
+        'BRADESCO', '237-2',
+        'ITAU', 'ITAÚ', '341-7',
+        'BANCO DO BRASIL', '001-9',
+        'CAIXA ECONOMICA', 'CAIXA ECONÔMICA', '104-0',
+        'SANTANDER', '033-7',
+        'SICOOB', '756',
+        'SICREDI', '748',
+        'RECIBO DO PAGADOR',
+        'FICHA DE COMPENSAÇÃO',
+        'FICHA DE COMPENSACAO',
+        'AUTENTICAÇÃO MECÂNICA',
+        'AUTENTICACAO MECANICA',
+        'LINHA DIGITÁVEL',
+        'LINHA DIGITAVEL'
+      ];
+
+      const hasBoletoMarker = BOLETO_STRONG_MARKERS.some((marker) => rawTextUpper.includes(marker));
+
+      // FORÇAR CLASSIFICAÇÃO: Se tem marca de banco ou linha digitável, NUNCA pode ser Nota Fiscal
+      if (hasBoletoMarker || result.barcode || result.digitable_line || result.barcode_or_pix || result.has_boleto_layout) {
+        if (result.doc_type !== 'das_mei' || hasBoletoMarker) {
+          result.doc_type = 'boleto';
+        }
+      }
+
+      return result;
     } catch (err) {
       lastError = err;
       console.warn(`[Gemini Extract Doc] Falha com ${modelName}, tentando próximo modelo:`, err);
@@ -334,8 +434,19 @@ export async function parseConversationalFinancialEntry(
   userText: string,
   referenceDateStr: string = new Date().toISOString().split('T')[0]
 ) {
+  // PROIBIÇÃO ESTRITA: Verbos de baixa/liquidação ("baixar", "dar baixa", "liquidar", "paguei", "quitei", "recebi", "recebido")
+  // NUNCA podem ser desviados para extração de novo lançamento (NEW_ENTRY) ou perguntas de preenchimento de campos!
+  if (isSettlementVerbMessage(userText)) {
+    return {
+      is_financial_entry: false,
+      entries: [],
+      needs_clarification: false,
+      clarification_prompt: null,
+    };
+  }
+
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
   let lastError: any = null;
 
   for (const modelName of candidateModels) {
@@ -591,20 +702,6 @@ export async function processVoiceCommandWithGemini(
       description: 'Invocada quando o cliente quer consultar o consumo do seu plano no mês.',
     },
     {
-      name: 'request_partner_product',
-      description: 'Invocada quando o cliente busca certificado digital, maquininha ou abertura de conta PJ.',
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          product_category: {
-            type: SchemaType.STRING,
-            description: 'fiscal, bancario ou hardware',
-          },
-        },
-        required: ['product_category'],
-      },
-    },
-    {
       name: 'request_human_consultant',
       description: 'Invocada quando o cliente pede para falar com um consultor humano ou especialista.',
     },
@@ -623,13 +720,11 @@ export async function processVoiceCommandWithGemini(
   if (cleanMime === 'audio/opus') cleanMime = 'audio/ogg';
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
-  // Lista de modelos oficiais com suporte nativo a áudio multimodal (Gemini 3 oficial)
-  // gemini-3.5-flash-lite processa áudios em < 1.5s com altíssima precisão e estabilidade
+  // Lista de modelos oficiais com suporte nativo a áudio multimodal (Gemini 2.5 / 2.0 + fallback 2.5 Pro)
   const modelsToTry = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.6-flash',
-    'gemini-3.7-flash',
-    'gemini-3.1-pro-preview',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.5-pro',
   ];
   let transcribedText = '';
   const attemptedErrors: string[] = [];
@@ -802,10 +897,10 @@ export async function processVoiceCommandWithGemini(
     };
   }
 
-  // 6. Gemini 3.6 Flash com Function Calling para extração precisa
+  // 6. Gemini 2.5 Flash com Function Calling para extração precisa
   try {
     const textModel = genAI.getGenerativeModel({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       tools: [{ functionDeclarations: functionDeclarations as any }],
       systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
 Classifique o comando do usuário e acione a ferramenta correta.
@@ -861,7 +956,7 @@ export async function parseConversationalCorrections(
   userText: string
 ): Promise<ConversationalCorrectionsResult> {
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
 
   for (const modelName of candidateModels) {
     try {
@@ -1014,7 +1109,7 @@ export async function parseInvoicePaymentResolution(
   }
 ): Promise<InvoicePaymentResolution> {
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.7-flash'];
+  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
   const todayStr = new Date().toISOString().split('T')[0];
   const totalAmount = Math.abs(Number(invoiceContext.total_amount || 0));
   const issueDateStr = invoiceContext.issue_date || todayStr;

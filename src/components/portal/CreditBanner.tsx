@@ -58,7 +58,6 @@ export function CreditBanner({ status, onDismiss }: CreditBannerProps) {
         <div className="mt-2 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
           <div
             className={`h-1.5 rounded-full transition-all ${
-              status.estado === 'normal' ? 'bg-amber-400' :
               status.estado === 'aviso' ? 'bg-amber-400' : 'bg-rose-400'
             }`}
             style={{ width: `${Math.min(status.percentualUso, 100)}%` }}

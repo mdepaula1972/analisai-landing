@@ -140,10 +140,9 @@ export async function POST(req: NextRequest) {
 
     // Lista de modelos resilientes para fallback em caso de alta demanda no Google
     const MODELS_TO_TRY = [
-      'gemini-3.6-flash',
-      'gemini-3.7-flash',
-      'gemini-3.5-flash',
-      'gemini-3.5-flash-lite'
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.5-pro'
     ];
 
     let geminiData: any = null;
@@ -227,7 +226,7 @@ export async function POST(req: NextRequest) {
               {
                 slug,
                 razao_social: cliente_info.nome,
-                nome_fantasia: parsedResponse.resumo_extracao?.ramo_atividade || 'Cliente Diagnóstico',
+                nome_fantasia: (parsedResponse.resumo_extracao as any)?.ramo_atividade || 'Cliente Diagnóstico',
                 plano: 'essencial',
                 ativo: true,
               },
