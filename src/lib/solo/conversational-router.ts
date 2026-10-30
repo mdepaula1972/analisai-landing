@@ -174,9 +174,11 @@ export function isSettlementVerbMessage(text: string): boolean {
 }
 
 /**
- * Extrai pistas de dia do mês (ex: "dia 25", "do dia 25", "25/10") e valor monetário da frase de baixa.
+ * Extrai pistas de dia do mês (ex: "dia 25", "do dia 25", "25/10"), código da conta e valor monetário da frase de baixa.
  */
 function extractSettlementClues(text: string): {
+  codeHint: string | null;
+  codeNum: number | null;
   dayOfMonth: number | null;
   month: number | null;
   amountHint: number | null;
@@ -187,6 +189,28 @@ function extractSettlementClues(text: string): {
   nameTokens: string[];
 } {
   const clean = text.trim();
+
+  // 0. Código simplificado da conta (ex: "baixar conta 02", "baixar 2", "paguei a 01", "código 03", "#01", "#02")
+  let codeNum: number | null = null;
+  let codeHint: string | null = null;
+  const shortCodeActionMatch = clean.match(
+    /(?:baixar|pagar|quitar|recebi|liquidar|quitei|paguei)\s*(?:a\s*conta\s*|o\s*boleto\s*|a\s+|o\s*)?(?:#|n[ºo]\.?|n[uú]mero\s*|c[oó]digo\s*)?(\d{1,2})\b/i
+  );
+  const generalCodeMatch =
+    shortCodeActionMatch ||
+    clean.match(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|n[ºo]\.?|#)\s*#?(\d{1,4})\b/i) ||
+    clean.match(/(?:boleto|conta|fatura|lan[çc]amento|parcela|item|doc)\s+(?:de\s+c[oó]digo\s+)?#?(\d{1,4})\b/i) ||
+    clean.match(/\b(?:baixar|liquidar|quitar|paguei|recebi|pagar)\s+(?:o|a|do|da)?\s*#?(\d{1,4})\b/i) ||
+    clean.match(/#(\d{1,4})\b/);
+
+  if (generalCodeMatch && generalCodeMatch[1]) {
+    const parsedNum = parseInt(generalCodeMatch[1], 10);
+    if (!isNaN(parsedNum) && parsedNum > 0 && parsedNum <= 9999) {
+      codeNum = parsedNum;
+      codeHint = String(parsedNum).padStart(2, '0');
+    }
+  }
+
   let dayOfMonth: number | null = null;
   let month: number | null = null;
 
@@ -210,13 +234,15 @@ function extractSettlementClues(text: string): {
     }
   }
 
-  // 3. Valor monetário explícito (removendo antes trechos de data para não confundir "dia 25" com R$ 25)
-  const textWithoutDates = clean
+  // 3. Valor monetário explícito (removendo antes trechos de data e código para não confundir "dia 25" ou "código 001" com R$ 25 ou R$ 1)
+  const textWithoutCodesAndDates = clean
+    .replace(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|n[ºo]\.?|#)\s*#?\d{1,4}\b/gi, ' ')
+    .replace(/(?:boleto|conta|fatura|lan[çc]amento|parcela|item|doc)\s+(?:de\s+c[oó]digo\s+)?#?\d{1,4}\b/gi, ' ')
     .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, ' ')
     .replace(/(?:dia|vencimento|vencid[ao]\s+em|venceu\s+em)\s*\d{1,2}\b/gi, ' ');
 
   let amountHint: number | null = null;
-  const explicitMoneyMatch = textWithoutDates.match(
+  const explicitMoneyMatch = textWithoutCodesAndDates.match(
     /(?:r\$\s*(\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*reais|(?:valor|boleto|conta)\s+de\s+(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?))/i
   );
   if (explicitMoneyMatch) {
@@ -344,12 +370,14 @@ function extractSettlementClues(text: string): {
     'recente',
   ]);
 
-  const normalizedWords = normalizeForMatch(textWithoutDates)
+  const normalizedWords = normalizeForMatch(textWithoutCodesAndDates)
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !stopWords.has(w));
 
   return {
+    codeHint,
+    codeNum,
     dayOfMonth,
     month,
     amountHint,
@@ -384,6 +412,39 @@ export function resolveSettlementFromSnapshot(
       reply_text:
         'Não localizei nenhuma conta aberta com esses critérios no momento. Deseja que eu liste todas as suas contas abertas?',
     };
+  }
+
+  // 0. Match PRIORITÁRIO e DETERMINÍSTICO por CÓDIGO SIMPLIFICADO (#01, #02, etc.)
+  if (clues.codeNum !== null) {
+    const targetNum = clues.codeNum;
+    const matchedByCode = allOpen.find((c, idx) => {
+      const cNum = c.code ? parseInt(String(c.code).replace(/\D/g, ''), 10) : (idx + 1);
+      return cNum === targetNum || c.id === String(targetNum) || c.id.endsWith(`_${targetNum}`);
+    });
+
+    if (matchedByCode) {
+      const codeDisplay = `[#${String(targetNum).padStart(2, '0')}] `;
+      const finalDesc = matchedByCode.description.includes('[#')
+        ? matchedByCode.description
+        : `${codeDisplay}${matchedByCode.description}`;
+
+      return {
+        intent: 'SETTLE_ACCOUNT',
+        confidence: 1.0,
+        is_applicable: true,
+        target_account_id: matchedByCode.id,
+        target_type: matchedByCode.type,
+        target_description: finalDesc,
+        target_amount: matchedByCode.amount,
+      };
+    } else {
+      return {
+        intent: 'SETTLE_ACCOUNT',
+        confidence: 1.0,
+        is_applicable: true,
+        reply_text: `Não localizei nenhuma conta aberta com o código #${String(targetNum).padStart(2, '0')}. Digite *contas* para consultar sua agenda de compromissos e códigos ativos!`,
+      };
+    }
   }
 
   // 1. Filtra por tipo (receivable vs payable) APENAS se o usuário deu pista explícita de tipo
@@ -546,10 +607,13 @@ export async function routeConversationalIntent(
     }
   }
 
-  // ── FAST PATH 2: Prioridade Absoluta para Verbos de Liquidação com Snapshot Ativo ──
-  // Se a mensagem contiver termos como: "baixar", "dar baixa", "liquidar", "paguei", "quitei", "recebi", "recebido":
+  // ── FAST PATH 2: Prioridade Absoluta para Verbos de Liquidação e Códigos Curtos (#01, #02...) com Snapshot Ativo ──
+  // Se a mensagem contiver termos como: "baixar", "dar baixa", "liquidar", "paguei", "quitei", "recebi", "recebido" ou código de ação direta:
   // A intenção primária DEVE ser classificada como SETTLE_ACCOUNT (ou CLARIFICATION_NEEDED se >1), NUNCA como NEW_ENTRY.
-  const hasSettlementVerb = isSettlementVerbMessage(cleanUserText);
+  const shortCodeMatch = cleanUserText.match(
+    /(?:baixar|pagar|quitar|recebi|liquidar|quitei|paguei)\s*(?:a\s*conta\s*|o\s*boleto\s*|a\s+|o\s*)?(?:#|n[ºo]\.?|n[uú]mero\s*|c[oó]digo\s*)?(\d{1,2})\b/i
+  );
+  const hasSettlementVerb = isSettlementVerbMessage(cleanUserText) || Boolean(shortCodeMatch);
   if (hasSettlementVerb && context.snapshot) {
     const resolved = resolveSettlementFromSnapshot(cleanUserText, context.snapshot);
     if (resolved) {
@@ -842,7 +906,7 @@ Sua missão é entender com perfeição o que o usuário quer fazer, a partir de
 
 REGRA DE OURO PARA BAIXAS / LIQUIDAÇÕES:
 Quando o usuário pedir para "baixar", "liquidar" ou disser que "recebeu/pagou":
-1. Filtre as contas do snapshot usando as pistas fornecidas (ex: "dia 25", "atrasada", "a receber", "cliente X").
+1. Filtre as contas do snapshot usando as pistas fornecidas: se o usuário citar um código de conta (ex: "código 001", "boleto 001", "#001", "001"), identifique a conta imediatamente pelo campo "code"; caso contrário, use pistas como data ("dia 25"), atraso ("atrasada"), favorecido ("cliente X") ou valor.
 2. Se encontrar EXATAMENTE UMA conta que atenda aos critérios:
    - Retorne imediatamente:
      {

@@ -7,6 +7,8 @@
 
 export interface ActiveFinancialAccountItem {
   id: string;
+  code?: string;
+  formatted_code?: string;
   description: string;
   amount: number;
   due_date: string;
@@ -192,8 +194,12 @@ export async function getClientActiveFinancialSnapshot(
           (isRecurring && dayOfMonth !== null && dayOfMonth < currentDayOfMonth);
         const isToday = dueDateYMD === todayStr || (isRecurring && dayOfMonth === currentDayOfMonth);
 
+        const notesMatch = String(r.notes || '').match(/\[#?(\d{1,4})\]/);
+        const explicitCode = notesMatch ? String(parseInt(notesMatch[1], 10)).padStart(3, '0') : undefined;
+
         addAccountIfUnique({
           id: r.id,
+          code: explicitCode,
           description: desc,
           amount: Number(r.amount || 0),
           due_date: dueDateYMD,
@@ -306,6 +312,7 @@ export async function getClientActiveFinancialSnapshot(
 
           addAccountIfUnique({
             id: b.id || `trial_${index}`,
+            code: b.code || String(index + 1).padStart(3, '0'),
             description: desc,
             amount: Number(rawAmount || 0),
             due_date: dueDateYMD,
@@ -348,6 +355,27 @@ export async function getClientActiveFinancialSnapshot(
       console.warn('[getClientActiveFinancialSnapshot] Erro ao consultar trial_leads:', leadErr);
     }
   }
+
+  // Ordena cronologicamente por due_date ASC
+  const sortByDueDateAsc = (a: ActiveFinancialAccountItem, b: ActiveFinancialAccountItem) => {
+    const timeA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const timeB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    if (timeA !== timeB) return timeA - timeB;
+    return (b.amount || 0) - (a.amount || 0);
+  };
+
+  allPayables.sort(sortByDueDateAsc);
+  allReceivables.sort(sortByDueDateAsc);
+
+  // Atribuição determinística e sequencial de código simplificado (#01, #02, ...)
+  let runningCode = 1;
+  const assignCodeIfMissing = (item: ActiveFinancialAccountItem) => {
+    item.code = String(runningCode++).padStart(2, '0');
+    item.formatted_code = `*[#${item.code}]*`;
+  };
+
+  allPayables.forEach(assignCodeIfMissing);
+  allReceivables.forEach(assignCodeIfMissing);
 
   const overdueReceivables = allReceivables.filter((r) => r.is_overdue);
   const todayReceivables = allReceivables.filter((r) => r.is_today);

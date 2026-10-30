@@ -49,6 +49,7 @@ import {
   updateTrialBill,
   deleteTrialBill,
   formatTrialBillsListMessage,
+  ensureTrialBillsCodes,
   BANK_SAFETY_NOTICE,
 } from '@/lib/solo/trial';
 import { checkAntiLoopStatus, recordFruitlessAttempt } from '@/lib/solo/anti-loop';
@@ -75,7 +76,7 @@ import {
   processarRespostaDesafioEmail,
 } from '@/lib/solo/email-recovery';
 import { escalateToHumanConsultant } from '@/lib/solo/consultant-escalation';
-import { reconcileBankTransactions } from '@/lib/solo/bank-reconciliation';
+import { reconcileBankTransactions, ReconciliationResult } from '@/lib/solo/bank-reconciliation';
 import {
   createPendingConfirmation,
   handlePendingConfirmation,
@@ -361,6 +362,17 @@ async function handleAmountChange(
   }
 
   const cleanQuery = supplierQuery.toLowerCase().trim();
+  const explicitCodeMatch = cleanQuery.match(/(?:c[oó]digo|cod|c[oó]d\.?|n[uú]mero|num|#)\s*#?(\d{1,4})\b/i);
+  let targetCode: string | null = null;
+  if (explicitCodeMatch) {
+    targetCode = String(parseInt(explicitCodeMatch[1], 10)).padStart(3, '0');
+  } else {
+    const standAloneCodeMatch = cleanQuery.match(/(?:^|[^\d/.,-])(\d{3})(?:$|[^\d/.,-])/);
+    if (standAloneCodeMatch) {
+      targetCode = standAloneCodeMatch[1].padStart(3, '0');
+    }
+  }
+
   const stopWords = ['conta', 'fornecedor', 'boleto', 'de', 'da', 'do', 'o', 'a', 'valor', 'reais'];
   const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
 
@@ -373,9 +385,22 @@ async function handleAmountChange(
       .in('status', ['open', 'postponed'])
       .order('current_due_date', { ascending: true });
 
-    let matchedBill = openBills?.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
-    if (!matchedBill && tokens.length > 0 && openBills) {
-      matchedBill = openBills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+    let matchedBill = null;
+    if (targetCode && openBills) {
+      matchedBill = openBills.find((b: any, idx: number) => {
+        const explicit = b.code || (b.notes?.match(/\[#(\d{3})\]/)?.[1]);
+        if (explicit && String(explicit).replace(/\D/g, '').padStart(3, '0') === targetCode) return true;
+        if (b.id && String(b.id) === targetCode) return true;
+        if (String(idx + 1).padStart(3, '0') === targetCode) return true;
+        return false;
+      });
+    }
+
+    if (!matchedBill && openBills) {
+      matchedBill = openBills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
+      if (!matchedBill && tokens.length > 0) {
+        matchedBill = openBills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+      }
     }
 
     if (matchedBill) {
@@ -402,12 +427,13 @@ async function handleAmountChange(
       const oldFmt = oldAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const newFmt = newAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const dueFmt = formatDueDateDetails(matchedBill.current_due_date);
+      const codeDisplay = matchedBill.code ? `[#${matchedBill.code}] ` : (matchedBill.notes?.match(/\[#(\d{3})\]/)?.[0] ? `${matchedBill.notes.match(/\[#(\d{3})\]/)[0]} ` : '');
 
       await sendEvolutionText({
         phone,
         text: `✅ *${isProv ? 'Provisão Conciliada com a Fatura Real!' : 'Valor Atualizado com Sucesso!'}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *${isRec ? 'Cliente' : 'Fornecedor'}:* ${matchedBill.counterparty_name}
+• *${isRec ? 'Cliente' : 'Fornecedor'}:* ${codeDisplay}${matchedBill.counterparty_name}
 • *Valor Anterior:* ${oldFmt}
 • *Novo Valor Corrigido:* *${newFmt}*
 • *Vencimento:* ${dueFmt}
@@ -419,18 +445,19 @@ Seus relatórios e fluxo de caixa já foram sincronizados com o novo valor.`,
   }
 
   // 2. Se for lead em degustação (ou cliente sem match no banco oficial):
-  const trialRes = await updateTrialBill(cleanPhone, cleanQuery, { amount: newAmount, is_provision: false });
+  const trialRes = await updateTrialBill(cleanPhone, targetCode || cleanQuery, { amount: newAmount, is_provision: false });
   if (trialRes.updated && trialRes.oldBill && trialRes.newBill) {
     const oldAmount = Number(trialRes.oldBill.amount || 0);
     const oldFmt = oldAmount > 0 ? oldAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A confirmar';
     const newFmt = newAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const dueFmt = trialRes.newBill.due_date ? trialRes.newBill.due_date.split('-').reverse().join('/') : 'A definir';
+    const codeDisplay = trialRes.newBill.code ? `[#${trialRes.newBill.code}] ` : '';
 
     await sendEvolutionText({
       phone,
       text: `✅ *${trialRes.oldBill.is_provision ? 'Provisão Conciliada com a Fatura Real!' : 'Valor Atualizado com Sucesso!'}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *Conta:* ${trialRes.newBill.supplier_name}
+• *Conta:* ${codeDisplay}${trialRes.newBill.supplier_name}
 • *Valor Anterior:* ${oldFmt}
 • *Novo Valor Corrigido:* *${newFmt}*
 • *Vencimento:* ${dueFmt}
@@ -442,16 +469,19 @@ Seu painel de contas da degustação VIP foi atualizado com o valor real!`,
 
   // 3. Se não achou em nenhum lugar, exibe a lista existente
   const bills = client
-    ? (await supabase.from('payables_receivables').select('counterparty_name, amount').eq('client_id', client.id).in('status', ['open', 'postponed']))?.data
+    ? (await supabase.from('payables_receivables').select('counterparty_name, amount, notes, id').eq('client_id', client.id).in('status', ['open', 'postponed']))?.data
     : await getTrialBills(cleanPhone);
 
   const listStr = bills && bills.length > 0
-    ? bills.map((b: any) => `• *${b.counterparty_name || b.supplier_name}* (R$ ${Number(b.amount || 0).toFixed(2)})`).join('\n')
+    ? bills.map((b: any, idx: number) => {
+        const code = b.code ? String(b.code).padStart(3, '0') : (b.notes?.match(/\[#(\d{3})\]/)?.[1] || String(idx + 1).padStart(3, '0'));
+        return `• [#${code}] *${b.counterparty_name || b.supplier_name}* (R$ ${Number(b.amount || 0).toFixed(2)})`;
+      }).join('\n')
     : 'Nenhuma conta cadastrada.';
 
   await sendEvolutionText({
     phone,
-    text: `Não localizei a conta correspondente a "${supplierQuery}".\n\nSuas contas cadastradas são:\n${listStr}\n\nEnvie o nome correto da conta que deseja alterar.`,
+    text: `Não localizei a conta correspondente a "${supplierQuery}".\n\nSuas contas cadastradas são:\n${listStr}\n\nEnvie o código ou nome correto da conta que deseja alterar (ex: *"Mudar valor da 001 para 85"*).`,
   });
 }
 
@@ -472,6 +502,8 @@ async function handleDeleteBill(
 
   const supabase = createServiceRoleClient();
   const cleanQuery = supplierQuery ? supplierQuery.toLowerCase().trim() : '';
+  const codeMatch = cleanQuery.match(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|#)?\s*#?(\d{1,4})\b/i);
+  const targetCode = codeMatch ? String(parseInt(codeMatch[1], 10)).padStart(3, '0') : null;
 
   let matchedBill: any = null;
   let isTrial = false;
@@ -485,14 +517,22 @@ async function handleDeleteBill(
       .order('created_at', { ascending: false });
 
     if (bills && bills.length > 0) {
-      if (cleanQuery.includes('último') || cleanQuery.includes('ultimo') || cleanQuery.includes('recente') || !cleanQuery) {
-        matchedBill = bills[0];
-      } else {
-        const stopWords = ['conta', 'fornecedor', 'boleto', 'de', 'da', 'do', 'a', 'o', 'excluir', 'apagar', 'remover'];
-        const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
-        matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
-        if (!matchedBill && tokens.length > 0) {
-          matchedBill = bills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+      if (targetCode) {
+        matchedBill = bills.find((b: any, idx: number) => {
+          const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+          return bCode === targetCode || b.id === targetCode;
+        });
+      }
+      if (!matchedBill) {
+        if (cleanQuery.includes('último') || cleanQuery.includes('ultimo') || cleanQuery.includes('recente') || !cleanQuery) {
+          matchedBill = bills[0];
+        } else {
+          const stopWords = ['conta', 'fornecedor', 'boleto', 'de', 'da', 'do', 'a', 'o', 'excluir', 'apagar', 'remover'];
+          const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+          matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
+          if (!matchedBill && tokens.length > 0) {
+            matchedBill = bills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+          }
         }
       }
     }
@@ -501,14 +541,23 @@ async function handleDeleteBill(
   if (!matchedBill) {
     const trialBills = await getTrialBills(cleanPhone);
     if (trialBills && trialBills.length > 0) {
-      if (cleanQuery.includes('último') || cleanQuery.includes('ultimo') || cleanQuery.includes('recente') || !cleanQuery) {
-        matchedBill = trialBills[trialBills.length - 1];
-        isTrial = true;
-      } else {
-        matchedBill = trialBills.find((b: any) =>
-          b.supplier_name && (b.supplier_name.toLowerCase().includes(cleanQuery) || cleanQuery.includes(b.supplier_name.toLowerCase()))
-        );
+      if (targetCode) {
+        matchedBill = trialBills.find((b: any, idx: number) => {
+          const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+          return bCode === targetCode || b.id === targetCode;
+        });
         if (matchedBill) isTrial = true;
+      }
+      if (!matchedBill) {
+        if (cleanQuery.includes('último') || cleanQuery.includes('ultimo') || cleanQuery.includes('recente') || !cleanQuery) {
+          matchedBill = trialBills[trialBills.length - 1];
+          isTrial = true;
+        } else {
+          matchedBill = trialBills.find((b: any) =>
+            b.supplier_name && (b.supplier_name.toLowerCase().includes(cleanQuery) || cleanQuery.includes(b.supplier_name.toLowerCase()))
+          );
+          if (matchedBill) isTrial = true;
+        }
       }
     }
   }
@@ -580,6 +629,17 @@ async function handleMarkBillPaid(
   const supabase = createServiceRoleClient();
   const cleanQuery = supplierQuery ? supplierQuery.toLowerCase().trim() : '';
 
+  const explicitCodeMatch = cleanQuery.match(/(?:c[oó]digo|cod|c[oó]d\.?|n[uú]mero|num|#)\s*#?(\d{1,4})\b/i);
+  let targetCode: string | null = null;
+  if (explicitCodeMatch) {
+    targetCode = String(parseInt(explicitCodeMatch[1], 10)).padStart(3, '0');
+  } else {
+    const standAloneCodeMatch = cleanQuery.match(/(?:^|[^\d/.,-])(\d{3})(?:$|[^\d/.,-])/);
+    if (standAloneCodeMatch) {
+      targetCode = standAloneCodeMatch[1].padStart(3, '0');
+    }
+  }
+
   let matchedBill: any = null;
   let isTrial = false;
 
@@ -588,18 +648,29 @@ async function handleMarkBillPaid(
       .from('payables_receivables')
       .select('*')
       .eq('client_id', client.id)
-      .in('status', ['open', 'postponed'])
+      .in('status', ['open', 'postponed', 'pending', 'overdue'])
       .order('current_due_date', { ascending: true });
 
     if (bills && bills.length > 0) {
-      if (cleanQuery.includes('últim') || cleanQuery.includes('ultim') || cleanQuery.includes('recente') || !cleanQuery || cleanQuery === 'tudo' || cleanQuery === 'conta') {
-        matchedBill = bills[0];
-      } else {
-        const stopWords = ['conta', 'fornecedor', 'cliente', 'boleto', 'de', 'da', 'do', 'a', 'o', 'pagar', 'paguei', 'baixar', 'baixa', 'recebi', 'recebido'];
-        const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
-        matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
-        if (!matchedBill && tokens.length > 0) {
-          matchedBill = bills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+      if (targetCode) {
+        matchedBill = bills.find((b: any, idx: number) => {
+          const explicit = b.code || (b.notes?.match(/\[#(\d{3})\]/)?.[1]);
+          if (explicit && String(explicit).replace(/\D/g, '').padStart(3, '0') === targetCode) return true;
+          if (b.id && String(b.id) === targetCode) return true;
+          if (String(idx + 1).padStart(3, '0') === targetCode) return true;
+          return false;
+        });
+      }
+      if (!matchedBill) {
+        if (cleanQuery.includes('últim') || cleanQuery.includes('ultim') || cleanQuery.includes('recente') || !cleanQuery || cleanQuery === 'tudo' || cleanQuery === 'conta') {
+          matchedBill = bills[0];
+        } else {
+          const stopWords = ['conta', 'fornecedor', 'cliente', 'boleto', 'de', 'da', 'do', 'a', 'o', 'pagar', 'paguei', 'baixar', 'baixa', 'recebi', 'recebido'];
+          const tokens = cleanQuery.split(/\s+/).filter((t: string) => t.length >= 3 && !stopWords.includes(t));
+          matchedBill = bills.find((b: any) => b.counterparty_name.toLowerCase().includes(cleanQuery));
+          if (!matchedBill && tokens.length > 0) {
+            matchedBill = bills.find((b: any) => tokens.some((t: string) => b.counterparty_name.toLowerCase().includes(t)));
+          }
         }
       }
     }
@@ -610,14 +681,23 @@ async function handleMarkBillPaid(
     if (trialBills && trialBills.length > 0) {
       const openTrialBills = trialBills.filter((b: any) => b.status !== 'paid' && b.status !== 'canceled');
       if (openTrialBills.length > 0) {
-        if (cleanQuery.includes('últim') || cleanQuery.includes('ultim') || cleanQuery.includes('recente') || !cleanQuery || cleanQuery === 'tudo' || cleanQuery === 'conta') {
-          matchedBill = openTrialBills[0];
-          isTrial = true;
-        } else {
-          matchedBill = openTrialBills.find((b: any) =>
-            b.supplier_name && (b.supplier_name.toLowerCase().includes(cleanQuery) || cleanQuery.includes(b.supplier_name.toLowerCase()))
-          );
+        if (targetCode) {
+          matchedBill = openTrialBills.find((b: any, idx: number) => {
+            const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+            return bCode === targetCode || b.id === targetCode;
+          });
           if (matchedBill) isTrial = true;
+        }
+        if (!matchedBill) {
+          if (cleanQuery.includes('últim') || cleanQuery.includes('ultim') || cleanQuery.includes('recente') || !cleanQuery || cleanQuery === 'tudo' || cleanQuery === 'conta') {
+            matchedBill = openTrialBills[0];
+            isTrial = true;
+          } else {
+            matchedBill = openTrialBills.find((b: any) =>
+              b.supplier_name && (b.supplier_name.toLowerCase().includes(cleanQuery) || cleanQuery.includes(b.supplier_name.toLowerCase()))
+            );
+            if (matchedBill) isTrial = true;
+          }
         }
       }
     }
@@ -625,16 +705,19 @@ async function handleMarkBillPaid(
 
   if (!matchedBill) {
     const bills = client
-      ? (await supabase.from('payables_receivables').select('counterparty_name, amount').eq('client_id', client.id).in('status', ['open', 'postponed']))?.data
+      ? (await supabase.from('payables_receivables').select('counterparty_name, amount, notes, id').eq('client_id', client.id).in('status', ['open', 'postponed', 'pending', 'overdue']))?.data
       : await getTrialBills(cleanPhone);
 
     const listStr = bills && bills.length > 0
-      ? bills.map((b: any) => `• *${b.counterparty_name || b.supplier_name}* (R$ ${Number(b.amount || 0).toFixed(2)})`).join('\n')
+      ? bills.map((b: any, idx: number) => {
+          const code = b.code ? String(b.code).padStart(3, '0') : (b.notes?.match(/\[#(\d{3})\]/)?.[1] || String(idx + 1).padStart(3, '0'));
+          return `• [#${code}] *${b.counterparty_name || b.supplier_name}* (R$ ${Number(b.amount || 0).toFixed(2)})`;
+        }).join('\n')
       : 'Nenhuma conta pendente encontrada.';
 
     await sendEvolutionText({
       phone,
-      text: `Não localizei uma conta em aberto correspondente a "${supplierQuery}".\n\nSuas contas pendentes são:\n${listStr}\n\nEnvie o nome da conta que deseja dar baixa (ex: *"Paguei a Sabesp"* ou *"Recebi do João"*).`,
+      text: `Não localizei uma conta em aberto correspondente a "${supplierQuery}".\n\nSuas contas pendentes são:\n${listStr}\n\nEnvie o código ou nome da conta que deseja dar baixa (ex: *"Baixar 001"* ou *"Paguei a Sabesp"*).`,
     });
     return;
   }
@@ -671,18 +754,19 @@ async function handleMarkBillPaid(
       });
     }
   } else {
-    await updateTrialBill(cleanPhone, supplier, {
+    await updateTrialBill(cleanPhone, matchedBill.code || matchedBill.id || supplier, {
       status: 'paid',
       notes: `Baixa informada pelo usuário em ${new Date().toLocaleDateString('pt-BR')}`,
     });
   }
 
+  const codeDisplay = matchedBill.code ? `[#${matchedBill.code}] ` : (matchedBill.notes?.match(/\[#(\d{3})\]/)?.[0] ? `${matchedBill.notes.match(/\[#(\d{3})\]/)[0]} ` : '');
   const actionLabel = isReceivable ? 'Recebimento Confirmado e Liquidado' : 'Conta Baixada como Paga';
   await sendEvolutionText({
     phone,
     text: `✅ *${actionLabel}!*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *${isReceivable ? 'Cliente' : 'Fornecedor'}:* ${supplier}
+• *${isReceivable ? 'Cliente' : 'Fornecedor'}:* ${codeDisplay}${supplier}
 • *Valor:* *${amtFmt}*
 • *Data da Baixa:* ${formatDueDateDetails(todayYMD)}
 • *Status:* Liquidado no Livro Caixa
@@ -1894,6 +1978,73 @@ Atualizei o último lançamento cadastrado no seu Livro Caixa!`,
     }
   }
 
+  // ── FAST PATH: Resolução de Comandos via Código Curto (#01, #02...) com Espelho de Conferência ──
+  const shortCodeSettleMatch =
+    clean.match(/(?:baixar|pagar|quitar|recebi|liquidar|quitei|paguei)\s*(?:a\s*conta\s*|o\s*boleto\s*|a\s+|o\s*)?(?:#|n[ºo]\.?|n[uú]mero\s*|c[oó]digo\s*)?(\d{1,2})\b/i) ||
+    clean.match(/^(?:c[oó]digo|c[oó]d\.?|#)\s*#?(\d{1,2})$/i);
+
+  if (shortCodeSettleMatch) {
+    const targetCodeNum = parseInt(shortCodeSettleMatch[1], 10);
+    const { getClientActiveFinancialSnapshot } = await import('@/lib/solo/active-context');
+    const supabase = createServiceRoleClient();
+    const snapshot = await getClientActiveFinancialSnapshot(supabase, client?.id || null, cleanPhone);
+    const allOpen = [...snapshot.allOpenReceivables, ...snapshot.allOpenPayables];
+
+    const matched = allOpen.find((c, idx) => {
+      const cNum = c.code ? parseInt(String(c.code).replace(/\D/g, ''), 10) : (idx + 1);
+      return cNum === targetCodeNum || c.id === String(targetCodeNum);
+    });
+
+    const codeFmt = String(targetCodeNum).padStart(2, '0');
+
+    if (matched) {
+      const isReceivable = matched.type === 'receivable';
+      const targetDesc = matched.description || (isReceivable ? 'Recebimento de Cliente' : 'Pagamento de Despesa');
+      const formattedDesc = `[#${codeFmt}] ${targetDesc.replace(/\[#\d+\]\s*/, '')}`;
+      const targetAmt = Number(matched.amount || 0);
+      const valFmt = targetAmt > 0 ? targetAmt.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(matched.id));
+      const isTrial = !client?.id || !isUuid;
+
+      const { addMinutes } = await import('date-fns');
+      await supabase.from('bot_action_confirmations').insert({
+        client_id: client?.id || null,
+        phone_number: cleanPhone,
+        action_type: 'SETTLE_ACCOUNT',
+        target_entity_id: isUuid ? matched.id : null,
+        proposed_payload: {
+          isTrial,
+          billId: matched.id,
+          target_account_id: matched.id,
+          target_type: matched.type,
+          target_description: formattedDesc,
+          target_amount: targetAmt,
+        },
+        status: 'pending',
+        expires_at: addMinutes(new Date(), 10).toISOString(),
+      });
+
+      const mirrorCard = `📋 *Espelho de Conferência — Baixa de Conta*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Tipo:* ${isReceivable ? 'Recebimento de Cliente 🟢' : 'Pagamento de Despesa 🔴'}
+• *Conta:* ${formattedDesc}
+• *Valor:* ${valFmt}
+• *Ação:* Marcar como liquidado e registrar no Livro Caixa
+
+*[1]* ✅ Confirmar Baixa
+*[2]* ❌ Cancelar`;
+
+      await sendEvolutionText({ phone, text: mirrorCard });
+      return true;
+    } else {
+      await sendEvolutionText({
+        phone,
+        text: `⚠️ Não localizei nenhuma conta em aberto com o código *#${codeFmt}*.\n\n💡 Digite *contas* para ver seus lançamentos ativos e códigos atuais!`,
+      });
+      return true;
+    }
+  }
+
   // C.3) Baixa em Pagamentos em Linguagem Natural ("já paguei", "paguei a sabesp", "tá pago", "acabei de pagar")
   const isPaidIntent = !hasSemanticQualifiers && (
     /^(?:já\s+)?paguei(?:\s+(?:a|o|a\s+conta\s+d[ao]|o\s+boleto\s+d[ao]))?(\s+.*)?$/i.test(clean) ||
@@ -3026,6 +3177,115 @@ function extractContactsFromPayload(msg: any): ExtractedContact[] {
   return contacts;
 }
 
+async function sendBankReconAuditCard(params: {
+  supabase: any;
+  phone: string;
+  cleanPhone: string;
+  clientId: string | null;
+  currentBill: any;
+  remainingBills: any[];
+}) {
+  const { supabase, phone, cleanPhone, clientId, currentBill, remainingBills } = params;
+  const { addMinutes } = await import('date-fns');
+
+  await supabase.from('bot_action_confirmations').insert({
+    client_id: clientId,
+    phone_number: cleanPhone,
+    action_type: 'BANK_RECON_AUDIT_UNPAID',
+    target_entity_id: currentBill.id || null,
+    proposed_payload: {
+      clientId,
+      cleanPhone,
+      currentBill,
+      remainingBills,
+    },
+    status: 'pending',
+    expires_at: addMinutes(new Date(), 15).toISOString(),
+  });
+
+  const billFav = currentBill.counterparty || currentBill.supplier_name || 'Conta';
+  const billVal = Number(currentBill.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const billDue = currentBill.dueDate ? formatDueDateDetails(currentBill.dueDate) : 'Data vencida';
+
+  const card = `🔍 *Auditoria de Contas que Venceram sem Baixa:*
+Constatamos que a conta de *${billFav}* (${billVal} - Vencida em ${billDue}) não consta quitada neste extrato.
+
+Como deseja registrar?
+*[1]* ✅ Declarar como Paga (paguei por outro banco/dinheiro)
+*[2]* ⚠️ Manter em Atraso (continuar cobrando/lembrando)
+*[3]* 📅 Prorrogar Vencimento
+*[4]* ❌ Cancelar Lançamento`;
+
+  await sendEvolutionText({ phone, text: card });
+}
+
+async function initiateBankReconciliationInteractiveFlow(params: {
+  supabase: any;
+  phone: string;
+  cleanPhone: string;
+  clientId: string | null;
+  reconRes: ReconciliationResult;
+}) {
+  const { supabase, phone, cleanPhone, clientId, reconRes } = params;
+  const { addMinutes } = await import('date-fns');
+
+  // Envia sempre o relatório executivo da conciliação bancária
+  await sendEvolutionText({
+    phone,
+    text: reconRes.summaryMessage,
+  });
+
+  const todayYMD = new Date().toISOString().split('T')[0];
+  const pastUnreconciled = (reconRes.unreconciledBills || []).filter(
+    (b) => b.dueDate && b.dueDate <= todayYMD
+  );
+
+  // ETAPA A: Se houver saídas no extrato que não estavam agendadas (ex: tarifas, Pix avulsos)
+  if (reconRes.unmatchedDebits && reconRes.unmatchedDebits.length > 0) {
+    const totalUnmatchedDebits = reconRes.unmatchedDebits.reduce((acc, d) => acc + d.amount, 0);
+    const totalFmt = totalUnmatchedDebits.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    await supabase.from('bot_action_confirmations').insert({
+      client_id: clientId,
+      phone_number: cleanPhone,
+      action_type: 'BANK_RECON_IMPORT_INCONSISTENCIES',
+      target_entity_id: null,
+      proposed_payload: {
+        clientId,
+        cleanPhone,
+        unmatchedDebits: reconRes.unmatchedDebits,
+        totalAmount: totalUnmatchedDebits,
+        pastUnreconciled,
+      },
+      status: 'pending',
+      expires_at: addMinutes(new Date(), 15).toISOString(),
+    });
+
+    const cardEtapaA = `⚠️ *Lançamentos no Extrato Não Previstos (${reconRes.unmatchedDebits.length}):*
+Total de saídas avulsas: *${totalFmt}*
+
+Deseja registrar essas despesas no seu Livro Caixa para atualizar seu saldo real?
+*[1]* 📥 Sim, registrar todas as ${reconRes.unmatchedDebits.length} saídas avulsas no Livro Caixa
+*[2]* ⏭️ Não, ignorar saídas avulsas e ir para as contas pendentes`;
+
+    await sendEvolutionText({ phone, text: cardEtapaA });
+    return;
+  }
+
+  // ETAPA B: Se não houver saídas avulsas mas houver contas vencidas sem baixa no extrato
+  if (pastUnreconciled.length > 0) {
+    await sendBankReconAuditCard({
+      supabase,
+      phone,
+      cleanPhone,
+      clientId,
+      currentBill: pastUnreconciled[0],
+      remainingBills: pastUnreconciled.slice(1, 5),
+    });
+    return;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as EvolutionWebhookBody;
@@ -3272,11 +3532,13 @@ async function processTrialDocumentMedia(params: {
       bankName: extraction.counterparty_name !== 'Desconhecido' ? extraction.counterparty_name : undefined,
     });
 
-    await sendEvolutionText({
+    await initiateBankReconciliationInteractiveFlow({
+      supabase,
       phone,
-      text: reconRes.summaryMessage,
+      cleanPhone,
+      clientId: null,
+      reconRes,
     });
-    await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
     return;
   }
 
@@ -3708,11 +3970,13 @@ async function processSubscriberDocumentMedia(params: {
         bankName: extracted.counterparty_name !== 'Desconhecido' ? extracted.counterparty_name : undefined,
       });
 
-      await sendEvolutionText({
+      await initiateBankReconciliationInteractiveFlow({
+        supabase,
         phone,
-        text: reconRes.summaryMessage,
+        cleanPhone,
+        clientId: client.id,
+        reconRes,
       });
-      await sendActionSequenceMenu(phone, 'O que deseja fazer a seguir?');
       return;
     }
 
@@ -4273,6 +4537,326 @@ Seus lançamentos foram preservados no seu Livro Caixa oficial e os lembretes de
         });
         return;
       }
+    }
+
+    // ── ETAPA A: IMPORTAÇÃO DE INCONSISTÊNCIAS / SAÍDAS NÃO PREVISTAS ──
+    if (pendingAction.action_type === 'BANK_RECON_IMPORT_INCONSISTENCIES') {
+      const payload = pendingAction.proposed_payload as any;
+      const transactions = Array.isArray(payload?.unmatchedDebits) ? payload.unmatchedDebits : [];
+      const pastBills = Array.isArray(payload?.pastUnreconciled) ? payload.pastUnreconciled : [];
+      const isImport = /^(1\b|sim\b|s\b|registrar|importar|confirmo|confirmar|positivo)/i.test(trimmed);
+      const isSkip = /^(2\b|n[aã]o\b|n\b|ignorar|pular|cancela|cancelar)/i.test(trimmed);
+
+      if (isImport) {
+        await supabase
+          .from('bot_action_confirmations')
+          .update({ status: 'confirmed' })
+          .eq('id', pendingAction.id);
+
+        let totalImported = 0;
+        const todayYMD = new Date().toISOString().split('T')[0];
+
+        if (client?.id) {
+          const entriesToInsert = transactions.map((tx: any) => {
+            const amt = Math.abs(Number(tx.amount || 0));
+            totalImported += amt;
+            return {
+              client_id: client.id,
+              entry_date: tx.date || todayYMD,
+              description: `DESPESA BANCÁRIA - ${tx.description || 'Saída do Extrato'}`,
+              amount: -amt,
+              entry_type: 'expense',
+              dre_group: 'despesa_administrativa',
+              status: 'realizado',
+            };
+          });
+          if (entriesToInsert.length > 0) {
+            await supabase.from('cash_ledger_entries').insert(entriesToInsert);
+          }
+        } else {
+          const { data: lead } = await supabase
+            .from('trial_leads')
+            .select('id, bills_list')
+            .eq('whatsapp_number', cleanPhone)
+            .maybeSingle();
+
+          if (lead) {
+            const bills = Array.isArray(lead.bills_list) ? [...lead.bills_list] : [];
+            for (const tx of transactions) {
+              const amt = Math.abs(Number(tx.amount || 0));
+              totalImported += amt;
+              bills.push({
+                id: `bill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                supplier_name: tx.description || 'Despesa Extrato Bancário',
+                amount: amt,
+                due_date: tx.date || todayYMD,
+                status: 'paid',
+                is_paid: true,
+                entry_type: 'payable',
+                reconciled_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+              });
+            }
+            const finalBills = ensureTrialBillsCodes(bills);
+            await supabase.from('trial_leads').update({ bills_list: finalBills }).eq('id', lead.id);
+          }
+        }
+
+        const totalFmt = totalImported.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        await sendEvolutionText({
+          phone,
+          text: `✅ *${transactions.length} despesa(s) avulsa(s) registrada(s) no Livro Caixa!*\nTotal de *${totalFmt}* computado no seu saldo real.`,
+        });
+
+        if (pastBills.length > 0) {
+          await sendBankReconAuditCard({
+            supabase,
+            phone,
+            cleanPhone,
+            clientId: client?.id || null,
+            currentBill: pastBills[0],
+            remainingBills: pastBills.slice(1, 5),
+          });
+        } else {
+          await sendEvolutionText({
+            phone,
+            text: `🎉 *Conciliação Concluída!*\nSeu Livro Caixa está perfeitamente calibrado com o seu extrato bancário. 🚀`,
+          });
+        }
+        return;
+      } else if (isSkip) {
+        await supabase
+          .from('bot_action_confirmations')
+          .update({ status: 'rejected' })
+          .eq('id', pendingAction.id);
+
+        await sendEvolutionText({
+          phone,
+          text: `⏭️ *Saídas avulsas ignoradas.*\nSeu Livro Caixa não foi alterado com as movimentações não previstas.`,
+        });
+
+        if (pastBills.length > 0) {
+          await sendBankReconAuditCard({
+            supabase,
+            phone,
+            cleanPhone,
+            clientId: client?.id || null,
+            currentBill: pastBills[0],
+            remainingBills: pastBills.slice(1, 5),
+          });
+        } else {
+          await sendEvolutionText({
+            phone,
+            text: `🎉 *Conciliação Concluída!* Todas as etapas foram finalizadas. 🚀`,
+          });
+        }
+        return;
+      }
+    }
+
+    // ── ETAPA B: AUDITORIA DE CONTAS VENCIDAS SEM BAIXA ──
+    if (pendingAction.action_type === 'BANK_RECON_AUDIT_UNPAID') {
+      const payload = pendingAction.proposed_payload as any;
+      const currentBill = payload?.currentBill || {};
+      const remainingBills = Array.isArray(payload?.remainingBills) ? payload.remainingBills : [];
+      const billFav = currentBill.counterparty || currentBill.supplier_name || 'Conta';
+      const billVal = Number(currentBill.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      const isPaid = /^(1\b|paga\b|pago\b|paguei\b|declarar\b|sim\b|liquidar\b)/i.test(trimmed);
+      const isOverdue = /^(2\b|atrasada\b|atrasado\b|atraso\b|manter\b)/i.test(trimmed);
+      const isPostpone = /^(3\b|prorrogar\b|adiar\b|mudar\s*vencimento\b)/i.test(trimmed);
+      const isCancel = /^(4\b|cancelar\b|excluir\b|apagar\b|remover\b)/i.test(trimmed);
+
+      if (isPaid) {
+        await supabase.from('bot_action_confirmations').update({ status: 'confirmed' }).eq('id', pendingAction.id);
+        const todayYMD = new Date().toISOString().split('T')[0];
+
+        if (client?.id) {
+          await supabase.from('payables_receivables').update({
+            status: 'paid',
+            notes: `Liquidado via auditoria de conciliação bancária em ${new Date().toLocaleDateString('pt-BR')}`,
+          }).eq('id', currentBill.id);
+
+          await supabase.from('cash_ledger_entries').insert({
+            client_id: client.id,
+            entry_date: todayYMD,
+            description: `PAGAMENTO DECLARADO - ${billFav}`,
+            amount: -Math.abs(Number(currentBill.amount || 0)),
+            entry_type: 'expense',
+            dre_group: 'despesa_administrativa',
+            status: 'realizado',
+          });
+        } else {
+          await updateTrialBill(cleanPhone, currentBill.id || billFav, {
+            status: 'paid',
+            is_paid: true,
+            notes: `Liquidado via auditoria de conciliação bancária em ${new Date().toLocaleDateString('pt-BR')}`,
+          });
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `✅ Conta de *${billFav}* (${billVal}) declarada como **Paga** e liquidada no Livro Caixa!`,
+        });
+
+        if (remainingBills.length > 0) {
+          await sendBankReconAuditCard({
+            supabase,
+            phone,
+            cleanPhone,
+            clientId: client?.id || null,
+            currentBill: remainingBills[0],
+            remainingBills: remainingBills.slice(1),
+          });
+        } else {
+          await sendEvolutionText({
+            phone,
+            text: `🎉 *Auditoria e Conciliação Finalizadas!* Todas as contas pendentes foram verificadas e seu fluxo de caixa está 100% atualizado. 🚀`,
+          });
+        }
+        return;
+      }
+
+      if (isOverdue) {
+        await supabase.from('bot_action_confirmations').update({ status: 'confirmed' }).eq('id', pendingAction.id);
+        if (client?.id) {
+          await supabase.from('payables_receivables').update({
+            notes: `Mantida em atraso pós-auditoria em ${new Date().toLocaleDateString('pt-BR')}`,
+          }).eq('id', currentBill.id);
+        } else {
+          await updateTrialBill(cleanPhone, currentBill.id || billFav, {
+            status: 'overdue',
+            notes: `Mantida em atraso pós-auditoria em ${new Date().toLocaleDateString('pt-BR')}`,
+          });
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ Conta de *${billFav}* mantida em aberto no radar de cobrança e contas vencidas.`,
+        });
+
+        if (remainingBills.length > 0) {
+          await sendBankReconAuditCard({
+            supabase,
+            phone,
+            cleanPhone,
+            clientId: client?.id || null,
+            currentBill: remainingBills[0],
+            remainingBills: remainingBills.slice(1),
+          });
+        } else {
+          await sendEvolutionText({
+            phone,
+            text: `🎉 *Auditoria e Conciliação Finalizadas!* 🚀`,
+          });
+        }
+        return;
+      }
+
+      if (isPostpone) {
+        await supabase.from('bot_action_confirmations').update({
+          action_type: 'BANK_RECON_POSTPONE_DATE',
+          proposed_payload: {
+            ...payload,
+          },
+        }).eq('id', pendingAction.id);
+
+        await sendEvolutionText({
+          phone,
+          text: `📅 *Prorrogação de Vencimento:*\nPara qual data deseja prorrogar a conta de *${billFav}*?\n\n💡 Informe no formato: *"para dia 15"*, *"15/11"* ou *"dia 20 de novembro"*.`,
+        });
+        return;
+      }
+
+      if (isCancel) {
+        await supabase.from('bot_action_confirmations').update({ status: 'confirmed' }).eq('id', pendingAction.id);
+        if (client?.id) {
+          await supabase.from('payables_receivables').update({
+            status: 'canceled',
+            notes: `Cancelado via auditoria de conciliação bancária em ${new Date().toLocaleDateString('pt-BR')}`,
+          }).eq('id', currentBill.id);
+        } else {
+          await updateTrialBill(cleanPhone, currentBill.id || billFav, {
+            status: 'canceled',
+            notes: `Cancelado via auditoria em ${new Date().toLocaleDateString('pt-BR')}`,
+          });
+        }
+
+        await sendEvolutionText({
+          phone,
+          text: `❌ Lançamento de *${billFav}* cancelado e removido das contas pendentes.`,
+        });
+
+        if (remainingBills.length > 0) {
+          await sendBankReconAuditCard({
+            supabase,
+            phone,
+            cleanPhone,
+            clientId: client?.id || null,
+            currentBill: remainingBills[0],
+            remainingBills: remainingBills.slice(1),
+          });
+        } else {
+          await sendEvolutionText({
+            phone,
+            text: `🎉 *Auditoria e Conciliação Finalizadas!* 🚀`,
+          });
+        }
+        return;
+      }
+    }
+
+    // ── ETAPA B.1: RESPOSTA DE DATA DE PRORROGAÇÃO PÓS-CONCILIAÇÃO ──
+    if (pendingAction.action_type === 'BANK_RECON_POSTPONE_DATE') {
+      const payload = pendingAction.proposed_payload as any;
+      const currentBill = payload?.currentBill || {};
+      const remainingBills = Array.isArray(payload?.remainingBills) ? payload.remainingBills : [];
+      const billFav = currentBill.counterparty || currentBill.supplier_name || 'Conta';
+      const parsedDate = parseDateFromSpokenText(cleanText);
+
+      if (!parsedDate) {
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ Não consegui entender a nova data informada ("${cleanText}").\n\n💡 Por favor, informe no formato:\n*"para dia 15"*, *"15/11"* ou *"dia 20 de novembro"*.`,
+        });
+        return;
+      }
+
+      await supabase.from('bot_action_confirmations').update({ status: 'confirmed' }).eq('id', pendingAction.id);
+
+      if (client?.id) {
+        await supabase.from('payables_receivables').update({
+          current_due_date: parsedDate,
+          notes: `Vencimento prorrogado para ${formatDueDateDetails(parsedDate)} via auditoria de conciliação`,
+        }).eq('id', currentBill.id);
+      } else {
+        await updateTrialBill(cleanPhone, currentBill.id || billFav, {
+          due_date: parsedDate,
+          notes: `Vencimento prorrogado para ${formatDueDateDetails(parsedDate)} via auditoria de conciliação`,
+        });
+      }
+
+      await sendEvolutionText({
+        phone,
+        text: `✅ *Vencimento Prorrogado com Sucesso!*\nA conta de *${billFav}* foi atualizada para *${formatDueDateDetails(parsedDate)}*.`,
+      });
+
+      if (remainingBills.length > 0) {
+        await sendBankReconAuditCard({
+          supabase,
+          phone,
+          cleanPhone,
+          clientId: client?.id || null,
+          currentBill: remainingBills[0],
+          remainingBills: remainingBills.slice(1),
+        });
+      } else {
+        await sendEvolutionText({
+          phone,
+          text: `🎉 *Auditoria e Conciliação Finalizadas!* 🚀`,
+        });
+      }
+      return;
     }
 
     // Trata seleção de conta candidata quando houve desempate semântico (>1 conta encontrada)

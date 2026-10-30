@@ -358,14 +358,6 @@ Constatamos que a(s) seguinte(s) conta(s) agendada(s) venceram e **não constam 
       const tag = b.type === 'receivable' ? 'Receita a receber' : 'Conta a pagar';
       summary += `• *${b.counterparty}* (${amtFmt} - Vencimento ${dueFmt}) [${tag}]\n`;
     }
-
-    summary += `
-❓ *Como deseja que o AnalisAí considere esta(s) conta(s)?*
-1️⃣ *Paga / Recebida* — Se pagou por outro banco/dinheiro (dar baixa manual)
-2️⃣ *Atrasada* — Continuar monitorando no painel de cobrança/lembretes
-3️⃣ *Postergada* — Adiar vencimento (informe: *"Adiar [conta] para dia [dia]"*)
-4️⃣ *Cancelada* — Excluir do fluxo de caixa (informe: *"Cancelar conta [conta]"*)
-`;
   } else if (unmatchedDebits.length === 0 && unmatchedCredits.length === 0) {
     summary += `✨ *Perfeito!* Todas as movimentações do extrato bateram perfeitamente com o seu planejamento financeiro. Seu Livro Caixa está 100% conciliado! 🚀`;
   } else {

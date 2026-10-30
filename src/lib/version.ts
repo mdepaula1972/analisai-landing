@@ -2,10 +2,10 @@
  * Versão Oficial do Sistema AnalisAí
  * Atualizado a cada novo deploy em produção
  */
-export const APP_VERSION = 'v1.5.4';
-export const APP_BUILD_TIMESTAMP = '30/10/2026 14:04 BRT';
+export const APP_VERSION = 'v1.5.5';
+export const APP_BUILD_TIMESTAMP = '30/10/2026 14:55 BRT';
 export const APP_RELEASE_NAME =
-  'Blindagem de Erros no OCR/Duplicidade + Timeout 60s + Matriz Gemini 2026 Ativa';
+  'Conciliação Guiada em 2 Etapas (Inconsistências + Auditoria) & Códigos Curtos (#01, #02)';
 
 export function getShortCommitSha(): string {
   const sha =

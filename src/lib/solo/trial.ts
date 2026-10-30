@@ -97,6 +97,35 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
 }
 
 /**
+ * Garante que todas as contas possuam um código numérico sequencial padronizado de 3 dígitos (ex: "001", "002").
+ * Preserva códigos já atribuídos e preenche contas legadas sem código.
+ */
+export function ensureTrialBillsCodes(bills: any[]): any[] {
+  if (!Array.isArray(bills) || bills.length === 0) return [];
+
+  let maxCode = 0;
+  for (const b of bills) {
+    if (b.code) {
+      const num = parseInt(String(b.code).replace(/\D/g, ''), 10);
+      if (!isNaN(num) && num > maxCode) {
+        maxCode = num;
+      }
+    }
+  }
+
+  let nextCode = maxCode + 1;
+  return bills.map((b) => {
+    if (b.code) {
+      const num = parseInt(String(b.code).replace(/\D/g, ''), 10);
+      const cleanCode = !isNaN(num) ? String(num).padStart(2, '0') : String(b.code);
+      return { ...b, code: cleanCode };
+    }
+    const assignedCode = String(nextCode++).padStart(2, '0');
+    return { ...b, code: assignedCode };
+  });
+}
+
+/**
  * Registra o uso da degustação gratuita para este número, incrementando a contagem de lançamentos
  * e detectando automaticamente o perfil tributário (CPF = 1, MEI = 3, Simples/Empresa = até 10)
  */
@@ -312,6 +341,8 @@ export async function recordTrialUsage(
     }
   }
 
+  const finalBillsList = ensureTrialBillsCodes(billsList);
+
   const { error: upsertErr } = await supabase
     .from('trial_leads')
     .upsert(
@@ -326,7 +357,7 @@ export async function recordTrialUsage(
         trial_docs_count: reconciled ? (leadRecord as any)?.trial_docs_count || newCount : newCount,
         trial_docs_limit: newLimit,
         interested_plan: suggestedPlan,
-        bills_list: billsList,
+        bills_list: finalBillsList,
         reminder_eve_sent: false,
         reminder_due_sent: false,
         trial_completed_at: new Date().toISOString(),
@@ -439,6 +470,8 @@ export async function recordMultipleTrialUsage(
   const newLimit = grantedLimit || leadRecord?.trial_docs_limit || current.docsLimit || 10;
   const lastEntry = validEntries[validEntries.length - 1];
 
+  const finalBillsList = ensureTrialBillsCodes(billsList);
+
   await supabase
     .from('trial_leads')
     .upsert(
@@ -453,7 +486,7 @@ export async function recordMultipleTrialUsage(
         trial_docs_count: newCount,
         trial_docs_limit: newLimit,
         interested_plan: leadRecord?.interested_plan || current.interestedPlan || 'solo',
-        bills_list: billsList,
+        bills_list: finalBillsList,
         reminder_eve_sent: false,
         reminder_due_sent: false,
         trial_completed_at: new Date().toISOString(),
@@ -1045,7 +1078,8 @@ export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de conf
  * Formata uma lista de contas de forma elegante para mensagens do WhatsApp
  */
 export function formatBillsList(bills: any[]): string {
-  const sortedBills = [...(bills || [])].sort((a, b) => {
+  const codedBills = ensureTrialBillsCodes(bills || []);
+  const sortedBills = [...codedBills].sort((a, b) => {
     const timeA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
     const timeB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
     if (timeA !== timeB) return timeA - timeB;
@@ -1053,14 +1087,15 @@ export function formatBillsList(bills: any[]): string {
   });
 
   return sortedBills
-    .map((b) => {
+    .map((b, idx) => {
+      const code = b.code ? String(b.code).replace(/\D/g, '').padStart(2, '0') : String(idx + 1).padStart(2, '0');
       const fornecedor = b.supplier_name || b.counterparty_name || 'Conta / Fornecedor';
       const rawVal = b.amount !== undefined && b.amount !== null ? b.amount : b.total_amount;
       const valFmt = rawVal && Number(rawVal) > 0
         ? Number(rawVal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '_(Valor em aberto - Provisão)_';
       const provTag = b.is_provision ? ' 📝 _[Provisão]_' : '';
-      let line = `• *${fornecedor}*: ${valFmt}${provTag}`;
+      let line = `• *[#${code}]* ${fornecedor}: ${valFmt}${provTag}`;
       if (b.barcode_or_pix) {
         line += `\n  ↳ Linha/Pix: \`${b.barcode_or_pix.trim()}\``;
       }
@@ -1350,11 +1385,16 @@ export async function getTrialBills(phone: string): Promise<any[]> {
 
   const { data: lead } = await supabase
     .from('trial_leads')
-    .select('bills_list')
+    .select('id, bills_list')
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
-  return Array.isArray(lead?.bills_list) ? lead.bills_list : [];
+  if (!lead || !Array.isArray(lead.bills_list)) return [];
+  const codedBills = ensureTrialBillsCodes(lead.bills_list);
+  if (lead.bills_list.some((b: any) => !b.code)) {
+    await supabase.from('trial_leads').update({ bills_list: codedBills }).eq('id', lead.id);
+  }
+  return codedBills;
 }
 
 /**
@@ -1385,11 +1425,18 @@ export async function updateTrialBill(
   }
 
   const cleanId = identifier.toLowerCase().trim();
-  const index = lead.bills_list.findIndex((b: any) =>
-    b.id === identifier ||
-    (b.supplier_name && b.supplier_name.toLowerCase().includes(cleanId)) ||
-    (b.supplier_name && cleanId.includes(b.supplier_name.toLowerCase()))
-  );
+  const codeMatch = cleanId.match(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|#)?\s*#?(\d{1,4})\b/i);
+  const targetCode = codeMatch ? String(parseInt(codeMatch[1], 10)).padStart(3, '0') : null;
+
+  const index = lead.bills_list.findIndex((b: any, idx: number) => {
+    const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+    return (
+      (targetCode && bCode === targetCode) ||
+      b.id === identifier ||
+      (b.supplier_name && b.supplier_name.toLowerCase().includes(cleanId)) ||
+      (b.supplier_name && cleanId.includes(b.supplier_name.toLowerCase()))
+    );
+  });
 
   if (index === -1) return { updated: false };
 
@@ -1445,11 +1492,18 @@ export async function deleteTrialBill(
   }
 
   const cleanId = identifier.toLowerCase().trim();
-  const index = lead.bills_list.findIndex((b: any) =>
-    b.id === identifier ||
-    (b.supplier_name && b.supplier_name.toLowerCase().includes(cleanId)) ||
-    (b.supplier_name && cleanId.includes(b.supplier_name.toLowerCase()))
-  );
+  const codeMatch = cleanId.match(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|#)?\s*#?(\d{1,4})\b/i);
+  const targetCode = codeMatch ? String(parseInt(codeMatch[1], 10)).padStart(3, '0') : null;
+
+  const index = lead.bills_list.findIndex((b: any, idx: number) => {
+    const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+    return (
+      (targetCode && bCode === targetCode) ||
+      b.id === identifier ||
+      (b.supplier_name && b.supplier_name.toLowerCase().includes(cleanId)) ||
+      (b.supplier_name && cleanId.includes(b.supplier_name.toLowerCase()))
+    );
+  });
 
   if (index === -1) return { deleted: false };
 
@@ -1471,7 +1525,8 @@ export async function deleteTrialBill(
  * Formata as contas de degustação em mensagem executiva WhatsApp, separando contas a pagar e contas a receber
  */
 export function formatTrialBillsListMessage(billsList: any[], periodLabel: string = 'Agenda Financeira Consolidada'): string {
-  const activeBills = (billsList || []).filter((b) => !b.is_paid && b.status !== 'paid');
+  const codedBills = ensureTrialBillsCodes(billsList);
+  const activeBills = (codedBills || []).filter((b) => !b.is_paid && b.status !== 'paid');
 
   if (activeBills.length === 0) {
     return `📋 *Agenda Financeira Consolidada*
@@ -1521,6 +1576,16 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
   const upcomingPayables = allPayables.filter((b) => !b.due_date || String(b.due_date).slice(0, 10) >= todayIso).sort(sortByDue);
   const receivables = activeBills.filter((b) => (b.entry_type || 'payable') === 'receivable').sort(sortByDue);
 
+  // Atribuição determinística e sequencial de códigos curtos (#01, #02, #03...) na ordem cronológica
+  let codeSeq = 1;
+  const assignSequentialShortCode = (b: any) => {
+    b.code = String(codeSeq++).padStart(2, '0');
+  };
+
+  overduePayables.forEach(assignSequentialShortCode);
+  upcomingPayables.forEach(assignSequentialShortCode);
+  receivables.forEach(assignSequentialShortCode);
+
   let totalOverduePayables = 0;
   let totalUpcomingPayables = 0;
   let totalReceivables = 0;
@@ -1537,9 +1602,11 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
       const dueFmt = formatBrDate(b.due_date);
       const overdueDays = getOverdueDays(b.due_date);
       const sup = b.supplier_name || b.counterparty_name || 'Conta';
-      text += `• *${sup}*\n  💰 R$ ${valFmt} | 📅 ${dueFmt} (⚠️ Vencido há ${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'})\n`;
+      text += `• *[#${b.code}]* ${sup}\n  💰 R$ ${valFmt} | 📅 ${dueFmt} (⚠️ Vencido há ${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'})\n`;
       if (b.barcode_or_pix) {
-        text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${sup.toLowerCase().split(' ')[0]}* para copiar)_\n`;
+        text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${b.code}* ou *baixar ${b.code}*)_\n`;
+      } else {
+        text += `  ↳ 💡 _Para baixar, digite *baixar ${b.code}*_\n`;
       }
     }
     text += `\n`;
@@ -1556,9 +1623,11 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
       const isDueToday = b.due_date && String(b.due_date).slice(0, 10) === todayIso;
       const todayBadge = isDueToday ? ' (🔔 Vence HOJE!)' : '';
       const sup = b.supplier_name || b.counterparty_name || 'Conta';
-      text += `• *${sup}*\n  💰 R$ ${valFmt} | 📅 ${dueFmt}${todayBadge}\n`;
+      text += `• *[#${b.code}]* ${sup}\n  💰 R$ ${valFmt} | 📅 ${dueFmt}${todayBadge}\n`;
       if (b.barcode_or_pix) {
-        text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${sup.toLowerCase().split(' ')[0]}* para copiar)_\n`;
+        text += `  ↳ 📋 _Linha digitável salva (digite *pagar ${b.code}* ou *baixar ${b.code}*)_\n`;
+      } else {
+        text += `  ↳ 💡 _Para baixar, digite *baixar ${b.code}*_\n`;
       }
     }
     text += `\n`;
@@ -1575,7 +1644,8 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
       const overdueDays = getOverdueDays(b.due_date);
       const overdueBadge = overdueDays > 0 ? ` (⚠️ Vencido há ${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'})` : '';
       const sup = b.supplier_name || b.counterparty_name || 'Cliente';
-      text += `• *${sup}*\n  💰 R$ ${valFmt} | 📅 ${dueFmt}${overdueBadge}\n`;
+      text += `• *[#${b.code}]* ${sup}\n  💰 R$ ${valFmt} | 📅 ${dueFmt}${overdueBadge}\n`;
+      text += `  ↳ 💡 _Para confirmar recebimento, digite *recebi ${b.code}*_\n`;
     }
     text += `\n`;
   }
@@ -1586,7 +1656,12 @@ Envie uma foto de boleto ou mande um áudio/texto dizendo suas contas (ex: *"Pag
 
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   text += `🔴 Total a Pagar Pendente: R$ ${totalPagarFmt}\n`;
-  text += `🟢 Total a Receber: R$ ${totalReceberFmt}`;
+  text += `🟢 Total a Receber: R$ ${totalReceberFmt}\n\n`;
+  text += `💡 *Ações Rápidas por Código:*\n`;
+  text += `Você pode usar o código da conta para qualquer comando imediato:\n`;
+  text += `• *"Baixar conta 02"* ou *"Paguei a 01"*\n`;
+  text += `• *"Pagar 02"* (para receber código de barras/Pix pronto)\n`;
+  text += `• *"Excluir 02"* ou *"Mudar valor da 01 para 850"*`;
 
   return text;
 }
@@ -1632,8 +1707,18 @@ export async function markTrialBillAsPaidOrReceived(params: {
 
   let matchedIndex = -1;
 
-  // 1. Busca por nome do fornecedor/cliente
-  if (cleanQuery.length >= 2) {
+  // 0. Match prioritário por CÓDIGO simplificado (ex: "001", "código 001", "#001", "1")
+  const codeMatch = cleanQuery.match(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|#)?\s*#?(\d{1,4})\b/i);
+  if (codeMatch && codeMatch[1]) {
+    const targetCode = String(parseInt(codeMatch[1], 10)).padStart(3, '0');
+    matchedIndex = bills.findIndex((b: any, idx: number) => {
+      const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+      return bCode === targetCode || b.id === targetCode;
+    });
+  }
+
+  // 1. Busca por nome do fornecedor/cliente se não encontrou por código
+  if (matchedIndex === -1 && cleanQuery.length >= 2) {
     matchedIndex = bills.findIndex((b: any) => {
       const name = (b.supplier_name || b.counterparty_name || '').toLowerCase();
       return name.includes(cleanQuery) || cleanQuery.includes(name);
