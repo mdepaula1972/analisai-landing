@@ -48,7 +48,7 @@ Com esses boletos agendados, quando você perguntar *"qual conta devo atrasar?"*
   
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       systemInstruction: `Você é o Simulador de Cenários de Caixa e Comparador de Encargos do AnalisAí Solo.
 Seu trabalho é orientar autônomos, MEIs e empresários em momentos de aperto financeiro de forma NEUTRA, TÉCNICA e CONSULTIVA, comparando taxas de encargos e riscos operacionais sem assumir a responsabilidade pela escolha.
 
@@ -491,7 +491,7 @@ export async function generateExtendedCashFlowReport(
 
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       systemInstruction: `Você é o Diretor Financeiro (CFO) e Consultor Sênior de Estratégia de Caixa do AnalisAí.
 Seu cliente contratou o Relatório Executivo de Fluxo de Caixa Futuro (R$ 49,00 avulso).
 Seu objetivo é entregar um diagnóstico contábil estratégico de alto padrão, empático, claro e orientado à ação para os próximos 30 a 90 dias.

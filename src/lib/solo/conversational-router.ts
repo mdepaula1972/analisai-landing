@@ -565,7 +565,7 @@ export async function routeConversationalIntent(
   }
 
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
+  const candidateModels = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite-preview'];
 
   const snapshotPrompt = context.snapshot
     ? `\nSITUAÇÃO ATIVA DE CONTAS NO BANCO DE DADOS (CONSULTE ANTES DE DECIDIR):

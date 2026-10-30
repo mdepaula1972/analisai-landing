@@ -21,7 +21,7 @@ export async function extractDocumentWithGemini(
   userInstruction?: string
 ): Promise<ExtractedDocumentData> {
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
+  const candidateModels = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite-preview'];
   let lastError: any = null;
 
   for (const modelName of candidateModels) {
@@ -446,7 +446,7 @@ export async function parseConversationalFinancialEntry(
   }
 
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
+  const candidateModels = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite-preview'];
   let lastError: any = null;
 
   for (const modelName of candidateModels) {
@@ -720,11 +720,11 @@ export async function processVoiceCommandWithGemini(
   if (cleanMime === 'audio/opus') cleanMime = 'audio/ogg';
   const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
 
-  // Lista de modelos oficiais com suporte nativo a áudio multimodal (Gemini 2.5 / 2.0 + fallback 2.5 Pro)
+  // Lista de modelos com suporte nativo a áudio multimodal
   const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.5-pro',
+    'gemini-3-flash-preview',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite-preview',
   ];
   let transcribedText = '';
   const attemptedErrors: string[] = [];
@@ -897,10 +897,10 @@ export async function processVoiceCommandWithGemini(
     };
   }
 
-  // 6. Gemini 2.5 Flash com Function Calling para extração precisa
+  // 6. Gemini Flash com Function Calling para extração precisa
   try {
     const textModel = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       tools: [{ functionDeclarations: functionDeclarations as any }],
       systemInstruction: `Você é o assistente financeiro do AnalisAí Solo.
 Classifique o comando do usuário e acione a ferramenta correta.
@@ -956,7 +956,7 @@ export async function parseConversationalCorrections(
   userText: string
 ): Promise<ConversationalCorrectionsResult> {
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
+  const candidateModels = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite-preview'];
 
   for (const modelName of candidateModels) {
     try {
@@ -1109,7 +1109,7 @@ export async function parseInvoicePaymentResolution(
   }
 ): Promise<InvoicePaymentResolution> {
   const genAI = getGeminiClient();
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
+  const candidateModels = ['gemini-3-flash-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite-preview'];
   const todayStr = new Date().toISOString().split('T')[0];
   const totalAmount = Math.abs(Number(invoiceContext.total_amount || 0));
   const issueDateStr = invoiceContext.issue_date || todayStr;

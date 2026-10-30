@@ -2,10 +2,10 @@
  * Versão Oficial do Sistema AnalisAí
  * Atualizado a cada novo deploy em produção
  */
-export const APP_VERSION = 'v1.5.3';
-export const APP_BUILD_TIMESTAMP = '30/10/2026 13:40 BRT';
+export const APP_VERSION = 'v1.5.4';
+export const APP_BUILD_TIMESTAMP = '30/10/2026 14:04 BRT';
 export const APP_RELEASE_NAME =
-  'Trava Determinística de Boletos + Vínculo Inteligente de Parcelas NF + Comando Desfazer + Agenda Cronológica';
+  'Blindagem de Erros no OCR/Duplicidade + Timeout 60s + Matriz Gemini 2026 Ativa';
 
 export function getShortCommitSha(): string {
   const sha =

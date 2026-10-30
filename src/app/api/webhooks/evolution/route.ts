@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60; // Permite até 60 segundos de execução em planos Pro/Serverless
+export const dynamic = 'force-dynamic';
+
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { APP_VERSION, getVersionStatusWhatsAppMessage } from '@/lib/version';
 import { sendEvolutionText, sendEvolutionPoll, sendEvolutionList, sendActionSequenceMenu, fetchMediaBase64FromEvolution } from '@/lib/solo/evolution';
@@ -87,9 +92,6 @@ import {
 } from '@/lib/solo/team-guard';
 import { isHelpMenuQuery, getHelpMenuMessage } from '@/lib/solo/help-menu';
 import { addMinutes } from 'date-fns';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 interface EvolutionWebhookBody {
   event: string;
@@ -3137,109 +3139,128 @@ async function processTrialDocumentMedia(params: {
   }
 
   const mimeType = mediaInfo.mimeType || (body.data as any)?.mimetype || message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
-  // Envia conjuntamente o binário e a instrução/legenda do usuário para o Gemini Vision
-  const extraction = await extractDocumentWithGemini(base64, mimeType, mediaCaption || undefined);
 
-  // Normaliza os campos para compatibilidade total entre extratores e formatadores
-  const normalizedDoc = {
-    ...extraction,
-    supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || (extraction.entry_type === 'receivable' ? 'Cliente' : 'Fornecedor'),
-    amount: extraction.total_amount !== undefined && extraction.total_amount !== null ? extraction.total_amount : (extraction as any).amount,
-    document_type: extraction.doc_type || (extraction as any).document_type || 'Boleto/Conta',
-    category: extraction.category_suggestion || (extraction as any).category || (extraction.entry_type === 'receivable' ? 'receita_operacional' : null),
-    entry_type: extraction.entry_type || 'payable',
-  };
-
-  // ── 1. VERIFICAÇÃO IMEDIATA E PRIORITÁRIA DE DUPLICIDADE E VÍNCULO DE BOLETO À PARCELA DA NF ──
-  const dupCheck = await checkDocumentDuplication(
-    supabase,
-    null,
-    {
-      amount: Number(normalizedDoc.amount || 0),
-      due_date: normalizedDoc.due_date,
-      counterparty: normalizedDoc.supplier_name,
-      doc_type: normalizedDoc.document_type,
-      barcode: extraction.barcode_or_pix || extraction.digitable_line || extraction.barcode,
-      invoice_number: extraction.invoice_number_ref,
-    },
-    cleanPhone
-  );
-
-  if (dupCheck.hasMatch && dupCheck.matchedAccount) {
-    const matched = dupCheck.matchedAccount;
-    const valFmt = Number(normalizedDoc.amount || matched.amount).toLocaleString('pt-BR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+  try {
+    console.log(`[Webhook Mídia][Trial] Iniciando extractDocumentWithGemini para ${cleanPhone}...`);
+    // Envia conjuntamente o binário e a instrução/legenda do usuário para o Gemini Vision
+    const extraction = await extractDocumentWithGemini(base64, mimeType, mediaCaption || undefined);
+    console.log('[Webhook Mídia] OCR concluído com sucesso. Iniciando verificação de duplicidade...', {
+      doc_type: extraction.doc_type,
+      counterparty_name: extraction.counterparty_name,
+      total_amount: extraction.total_amount,
+      due_date: extraction.due_date,
     });
-    const dueFmt = formatDueDateDetails(matched.current_due_date || normalizedDoc.due_date);
-    const favName = normalizedDoc.supplier_name || matched.description;
 
-    if (dupCheck.matchType === 'BOLETO_MATCHES_INVOICE_INSTALLMENT') {
-      await createPendingConfirmation({
-        clientId: null,
-        phoneNumber: phone,
-        actionType: 'ATTACH_BOLETO_TO_EXISTING_BILL',
-        payload: {
-          target_account_id: matched.id,
-          target_source: matched.source || 'trial_leads',
-          amount: Math.abs(Number(normalizedDoc.amount || matched.amount)),
-          counterparty_name: favName,
-          description: `${normalizedDoc.document_type} - ${favName}`,
-          due_date: normalizedDoc.due_date || matched.current_due_date,
-          entry_date: normalizedDoc.due_date || matched.current_due_date || new Date().toISOString().split('T')[0],
-          entry_type: normalizedDoc.entry_type || 'payable',
-          category_name: normalizedDoc.category,
-          dre_group: normalizedDoc.category,
-          barcode_or_pix: extraction.barcode_or_pix || extraction.digitable_line || extraction.barcode || null,
-          pix_key: extraction.pix_key || null,
-          pix_key_type: extraction.pix_key_type || null,
-          origin: 'documento',
-          rawText: mediaCaption || rawText,
-          isTrial: true,
-        },
-        sendWhatsAppCard: false,
-      });
+    // Normaliza os campos para compatibilidade total entre extratores e formatadores
+    const normalizedDoc = {
+      ...extraction,
+      supplier_name: extraction.counterparty_name || (extraction as any).supplier_name || (extraction.entry_type === 'receivable' ? 'Cliente' : 'Fornecedor'),
+      amount: extraction.total_amount !== undefined && extraction.total_amount !== null ? extraction.total_amount : (extraction as any).amount,
+      document_type: extraction.doc_type || (extraction as any).document_type || 'Boleto/Conta',
+      category: extraction.category_suggestion || (extraction as any).category || (extraction.entry_type === 'receivable' ? 'receita_operacional' : null),
+      entry_type: extraction.entry_type || 'payable',
+    };
 
-      await sendEvolutionText({
-        phone,
-        text: `⚠️ *Identificação Inteligente de Parcela*\n\nIdentifiquei que este boleto de *R$ ${valFmt}* (${favName}) refere-se à parcela da Nota Fiscal que já se encontra agendada para *${dueFmt}*.\n\nDeseja atualizar a parcela com este boleto e salvar a linha digitável para pagamento?\n\n*[1]* 🔗 Sim, atualizar agendamento existente\n*[2]* ➕ Não, lançar como despesa separada\n*[3]* ❌ Cancelar`,
+    // ── 1. VERIFICAÇÃO IMEDIATA E PRIORITÁRIA DE DUPLICIDADE E VÍNCULO DE BOLETO À PARCELA DA NF ──
+    const dupCheck = await checkDocumentDuplication(
+      supabase,
+      null,
+      {
+        amount: Number(normalizedDoc.amount || 0),
+        due_date: normalizedDoc.due_date,
+        counterparty: normalizedDoc.supplier_name,
+        doc_type: normalizedDoc.document_type,
+        barcode: extraction.barcode_or_pix || extraction.digitable_line || extraction.barcode,
+        invoice_number: extraction.invoice_number_ref,
+      },
+      cleanPhone
+    );
+    console.log('[Webhook Mídia] Verificação de duplicidade concluída:', {
+      hasMatch: dupCheck.hasMatch,
+      matchType: dupCheck.matchType,
+      matchedAccountId: dupCheck.matchedAccount?.id,
+    });
+
+    if (dupCheck.hasMatch && dupCheck.matchedAccount) {
+      const matched = dupCheck.matchedAccount;
+      const valFmt = Number(normalizedDoc.amount || matched.amount).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
       });
-      return;
+      const dueFmt = formatDueDateDetails(matched.current_due_date || normalizedDoc.due_date);
+      const favName = normalizedDoc.supplier_name || matched.description;
+
+      if (dupCheck.matchType === 'BOLETO_MATCHES_INVOICE_INSTALLMENT') {
+        console.log('[Webhook Mídia] Criando confirmação ATTACH_BOLETO_TO_EXISTING_BILL (Trial)...');
+        await createPendingConfirmation({
+          clientId: null,
+          phoneNumber: phone,
+          actionType: 'ATTACH_BOLETO_TO_EXISTING_BILL',
+          payload: {
+            target_account_id: matched.id,
+            target_source: matched.source || 'trial_leads',
+            amount: Math.abs(Number(normalizedDoc.amount || matched.amount)),
+            counterparty_name: favName,
+            description: `${normalizedDoc.document_type} - ${favName}`,
+            due_date: normalizedDoc.due_date || matched.current_due_date,
+            entry_date: normalizedDoc.due_date || matched.current_due_date || new Date().toISOString().split('T')[0],
+            entry_type: normalizedDoc.entry_type || 'payable',
+            category_name: normalizedDoc.category,
+            dre_group: normalizedDoc.category,
+            barcode_or_pix: extraction.barcode_or_pix || extraction.digitable_line || extraction.barcode || null,
+            pix_key: extraction.pix_key || null,
+            pix_key_type: extraction.pix_key_type || null,
+            origin: 'documento',
+            rawText: mediaCaption || rawText,
+            isTrial: true,
+          },
+          sendWhatsAppCard: false,
+        });
+
+        console.log('[Webhook Mídia] Enviando card BOLETO_MATCHES_INVOICE_INSTALLMENT (Trial)...');
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Identificação Inteligente de Parcela*\n\nIdentifiquei que este boleto de *R$ ${valFmt}* (${favName}) refere-se à parcela da Nota Fiscal que já se encontra agendada para *${dueFmt}*.\n\nDeseja atualizar a parcela com este boleto e salvar a linha digitável para pagamento?\n\n*[1]* 🔗 Sim, atualizar agendamento existente\n*[2]* ➕ Não, lançar como despesa separada\n*[3]* ❌ Cancelar`,
+        });
+        console.log('[Webhook Mídia] Card BOLETO_MATCHES_INVOICE_INSTALLMENT enviado com sucesso (Trial).');
+        return;
+      }
+
+      if (dupCheck.matchType === 'EXACT_DUPLICATE') {
+        console.log('[Webhook Mídia] Criando confirmação EXACT_DUPLICATE_CONFIRMATION (Trial)...');
+        await createPendingConfirmation({
+          clientId: null,
+          phoneNumber: phone,
+          actionType: 'EXACT_DUPLICATE_CONFIRMATION',
+          payload: {
+            target_account_id: matched.id,
+            target_source: matched.source || 'trial_leads',
+            amount: Math.abs(Number(normalizedDoc.amount || matched.amount)),
+            counterparty_name: favName,
+            description: `${normalizedDoc.document_type} - ${favName}`,
+            due_date: normalizedDoc.due_date || matched.current_due_date,
+            entry_date: normalizedDoc.due_date || matched.current_due_date || new Date().toISOString().split('T')[0],
+            entry_type: normalizedDoc.entry_type || 'payable',
+            category_name: normalizedDoc.category,
+            dre_group: normalizedDoc.category,
+            barcode_or_pix: extraction.barcode_or_pix || extraction.digitable_line || extraction.barcode || null,
+            pix_key: extraction.pix_key || null,
+            pix_key_type: extraction.pix_key_type || null,
+            origin: 'documento',
+            rawText: mediaCaption || rawText,
+            isTrial: true,
+          },
+          sendWhatsAppCard: false,
+        });
+
+        await sendEvolutionText({
+          phone,
+          text: `⚠️ *Atenção: Possível Conta Duplicada!*\n\nJá existe um agendamento idêntico de *R$ ${valFmt}* para *${favName}* com vencimento em *${dueFmt}*.\n\n*[1]* ➕ Lançar mesmo assim (conta repetida/diferente)\n*[2]* ❌ Cancelar (já está cadastrada)`,
+        });
+        console.log('[Webhook Mídia] Card EXACT_DUPLICATE enviado com sucesso (Trial).');
+        return;
+      }
     }
-
-    if (dupCheck.matchType === 'EXACT_DUPLICATE') {
-      await createPendingConfirmation({
-        clientId: null,
-        phoneNumber: phone,
-        actionType: 'EXACT_DUPLICATE_CONFIRMATION',
-        payload: {
-          target_account_id: matched.id,
-          target_source: matched.source || 'trial_leads',
-          amount: Math.abs(Number(normalizedDoc.amount || matched.amount)),
-          counterparty_name: favName,
-          description: `${normalizedDoc.document_type} - ${favName}`,
-          due_date: normalizedDoc.due_date || matched.current_due_date,
-          entry_date: normalizedDoc.due_date || matched.current_due_date || new Date().toISOString().split('T')[0],
-          entry_type: normalizedDoc.entry_type || 'payable',
-          category_name: normalizedDoc.category,
-          dre_group: normalizedDoc.category,
-          barcode_or_pix: extraction.barcode_or_pix || extraction.digitable_line || extraction.barcode || null,
-          pix_key: extraction.pix_key || null,
-          pix_key_type: extraction.pix_key_type || null,
-          origin: 'documento',
-          rawText: mediaCaption || rawText,
-          isTrial: true,
-        },
-        sendWhatsAppCard: false,
-      });
-
-      await sendEvolutionText({
-        phone,
-        text: `⚠️ *Atenção: Possível Conta Duplicada!*\n\nJá existe um agendamento idêntico de *R$ ${valFmt}* para *${favName}* com vencimento em *${dueFmt}*.\n\n*[1]* ➕ Lançar mesmo assim (conta repetida/diferente)\n*[2]* ❌ Cancelar (já está cadastrada)`,
-      });
-      return;
-    }
-  }
 
   // Suporte a Conciliação de Extratos Bancários (PDF / Imagem)
   if (extraction.is_bank_statement && Array.isArray(extraction.bank_transactions) && extraction.bank_transactions.length > 0) {
@@ -3436,11 +3457,18 @@ _Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no
     sendWhatsAppCard: true,
   });
 
-  if (extraction.barcode_or_pix) {
-    await sendPaymentCodeMessage(phone, {
-      barcode_or_pix: extraction.barcode_or_pix,
-      pix_key: extraction.pix_key,
-      pix_key_type: extraction.pix_key_type,
+    if (extraction.barcode_or_pix) {
+      await sendPaymentCodeMessage(phone, {
+        barcode_or_pix: extraction.barcode_or_pix,
+        pix_key: extraction.pix_key,
+        pix_key_type: extraction.pix_key_type,
+      });
+    }
+  } catch (err) {
+    console.error('[Webhook Mídia][Trial] Erro capturado no processamento de documento:', err);
+    await sendEvolutionText({
+      phone,
+      text: '⚠️ Tive uma pequena instabilidade ao processar os detalhes deste documento. Pode reenviar a foto ou tentar novamente?',
     });
   }
 }
@@ -3537,8 +3565,15 @@ async function processSubscriberDocumentMedia(params: {
   const mimeType = mediaInfo.mimeType || (body.data as any)?.mimetype || message?.imageMessage?.mimetype || message?.documentMessage?.mimetype || 'image/jpeg';
 
   try {
+    console.log(`[Webhook Mídia][Subscriber] Iniciando extractDocumentWithGemini para client=${client.id} (${cleanPhone})...`);
     // Envia conjuntamente o binário e a instrução/legenda do usuário para o Gemini Vision
     const extracted = await extractDocumentWithGemini(base64Media, mimeType, mediaCaption || undefined);
+    console.log('[Webhook Mídia] OCR concluído com sucesso. Iniciando verificação de duplicidade...', {
+      doc_type: extracted.doc_type,
+      counterparty_name: extracted.counterparty_name,
+      total_amount: extracted.total_amount,
+      due_date: extracted.due_date,
+    });
 
     // ── 1. VERIFICAÇÃO IMEDIATA E PRIORITÁRIA DE DUPLICIDADE E VÍNCULO DE BOLETO À PARCELA DA NF ──
     const dupCheck = await checkDocumentDuplication(
@@ -3554,6 +3589,11 @@ async function processSubscriberDocumentMedia(params: {
       },
       cleanPhone
     );
+    console.log('[Webhook Mídia] Verificação de duplicidade concluída:', {
+      hasMatch: dupCheck.hasMatch,
+      matchType: dupCheck.matchType,
+      matchedAccountId: dupCheck.matchedAccount?.id,
+    });
 
     const { data: docRecord } = await supabase
       .from('documents')
@@ -3582,6 +3622,7 @@ async function processSubscriberDocumentMedia(params: {
 
       // Cenário A: Vínculo de Boleto à Parcela Existente (BOLETO_MATCHES_INVOICE_INSTALLMENT)
       if (dupCheck.matchType === 'BOLETO_MATCHES_INVOICE_INSTALLMENT') {
+        console.log('[Webhook Mídia] Criando confirmação ATTACH_BOLETO_TO_EXISTING_BILL (Subscriber)...');
         await createPendingConfirmation({
           clientId: client.id,
           phoneNumber: phone,
@@ -3609,15 +3650,18 @@ async function processSubscriberDocumentMedia(params: {
           sendWhatsAppCard: false,
         });
 
+        console.log('[Webhook Mídia] Enviando card BOLETO_MATCHES_INVOICE_INSTALLMENT (Subscriber)...');
         await sendEvolutionText({
           phone,
           text: `⚠️ *Identificação Inteligente de Parcela*\n\nIdentifiquei que este boleto de *R$ ${valFmt}* (${favName}) refere-se à parcela da Nota Fiscal que já se encontra agendada para *${dueFmt}*.\n\nDeseja atualizar a parcela com este boleto e salvar a linha digitável para pagamento?\n\n*[1]* 🔗 Sim, atualizar agendamento existente\n*[2]* ➕ Não, lançar como despesa separada\n*[3]* ❌ Cancelar`,
         });
+        console.log('[Webhook Mídia] Card BOLETO_MATCHES_INVOICE_INSTALLMENT enviado com sucesso (Subscriber).');
         return;
       }
 
       // Cenário B: Duplicidade Exata (EXACT_DUPLICATE)
       if (dupCheck.matchType === 'EXACT_DUPLICATE') {
+        console.log('[Webhook Mídia] Criando confirmação EXACT_DUPLICATE_CONFIRMATION (Subscriber)...');
         await createPendingConfirmation({
           clientId: client.id,
           phoneNumber: phone,
@@ -3649,6 +3693,7 @@ async function processSubscriberDocumentMedia(params: {
           phone,
           text: `⚠️ *Atenção: Possível Conta Duplicada!*\n\nJá existe um agendamento idêntico de *R$ ${valFmt}* para *${favName}* com vencimento em *${dueFmt}*.\n\n*[1]* ➕ Lançar mesmo assim (conta repetida/diferente)\n*[2]* ❌ Cancelar (já está cadastrada)`,
         });
+        console.log('[Webhook Mídia] Card EXACT_DUPLICATE enviado com sucesso (Subscriber).');
         return;
       }
     }
@@ -3878,7 +3923,7 @@ _Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no
 
     await sendEvolutionText({
       phone,
-      text: `Não consegui decodificar nitidamente o documento enviado. Por favor, envie uma foto com melhor iluminação ou o arquivo PDF original.`,
+      text: '⚠️ Tive uma pequena instabilidade ao processar os detalhes deste documento. Pode reenviar a foto ou tentar novamente?',
     });
     return;
   }
