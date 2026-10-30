@@ -398,6 +398,63 @@ REGRA MANDATÓRIA DE CLASSIFICAÇÃO: Se a imagem contiver logotipo ou nome de b
 }
 
 /**
+ * Mensagem proativa e humanizada enviada quando a imagem não contiver dados contábeis legíveis
+ * ou for classificada como não financeira. Orienta reenvio ou registro por voz.
+ */
+export const UNREADABLE_OR_NON_FINANCIAL_DOC_MESSAGE = `⚠️ *Não consegui ler os dados deste documento com nitidez.*
+
+Se você tirou foto de uma tela ou o papel ficou distante, tente tirar uma foto mais de perto e enquadrada.
+
+💡 *Você também pode lançar rapidinho por voz:*
+🎙️ Mande um áudio dizendo: *"Paguei [valor] em [onde/o que] hoje"* ou *"Boleto de [valor] para o dia [data]"*.
+
+Se tiver a foto da nota, cupom fiscal ou comprovante Pix, é só me enviar aqui!`;
+
+/**
+ * Avalia se o documento extraído pelo Gemini possui dados financeiros reais e texto extraível.
+ * Retorna false se o documento for foto ilegível, não contábil, meme ou sem dados mínimos de valor/código.
+ */
+export function isDocumentReadableAndFinancial(doc: ExtractedDocumentData): boolean {
+  if (!doc) return false;
+  if (doc.is_financial_doc === false) return false;
+  if (doc.is_bank_statement) return true;
+
+  const rawText = (doc.raw_ocr_text || '').trim();
+  const amount = Number(doc.total_amount || 0);
+  const hasValidAmount = amount > 0;
+  const hasBarcodeOrPix = Boolean(doc.barcode_or_pix || doc.digitable_line || doc.barcode || doc.pix_code || doc.pix_key);
+  const hasInstallments = Boolean(doc.installments && doc.installments.length > 0);
+  const hasCounterparty = Boolean(
+    doc.counterparty_name &&
+    doc.counterparty_name !== 'Desconhecido' &&
+    doc.counterparty_name !== 'Fornecedor' &&
+    doc.counterparty_name.trim().length > 0
+  );
+
+  // Se não tem valor, não tem código de barras/pix e não possui parcelas
+  if (!hasValidAmount && !hasBarcodeOrPix && !hasInstallments) {
+    return false;
+  }
+
+  // Se não tem texto algum extraído e não possui código de barras/pix
+  if (!rawText && !hasBarcodeOrPix) {
+    return false;
+  }
+
+  // Se foi classificado como outro, sem valor e sem contraparte válida
+  if (doc.doc_type === 'outro' && !hasValidAmount && !hasBarcodeOrPix && !hasCounterparty) {
+    return false;
+  }
+
+  // Se a pontuação de confiança for mínima (ex: foto borrada/ruído) e não houver valor nem código
+  if ((doc.confidence_score ?? 1) < 0.3 && !hasValidAmount && !hasBarcodeOrPix) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Sanitiza o nome do favorecido/fornecedor removendo ruídos de IA e textos metalinguísticos
  */
 export function cleanSupplierName(raw: any): string {

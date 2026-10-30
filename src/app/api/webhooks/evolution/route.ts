@@ -13,6 +13,8 @@ import {
   parseConversationalFinancialEntry,
   parseConversationalCorrections,
   parseInvoicePaymentResolution,
+  isDocumentReadableAndFinancial,
+  UNREADABLE_OR_NON_FINANCIAL_DOC_MESSAGE,
 } from '@/lib/solo/gemini';
 import {
   routeConversationalIntent,
@@ -3411,6 +3413,27 @@ async function processTrialDocumentMedia(params: {
       due_date: extraction.due_date,
     });
 
+    // ── 0. VALIDAÇÃO DE DOCUMENTO LEGÍVEL E FINANCEIRO (FALLBACK INTELIGENTE) ──
+    if (!isDocumentReadableAndFinancial(extraction)) {
+      import('@/lib/solo/friction-radar')
+        .then((m) =>
+          m.recordInsight({
+            phone: cleanPhone,
+            eventType: 'unsupported',
+            category: 'ocr',
+            rawMessage: mediaCaption || 'Documento / Foto ilegível ou não financeira',
+            detectedIntent: 'Envio de documento ilegível ou não financeiro na degustação',
+          })
+        )
+        .catch(() => {});
+
+      await sendEvolutionText({
+        phone,
+        text: UNREADABLE_OR_NON_FINANCIAL_DOC_MESSAGE,
+      });
+      return;
+    }
+
     // Normaliza os campos para compatibilidade total entre extratores e formatadores
     const normalizedDoc = {
       ...extraction,
@@ -3538,30 +3561,6 @@ async function processTrialDocumentMedia(params: {
       cleanPhone,
       clientId: null,
       reconRes,
-    });
-    return;
-  }
-
-  const isFinancial =
-    extraction.is_financial_doc !== false &&
-    (Boolean(extraction.is_bank_statement) || extraction.doc_type !== 'outro' || (extraction.total_amount > 0 && extraction.counterparty_name !== 'Desconhecido'));
-
-  if (!isFinancial) {
-    import('@/lib/solo/friction-radar')
-      .then((m) =>
-        m.recordInsight({
-          phone: cleanPhone,
-          eventType: 'unsupported',
-          category: 'ocr',
-          rawMessage: mediaCaption || 'Documento não identificado como financeiro',
-          detectedIntent: 'Envio de documento não financeiro na degustação',
-        })
-      )
-      .catch(() => {});
-
-    await sendEvolutionText({
-      phone,
-      text: `⚠️ *Documento não identificado como financeiro.*\nO arquivo enviado não parece ser um boleto, conta de consumo, nota fiscal ou extrato bancário.\n\nNa nossa degustação gratuita, envie uma foto nítida de um boleto, NF ou extrato para ver o robô funcionando em tempo real!`,
     });
     return;
   }
@@ -3730,7 +3729,7 @@ _Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no
     console.error('[Webhook Mídia][Trial] Erro capturado no processamento de documento:', err);
     await sendEvolutionText({
       phone,
-      text: '⚠️ Tive uma pequena instabilidade ao processar os detalhes deste documento. Pode reenviar a foto ou tentar novamente?',
+      text: UNREADABLE_OR_NON_FINANCIAL_DOC_MESSAGE,
     });
   }
 }
@@ -3836,6 +3835,27 @@ async function processSubscriberDocumentMedia(params: {
       total_amount: extracted.total_amount,
       due_date: extracted.due_date,
     });
+
+    // ── 0. VALIDAÇÃO DE DOCUMENTO LEGÍVEL E FINANCEIRO (FALLBACK INTELIGENTE) ──
+    if (!isDocumentReadableAndFinancial(extracted)) {
+      import('@/lib/solo/friction-radar')
+        .then((m) =>
+          m.recordInsight({
+            phone: cleanPhone,
+            eventType: 'unsupported',
+            category: 'ocr',
+            rawMessage: mediaCaption || 'Documento / Foto ilegível ou não financeira',
+            detectedIntent: 'Envio de documento ilegível ou não financeiro (Subscriber)',
+          })
+        )
+        .catch(() => {});
+
+      await sendEvolutionText({
+        phone,
+        text: UNREADABLE_OR_NON_FINANCIAL_DOC_MESSAGE,
+      });
+      return;
+    }
 
     // ── 1. VERIFICAÇÃO IMEDIATA E PRIORITÁRIA DE DUPLICIDADE E VÍNCULO DE BOLETO À PARCELA DA NF ──
     const dupCheck = await checkDocumentDuplication(
@@ -4187,7 +4207,7 @@ _Ex: "Foi em 10x no cartão, vence dia 10 e faltam 9 parcelas" ou "Já paguei no
 
     await sendEvolutionText({
       phone,
-      text: '⚠️ Tive uma pequena instabilidade ao processar os detalhes deste documento. Pode reenviar a foto ou tentar novamente?',
+      text: UNREADABLE_OR_NON_FINANCIAL_DOC_MESSAGE,
     });
     return;
   }

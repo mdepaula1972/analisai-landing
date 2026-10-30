@@ -2,10 +2,10 @@
  * Versão Oficial do Sistema AnalisAí
  * Atualizado a cada novo deploy em produção
  */
-export const APP_VERSION = 'v1.5.5';
-export const APP_BUILD_TIMESTAMP = '30/10/2026 14:55 BRT';
+export const APP_VERSION = 'v1.5.6';
+export const APP_BUILD_TIMESTAMP = '30/10/2026 16:45 BRT';
 export const APP_RELEASE_NAME =
-  'Conciliação Guiada em 2 Etapas (Inconsistências + Auditoria) & Códigos Curtos (#01, #02)';
+  'Fallback Inteligente & Orientação por Voz para Fotos Ilegíveis ou Não Financeiras';
 
 export function getShortCommitSha(): string {
   const sha =
