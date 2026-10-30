@@ -115,20 +115,24 @@ async function runWebhookTest(test: TestCase, webhookUrl: string, testPhone: str
             expected: test.expectedBehavior,
         };
     } catch (error: any) {
+        const errorDetail = error?.cause?.message || error?.cause || error?.message || 'Falha de conexão';
         return {
             id: test.id,
             name: test.name,
             status: 'CRASH',
             httpStatus: 0,
             elapsedMs: Date.now() - startTime,
-            error: error.message,
+            error: String(errorDetail),
             expected: test.expectedBehavior,
         };
     }
 }
 
 async function main() {
-    const WEBHOOK_URL = process.env.TEST_WEBHOOK_URL || 'http://localhost:3000/api/webhooks/evolution';
+    let WEBHOOK_URL = process.env.TEST_WEBHOOK_URL || 'http://127.0.0.1:3000/api/webhooks/evolution';
+    if (WEBHOOK_URL.includes('localhost')) {
+        WEBHOOK_URL = WEBHOOK_URL.replace('localhost', '127.0.0.1');
+    }
     // Telefone que já existe no seu banco de testes (de preferência o seu de QA)
     const TEST_PHONE = process.env.TEST_PHONE_NUMBER || '5513999999999';
 
@@ -137,6 +141,23 @@ async function main() {
     console.log(`🎯 Alvo: ${WEBHOOK_URL}`);
     console.log(`📱 Telefone Mock: ${TEST_PHONE}`);
     console.log(`======================================================\n`);
+
+    // Pré-validação de conectividade com o alvo
+    try {
+        await fetch(WEBHOOK_URL, { method: 'GET' });
+    } catch (connErr: any) {
+        console.error(`❌ ERRO DE CONEXÃO AO ALVO: Não foi possível conectar a ${WEBHOOK_URL}`);
+        console.error(`💡 Causa: ${connErr?.cause?.message || connErr?.message || 'Servidor inacessível'}`);
+        console.error(`\n👉 IMPORTANTE:`);
+        console.error(`   1. O comando 'npm run dev' precisa ficar RODANDO em uma janela de terminal.`);
+        console.error(`   2. Se você digitou 'npm run test:stress' no mesmo terminal de onde rodou 'npm run dev', o servidor parou!`);
+        console.error(`   3. Abra um NOVO terminal (ou use outra aba) para rodar:`);
+        console.error(`      • Terminal 1: npm run dev`);
+        console.error(`      • Terminal 2: npm run test:stress`);
+        console.error(`   4. Alternativamente, para testar a API na nuvem (Vercel), configure no .env.local:`);
+        console.error(`      TEST_WEBHOOK_URL=https://analisai.me/api/webhooks/evolution\n`);
+        process.exit(1);
+    }
 
     const results = [];
 
