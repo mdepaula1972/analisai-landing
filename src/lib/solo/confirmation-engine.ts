@@ -1666,6 +1666,16 @@ export async function checkAndApplyLegalOptIn(params: {
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
+  // Verifica se e convidado VIP na whitelist para saudar pelo nome
+  const { data: whitelistEntry } = await supabase
+    .from('qa_whitelist')
+    .select('description')
+    .or(`identifier.eq.${cleanPhone},identifier.eq.${altPhone}`)
+    .limit(1)
+    .maybeSingle();
+
+  const guestName = whitelistEntry?.description ? whitelistEntry.description.split(' ')[0] : (client?.name ? client.name.split(' ')[0] : undefined);
+
   if (!lead || !lead.terms_accepted_at || !lead.profile_type) {
     if (lead?.id) {
       await supabase
@@ -1686,7 +1696,7 @@ export async function checkAndApplyLegalOptIn(params: {
 
     await sendEvolutionText({
       phone,
-      text: getWelcomeAndPfPjMessage(),
+      text: getWelcomeAndPfPjMessage(guestName),
     });
 
     return {

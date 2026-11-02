@@ -10,6 +10,7 @@ import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { classifyTaxId, TaxClassification } from '@/lib/solo/tax-classifier';
 import { addDays, format } from 'date-fns';
+import { getWelcomeAndPfPjMessage } from '@/lib/solo/onboarding-flow';
 
 export interface TrialStatus {
   hasUsedTrial: boolean;
@@ -568,100 +569,30 @@ ${billsSnippet}${extraText}
 • ❓ Pode me perguntar qualquer dúvida sobre seu caixa!`;
     }
 
-    if (whitelistEntry) {
-      const guestFirstName = whitelistEntry.description ? whitelistEntry.description.split(' ')[0] : 'Convidado VIP';
-      const inviter = whitelistEntry.created_by || 'Marcos';
-      return `👋 *Olá, ${guestFirstName}! Que prazer ter você por aqui!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *${inviter}* liberou o seu **acesso VIP completo e irrestrito** no **AnalisAí**, o seu assistente de inteligência financeira no WhatsApp!
+    // Se o usuário ainda não possui contas cadastradas, a Mensagem 4 (Boas-vindas + Calibração PF x PJ x Ambos)
+    // é o padrão para todos os novos contatos, independente da origem (seja convidado VIP, visitante ou lead de anúncio).
+    const guestFirstName = whitelistEntry?.description ? whitelistEntry.description.split(' ')[0] : undefined;
 
-Aqui você não precisa decorar comandos nem preencher formulários complicados:
-• 📸 *Notas, Boletos e Comprovantes:* Basta enviar fotos ou PDFs que eu extraio valores, datas e CNPJs automaticamente;
-• 🎙️ *Áudios ou Mensagens:* Pode falar ou digitar do seu jeito (ex: *"Paguei 180 de combustível"* ou *"Anota receber 1.200 do cliente"*);
-• 💡 *Inteligência de Caixa e Relatórios:* Além de contas a pagar e receber, eu analiso seu fluxo de caixa, calculo juros e gero seu DRE em PDF.
-
-💬 *Você tem total liberdade para conversar:*
-Ficou com alguma dúvida ou quer saber o que mais posso fazer pela sua empresa? **Basta me perguntar por áudio ou texto** (ex: *"o que você pode fazer por mim?"* ou *"como vejo meu fluxo de caixa?"*) que eu te oriento passo a passo!
-
-👉 *Para começar agora mesmo:*
-Envie uma foto de um **boleto** ou mande um áudio/texto dizendo suas contas. Em segundos eu organizo tudo para você! 🚀`;
+    // Registra/atualiza o onboarding_step para awaiting_pf_or_pj caso o lead já exista
+    if (leadRecord?.id) {
+      await supabase
+        .from('trial_leads')
+        .update({ onboarding_step: 'awaiting_pf_or_pj' })
+        .eq('id', leadRecord.id);
     }
+
+    return getWelcomeAndPfPjMessage(guestFirstName);
   }
 
-  const { count } = await supabase
-    .from('trial_leads')
-    .select('*', { count: 'exact', head: true });
-
-  const totalLeads = count || 0;
-  const remainingVipSlots = Math.max(0, MAX_BETA_VIP_USERS - totalLeads);
-  const hasVipSlots = remainingVipSlots > 0;
-
-  if (hasVipSlots) {
-    return `👋 *Olá! Que bom ter você por aqui!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *AnalisAí* é o seu assistente financeiro no WhatsApp para desburocratizar a sua rotina:
-
-• 📸 *Praticidade total:* Envie fotos de boletos, notas fiscais, áudios ou digite textos com suas contas a pagar e receber do jeito que preferir.
-• ⏰ *Lembretes na véspera:* Te aviso com antecedência para te ajudar a evitar juros e multas por atraso ou esquecimento.
-• 📊 *Fluxo de Caixa Descomplicado:* Veja o saldo futuro e receba relatórios de Livro Caixa direto no celular.
-
-🎁 *Quer experimentar gratuitamente?*
-Estamos com **vagas abertas** na nossa degustação VIP para novos avaliadores testarem na prática, sem compromisso e sem precisar cadastrar cartão!
-
-👉 *Para começar a testar agora mesmo:*
-Envie uma foto de um **boleto**, ou mande um áudio/texto dizendo suas contas (ex: *"Pagar internet R$ 90 dia 21 e receber cliente R$ 1.500 dia 25"*).
-
-Em segundos eu organizo tudo para você! 🚀
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Já possui cadastro? Digite seu *CPF ou CNPJ* para carregar seus dados._`;
-  }
-
-  // Se a cota dos 50 Pioneiros VIP estiver preenchida, NUNCA perde o lead: oferece a Degustação Express (5 contas)
-  return `👋 *Olá! Que bom ter você por aqui!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *AnalisAí* é o seu assistente financeiro no WhatsApp para MEIs e pequenas empresas:
-
-• 📸 *Praticidade total:* Envie fotos de boletos, notas fiscais, áudios ou digite textos com suas contas a pagar e receber do jeito que preferir.
-• ⏰ *Lembretes na véspera:* Te aviso com antecedência para te ajudar a evitar juros e multas por atraso ou esquecimento.
-• 📊 *Fluxo de Caixa Descomplicado:* Acompanhe seu saldo e livro caixa direto na conversa.
-
-🎁 *Quer experimentar gratuitamente?*
-Nossa cota de 50 vagas VIP completas foi preenchida, mas liberamos para você uma **Degustação Express Gratuita (com até 5 contas)** para você testar a inteligência agora mesmo sem nenhum compromisso!
-
-👉 *Para testar imediatamente:*
-Envie uma foto de um **boleto** ou mande um áudio/texto com uma conta sua (ex: *"Pagar internet R$ 90 dia 21"*). Em segundos eu organizo para você! 🚀
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Deseja assinar agora? Planos a partir de R$ 39,90/mês. Digite *planos* para ver as opções._`;
+  // Sem telefone informado, retorna a mensagem padrão 4
+  return getWelcomeAndPfPjMessage();
 }
 
 /**
- * Mensagem de boas-vindas com convite para a Degustação Gratuita (sem fricção)
+ * Mensagem de boas-vindas inicial padrão (Mensagem 4 de Calibração PF x PJ x Ambos)
  */
 export function getTrialWelcomeMessage(): string {
-  return `👋 *Olá! Quer experimentar o AnalisAí gratuitamente?*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-O *AnalisAí* é o seu assistente financeiro no WhatsApp que cuida das suas contas a pagar e receber sem burocracia!
-
-✨ *O que você ganha durante seu período de teste:*
-• *Até 10 contas e boletos* cadastrados por foto, PDF, áudio ou texto;
-• *Lembretes diários no WhatsApp* às 10h da véspera com código Pix pronto para cópia (evite juros e multas de atraso);
-• *Relatório de Livro Caixa e DRE em PDF* com gráficos gerenciais direto no seu celular;
-• *Zero planilhas e zero burocracia.*
-
-👉 *Para começar agora mesmo:*
-Envie uma foto ou PDF do seu primeiro **boleto ou nota fiscal**, ou mande um áudio/texto dizendo o que pagar (ex: *"Pagar aluguel R$ 1.500 dia 10"*).
-
-Em segundos eu leio e já organizo seu primeiro lançamento!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚀 *Deseja ativar seu plano oficial agora mesmo?*
-• *AnalisAí Solo* (R$ 87,99/mês — menos de R$ 2,90/dia): ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-• *AnalisAí Start* (R$ 39,90/mês): ${ASAAS_PLANS.monthly.start.checkoutUrl}
-
-💡 *Já é cliente e trocou de número?*
-Envie seu **CPF ou CNPJ cadastrado** nesta conversa para transferir sua conta com segurança via verificação por e-mail (LGPD).`;
+  return getWelcomeAndPfPjMessage();
 }
 
 /**

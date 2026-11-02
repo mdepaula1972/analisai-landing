@@ -243,27 +243,39 @@ Nesse patamar, o foco principal é fluxo de caixa refinado, conciliação e rela
 
 /**
  * 1. Mensagem de Boas-Vindas + Pergunta Didática Inicial (PF, PJ ou Ambos)
+ * Padrão humanizado para todos os novos contatos (visitantes, testadores da degustação ou clientes).
  */
-export function getWelcomeAndPfPjMessage(): string {
-  return `👋 *Olá! Seja muito bem-vindo ao AnalisAí!*
-Sou sua inteligência financeira no WhatsApp, pronta para desburocratizar sua rotina, organizar suas contas e fluxo de caixa em segundos.
+export function getWelcomeAndPfPjMessage(guestName?: string): string {
+  const saudacao = guestName
+    ? `👋 *Olá, ${guestName}! Seja muito bem-vindo ao AnalisAí!*`
+    : `👋 *Olá! Seja muito bem-vindo ao AnalisAí!*`;
 
-Para que eu personalize seus alertas, categorias e relatórios desde o início, me conte:
-*Como você pretende utilizar o AnalisAí hoje?*
+  return `${saudacao}
+Sou o seu assistente de inteligência financeira no WhatsApp, pronto para desburocratizar a sua rotina, organizar suas contas e cuidar do seu fluxo de caixa em segundos — sem planilhas, sem complicação e direto aqui na nossa conversa.
+
+Você está com **acesso livre à nossa degustação gratuita** para vivenciar na prática como é ter um assistente financeiro no seu dia a dia, sem precisar cadastrar cartão nem pagar nada agora!
+
+Para que eu calibre os seus lembretes, relatórios e alertas sob medida desde o primeiro minuto, me conte:
+*Como você pretende utilizar o AnalisAí no seu dia a dia?*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha uma das opções abaixo:*
+👉 *Escolha a opção que melhor descreve você:*
 
-*1* ou *PJ* → *Pessoa Jurídica (Empresa / MEI)*
-_(Para MEIs, prestadores de serviço e empresas. Foco no Livro Caixa, DRE contábil, notas e teto fiscal)._
+*1* ou *PJ* → *Pessoa Jurídica (Negócio Próprio ou Empresa com CNPJ)*
+• *O que significa:* PJ é quando o seu negócio possui um cadastro formal de empresa (CNPJ).
+• *Para quem é:* Quem tem CNPJ, MEI, microempresa, lojinha, comércio, oficina, salão de beleza, clínica, restaurante ou qualquer negócio próprio com CNPJ.
+• *O que eu faço:* Organizo seu Livro Caixa, leio notas fiscais e boletos, controlo contas a pagar e a receber de clientes, envio lembretes na véspera para você não pagar juros e mostro se o caixa da sua empresa está no azul.
 
-*2* ou *PF* → *Pessoa Física (Pessoal / Autônomo)*
-_(Para finanças pessoais, orçamento do lar ou profissional liberal sem CNPJ)._
+*2* ou *PF* → *Pessoa Física (Profissional Liberal, Autônomo ou Contas Pessoais)*
+• *O que significa:* PF é quando você atua pelo seu CPF, sem ter uma empresa aberta.
+• *Importante para Profissionais Liberais e Autônomos:* Se você trabalha por conta própria (como médico, advogado, dentista, psicólogo, corretor, arquiteto, consultor, técnico, motorista, eletricista, pedreiro, diarista ou freelancer) e **NÃO tem empresa/CNPJ**, você se classifica aqui como **Pessoa Física (PF)**!
+• *Finanças Pessoais e da Casa:* Também é perfeito para quem quer apenas organizar as contas de casa e da família (luz, água, aluguel, supermercado, cartão de crédito e boletos do dia a dia).
 
-*3* ou *Ambos* → *Ambos (Misturo contas pessoais e da empresa)*
-_(Ideal para empresários e MEIs que ainda usam a mesma conta ou cartão para despesas pessoais e do negócio)._
+*3* ou *Ambos* → *Ambos (Misturo as contas do meu negócio com as de casa)*
+• *Para quem é:* Se você tem um negócio próprio ou trabalha por conta, mas ainda usa a mesma conta bancária, o mesmo cartão ou o mesmo Pix para pagar despesas do trabalho e despesas pessoais de casa.
+• *Sem julgamento:* Mais de 70% dos empreendedores começam assim! O AnalisAí te acolhe e te ajuda a separar o que é do negócio e o que é pessoal de forma automática e descomplicada.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Basta responder com *1*, *2* ou *3* (ou digitar *PJ*, *PF* ou *Ambos*)._`;
+💡 _Basta responder com *1*, *2* ou *3* (ou escrever *PJ*, *PF* ou *Ambos*). Se preferir, pode me mandar um áudio contando como é sua rotina!_`;
 }
 
 /**
@@ -398,7 +410,7 @@ Envie uma foto ou PDF de um boleto/nota fiscal, ou mande um áudio/texto dizendo
 }
 
 /**
- * 2. Mensagem Didática de Desdobramento para PF (Liberal, Único ou Família)
+ * 2. Mensagem Didática de Desdobramento para PF (Liberal/Autônomo, Pessoal ou Família)
  */
 export function getPfSubtypeMessage(): string {
   return `Perfeito! 👤 *Gestão Financeira para Pessoa Física.*
@@ -406,18 +418,18 @@ export function getPfSubtypeMessage(): string {
 Para eu calibrar o seu assistente no formato exato da sua rotina, qual é o seu perfil de uso principal?
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha uma das opções:*
+👉 *Escolha uma das opções abaixo:*
 
-*1* → *Profissional Liberal / Autônomo*
-_(Ideal para médicos, advogados, dentistas, psicólogos, corretores, arquitetos e consultores. Permite separar despesas da profissão das pessoais para o Livro Caixa do Carnê-Leão e deduções no IRPF)._
+*1* → *Profissional Liberal ou Autônomo (Trabalho por conta sem CNPJ)*
+• _Ideal para médicos, advogados, dentistas, psicólogos, corretores, arquitetos, consultores, técnicos, motoristas, freelancers e prestadores de serviço em geral. Permite registrar o que você recebe dos clientes e separar suas despesas de trabalho das contas pessoais para o Carnê-Leão e declaração do Imposto de Renda._
 
-*2* → *Uso Único / Pessoal Individual*
-_(Ideal para você controlar seu salário, cartão de crédito, compras, contas fixas e metas financeiras pessoais com total privacidade)._
+*2* → *Uso Pessoal Individual*
+• _Ideal para você controlar seu salário, compras, cartão de crédito, assinaturas e metas financeiras pessoais com total privacidade e sem planilhas difíceis._
 
-*3* → *Família / Casal*
-_(Ideal para o orçamento compartilhado da residência: contas de luz, água, internet, supermercado, escola dos filhos e planejamento doméstico conjunto)._
+*3* → *Família e Orçamento da Casa*
+• _Ideal para o orçamento compartilhado do lar: contas de energia, água, internet, supermercado, colégio dos filhos e despesas domésticas conjuntas._
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Basta responder com *1*, *2* ou *3* (ou escrever *Liberal*, *Pessoal* ou *Família*)._`;
+💡 _Basta responder com *1*, *2* ou *3* (ou escrever *Autônomo*, *Pessoal* ou *Família*)._`;
 }
 
 /**
@@ -823,16 +835,44 @@ export async function processOnboardingResponse(params: {
     }
 
     const isAmbos =
-      /^(3\b|3\.|ambos\b|ambas\b|misturo\b|misturado\b|os dois\b|as duas\b|pf e pj\b|pj e pf\b)/i.test(clean) ||
-      clean === '3' || clean === 'ambos';
+      /^(3\b|3\.|ambos\b|ambas\b|misturo\b|misturado\b|os dois\b|as duas\b|pf e pj\b|pj e pf\b|tudo junto\b|junto\b|mistura\b)/i.test(clean) ||
+      clean === '3' ||
+      clean === 'ambos' ||
+      clean.includes('misturo') ||
+      clean.includes('tudo junto') ||
+      clean.includes('os dois') ||
+      clean.includes('as duas') ||
+      clean.includes('mistura') ||
+      clean.includes('misturado');
 
     const isPj =
-      /^(1\b|1\.|pj\b|empresa\b|cnpj\b|jur[ií]dica\b|microempresa\b|comercial\b|neg[oó]cio\b)/i.test(clean) ||
-      clean === '1' || clean === 'pj';
+      /^(1\b|1\.|pj\b|empresa\b|cnpj\b|jur[ií]dica\b|microempresa\b|comercial\b|neg[oó]cio\b|loja\b|lojinha\b|com[eé]rcio\b|oficina\b|sal[aã]o\b|restaurante\b|cl[ií]nica\b)/i.test(clean) ||
+      clean === '1' ||
+      clean === 'pj' ||
+      clean.includes('com cnpj') ||
+      clean.includes('tenho cnpj') ||
+      clean.includes('minha empresa') ||
+      clean.includes('meu negócio') ||
+      clean.includes('meu negocio') ||
+      clean.includes('minha loja') ||
+      clean.includes('minha oficina') ||
+      clean.includes('meu comércio') ||
+      clean.includes('meu comercio');
 
     const isPf =
-      /^(2\b|2\.|pf\b|f[ií]sica\b|pessoa f[ií]sica\b|pessoal\b|casa\b|mim\b|minha\b|particular\b)/i.test(clean) ||
-      clean === '2' || clean === 'pf';
+      /^(2\b|2\.|pf\b|f[ií]sica\b|pessoa f[ií]sica\b|pessoal\b|casa\b|mim\b|minha\b|particular\b|aut[oô]nomo\b|liberal\b|sem cnpj\b)/i.test(clean) ||
+      clean === '2' ||
+      clean === 'pf' ||
+      clean.includes('sem cnpj') ||
+      clean.includes('nao tenho cnpj') ||
+      clean.includes('não tenho cnpj') ||
+      clean.includes('profissional liberal') ||
+      clean.includes('autonomo') ||
+      clean.includes('autônomo') ||
+      clean.includes('trabalho por conta') ||
+      clean.includes('minhas contas') ||
+      clean.includes('minha casa') ||
+      clean.includes('pessoal');
 
     if (isAmbos) {
       if (lead?.id) {
@@ -939,12 +979,13 @@ export async function processOnboardingResponse(params: {
 
     await sendEvolutionText({
       phone,
-      text: `Entendi! Para eu direcionar sua experiência corretamente:
-*Como você pretende utilizar o AnalisAí hoje?*
+      text: `Não se preocupe! Me diga apenas qual opção mais se parece com você:
 
-• Digite *1* para *Pessoa Jurídica (PJ / MEI / Empresa)*
-• Digite *2* para *Pessoa Física (PF / Contas Pessoais)*
-• Digite *3* para *Ambos (Misturo contas pessoais e da empresa)*`,
+*1* ou *PJ* → *Negócio Próprio ou Empresa com CNPJ* (loja, comércio, oficina, salão, clínica, MEI)
+*2* ou *PF* → *Pessoa Física* (autônomos ou profissionais liberais sem CNPJ, ou apenas contas pessoais de casa)
+*3* ou *Ambos* → *Misturo as contas do meu negócio com as de casa*
+
+💡 _Basta responder com *1*, *2* ou *3* (ou mandar um áudio me contando como você trabalha)!_`,
     });
     return { handled: true, completed: false };
   }
@@ -952,16 +993,26 @@ export async function processOnboardingResponse(params: {
   // ── ETAPA 2: ESCOLHA DO SUBTIPO DE PF (LIBERAL, ÚNICO OU FAMÍLIA) ──
   if (currentStep === 'awaiting_pf_subtype') {
     const isLiberal =
-      /^(1\b|1\.|liberal\b|aut[oô]nomo\b|freelancer\b|m[eé]dico\b|advogado\b|dentista\b|arquiteto\b|corretor\b|consultor\b|psic[oó]logo\b|profissional\b|honor[aá]rios\b)/i.test(clean) ||
-      clean === '1';
+      /^(1\b|1\.|liberal\b|aut[oô]nomo\b|freelancer\b|m[eé]dico\b|advogado\b|dentista\b|arquiteto\b|corretor\b|consultor\b|psic[oó]logo\b|profissional\b|honor[aá]rios\b|sem cnpj\b|trabalho por conta\b|prestador\b)/i.test(clean) ||
+      clean === '1' ||
+      clean.includes('autonomo') ||
+      clean.includes('autônomo') ||
+      clean.includes('liberal') ||
+      clean.includes('sem cnpj') ||
+      clean.includes('trabalho por conta');
 
     const isIndividual =
       /^(2\b|2\.|[uú]nico\b|pessoal\b|individual\b|s[oó] meu\b|apenas eu\b|minhas contas\b|sal[aá]rio\b)/i.test(clean) ||
-      clean === '2';
+      clean === '2' ||
+      clean.includes('pessoal') ||
+      clean.includes('individual');
 
     const isFamily =
       /^(3\b|3\.|fam[ií]lia\b|casal\b|casa\b|dom[eé]stico\b|filhos\b|resid[eê]ncia\b|escola\b)/i.test(clean) ||
-      clean === '3';
+      clean === '3' ||
+      clean.includes('familia') ||
+      clean.includes('família') ||
+      clean.includes('casa');
 
     let chosenProfile: ProfileType | null = null;
     if (isLiberal) chosenProfile = 'pf_liberal';
@@ -1005,9 +1056,9 @@ export async function processOnboardingResponse(params: {
     await sendEvolutionText({
       phone,
       text: `Por favor, selecione qual é o seu formato principal de uso:
-• Digite *1* para *Profissional Liberal / Autônomo* (Honorários e Carnê-Leão)
-• Digite *2* para *Uso Único / Pessoal* (Salário, cartão e contas individuais)
-• Digite *3* para *Família / Casal* (Orçamento doméstico compartilhado)`,
+• Digite *1* para *Profissional Liberal ou Autônomo* (quem trabalha por conta sem CNPJ, médicos, advogados, dentistas, corretores, etc.)
+• Digite *2* para *Uso Pessoal Individual* (salário, cartão e contas individuais)
+• Digite *3* para *Família / Casal* (orçamento doméstico compartilhado da casa)`,
     });
     return { handled: true, completed: false };
   }
