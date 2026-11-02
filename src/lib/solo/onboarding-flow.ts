@@ -247,35 +247,31 @@ Nesse patamar, o foco principal é fluxo de caixa refinado, conciliação e rela
  */
 export function getWelcomeAndPfPjMessage(guestName?: string): string {
   const saudacao = guestName
-    ? `👋 *Olá, ${guestName}! Seja muito bem-vindo ao AnalisAí!*`
-    : `👋 *Olá! Seja muito bem-vindo ao AnalisAí!*`;
+    ? `👋 *Olá, ${guestName}! Seja bem-vindo ao AnalisAí!*`
+    : `👋 *Olá! Seja bem-vindo ao AnalisAí!*`;
 
   return `${saudacao}
-Sou o seu assistente de inteligência financeira no WhatsApp, pronto para desburocratizar a sua rotina, organizar suas contas e cuidar do seu fluxo de caixa em segundos — sem planilhas, sem complicação e direto aqui na nossa conversa.
 
-Você está com **acesso livre à nossa degustação gratuita** para vivenciar na prática como é ter um assistente financeiro no seu dia a dia, sem precisar cadastrar cartão nem pagar nada agora!
+Sou seu assistente financeiro no WhatsApp. Você manda foto de contas, boletos ou áudios e eu organizo seu fluxo de caixa na hora — sem planilhas e sem complicação.
 
-Para que eu calibre os seus lembretes, relatórios e alertas sob medida desde o primeiro minuto, me conte:
-*Como você pretende utilizar o AnalisAí no seu dia a dia?*
+Sua degustação gratuita já está liberada (sem cartão de crédito)!
+
+Para calibrar seus relatórios e lembretes, me diga: como você quer usar o AnalisAí?
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 *Escolha a opção que melhor descreve você:*
+👉 *Escolha uma opção:*
 
-*1* ou *PJ* → *Pessoa Jurídica (Negócio Próprio ou Empresa com CNPJ)*
-• *O que significa:* PJ é quando o seu negócio possui um cadastro formal de empresa (CNPJ).
-• *Para quem é:* Quem tem CNPJ, MEI, microempresa, lojinha, comércio, oficina, salão de beleza, clínica, restaurante ou qualquer negócio próprio com CNPJ.
-• *O que eu faço:* Organizo seu Livro Caixa, leio notas fiscais e boletos, controlo contas a pagar e a receber de clientes, envio lembretes na véspera para você não pagar juros e mostro se o caixa da sua empresa está no azul.
+1️⃣ *PJ (Empresa ou MEI)*
+Para quem tem CNPJ, MEI, loja, clínica ou negócio próprio. Cuido de notas fiscais, boletos, clientes e Livro Caixa.
 
-*2* ou *PF* → *Pessoa Física (Profissional Liberal, Autônomo ou Contas Pessoais)*
-• *O que significa:* PF é quando você atua pelo seu CPF, sem ter uma empresa aberta.
-• *Importante para Profissionais Liberais e Autônomos:* Se você trabalha por conta própria (como médico, advogado, dentista, psicólogo, corretor, arquiteto, consultor, técnico, motorista, eletricista, pedreiro, diarista ou freelancer) e **NÃO tem empresa/CNPJ**, você se classifica aqui como **Pessoa Física (PF)**!
-• *Finanças Pessoais e da Casa:* Também é perfeito para quem quer apenas organizar as contas de casa e da família (luz, água, aluguel, supermercado, cartão de crédito e boletos do dia a dia).
+2️⃣ *PF (Autônomo ou Contas Pessoais)*
+Para profissionais liberais/autônomos sem CNPJ ou quem quer apenas organizar as contas de casa e da família.
 
-*3* ou *Ambos* → *Ambos (Misturo as contas do meu negócio com as de casa)*
-• *Para quem é:* Se você tem um negócio próprio ou trabalha por conta, mas ainda usa a mesma conta bancária, o mesmo cartão ou o mesmo Pix para pagar despesas do trabalho e despesas pessoais de casa.
-• *Sem julgamento:* Mais de 70% dos empreendedores começam assim! O AnalisAí te acolhe e te ajuda a separar o que é do negócio e o que é pessoal de forma automática e descomplicada.
+3️⃣ *Ambos (Misturo contas de casa com o negócio)*
+Usa a mesma conta bancária ou Pix para empresa e casa? Sem problemas! Te ajudo a separar tudo no automático.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Basta responder com *1*, *2* ou *3* (ou escrever *PJ*, *PF* ou *Ambos*). Se preferir, pode me mandar um áudio contando como é sua rotina!_`;
+
+💡 _Responda com *1*, *2* ou *3* (ou envie um áudio contando da sua rotina)._`;
 }
 
 /**
@@ -679,7 +675,12 @@ export async function processOnboardingResponse(params: {
   client?: any;
 }): Promise<{ handled: boolean; completed: boolean; profile?: ProfileType }> {
   const { phone, cleanPhone, rawText, client } = params;
-  const clean = rawText.trim().toLowerCase();
+  const clean = rawText
+    .trim()
+    .toLowerCase()
+    .replace(/1️⃣|1\uFE0F?\u20E3/g, '1')
+    .replace(/2️⃣|2\uFE0F?\u20E3/g, '2')
+    .replace(/3️⃣|3\uFE0F?\u20E3/g, '3');
   const supabase = createServiceRoleClient();
   const nowIso = new Date().toISOString();
 
