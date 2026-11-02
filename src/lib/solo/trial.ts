@@ -1,9 +1,26 @@
 
-import { ASAAS_PLANS, ASAAS_ONE_OFF, OFFICIAL_BOT_WHATSAPP, OFFICIAL_BOT_PHONE_DISPLAY } from '@/lib/solo/constants';
+import {
+  ASAAS_PLANS,
+  ASAAS_ONE_OFF,
+  OFFICIAL_BOT_WHATSAPP,
+  OFFICIAL_BOT_PHONE_DISPLAY,
+  MAX_GLOBAL_TRIAL_LEADS,
+  MAX_TRIAL_DOCS_LIMIT,
+  TRIAL_EXPIRATION_DAYS,
+  TRIAL_WAITING_LIST_MESSAGE,
+} from '@/lib/solo/constants';
 
-export const MAX_BETA_VIP_USERS = 5000;
-export const BETA_VIP_DOCS_LIMIT = 100;
-export const BETA_VIP_DAYS = 30;
+export {
+  MAX_GLOBAL_TRIAL_LEADS,
+  MAX_TRIAL_DOCS_LIMIT,
+  TRIAL_EXPIRATION_DAYS,
+  TRIAL_WAITING_LIST_MESSAGE,
+};
+
+// Aliases para compatibilidade total com o código legado
+export const MAX_BETA_VIP_USERS = MAX_GLOBAL_TRIAL_LEADS;
+export const BETA_VIP_DOCS_LIMIT = MAX_TRIAL_DOCS_LIMIT;
+export const BETA_VIP_DAYS = TRIAL_EXPIRATION_DAYS;
 
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
@@ -21,6 +38,69 @@ export interface TrialStatus {
   taxType?: 'cpf' | 'mei' | 'simples' | 'empresa';
   interestedPlan?: string;
 }
+
+/**
+ * Trava Global de Capacidade Máxima de Novos Testadores
+ * Bloqueia a entrada de novos leads se a cota ativa global atingir MAX_GLOBAL_TRIAL_LEADS (50 leads).
+ * Regras:
+ * 1. Clientes cadastrados (clients) e Whitelist de QA NUNCA são bloqueados.
+ * 2. Leads que já possuem cadastro prévio em trial_leads NUNCA são bloqueados (preservam sua vaga).
+ * 3. Novos números são barrados se count >= MAX_GLOBAL_TRIAL_LEADS.
+ */
+export async function checkGlobalTrialLimit(cleanPhone: string): Promise<{ isBlocked: boolean; waitingListMessage?: string }> {
+  const supabase = createServiceRoleClient();
+
+  let altPhone = cleanPhone;
+  if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + cleanPhone.slice(5);
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('55')) {
+    altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
+  }
+
+  // 1. Isenção: Whitelist de QA (Convidado VIP / Admin)
+  const { isQaWhitelisted } = await import('@/lib/solo/qa-whitelist');
+  const isQa = (await isQaWhitelisted(cleanPhone)) || (await isQaWhitelisted(altPhone));
+  if (isQa) {
+    return { isBlocked: false };
+  }
+
+  // 2. Isenção: Já é cliente cadastrado
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+  if (client?.id) {
+    return { isBlocked: false };
+  }
+
+  // 3. Isenção: Já é um lead cadastrado previamente em trial_leads (já garantiu a vaga dele)
+  const { data: existingLead } = await supabase
+    .from('trial_leads')
+    .select('id')
+    .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
+    .maybeSingle();
+  if (existingLead?.id) {
+    return { isBlocked: false };
+  }
+
+  // 4. Novo Lead: Consulta a contagem de vagas ativas no banco
+  const { count } = await supabase
+    .from('trial_leads')
+    .select('*', { count: 'exact', head: true })
+    .eq('converted_to_client', false);
+
+  const activeLeadsCount = count || 0;
+  if (activeLeadsCount >= MAX_GLOBAL_TRIAL_LEADS) {
+    return {
+      isBlocked: true,
+      waitingListMessage: TRIAL_WAITING_LIST_MESSAGE,
+    };
+  }
+
+  return { isBlocked: false };
+}
+
 
 /**
  * Consulta se este número de WhatsApp já esgotou a sua cota de degustação gratuita
@@ -59,8 +139,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
   }
 
   if (!data) {
-    // Degustação Completa de 30 Dias: cota de segurança de até 100 documentos
-    const initialLimit = BETA_VIP_DOCS_LIMIT; // 100 documentos
+    // Degustação Completa de 30 Dias: cota de segurança de até 30 documentos
+    const initialLimit = MAX_TRIAL_DOCS_LIMIT; // 30 documentos
 
     return {
       hasUsedTrial: false,
@@ -70,8 +150,8 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
     };
   }
 
-  // Cota de segurança oculta de até 100 documentos durante os 30 dias corridos
-  const docsLimit = Math.max(Number(data.trial_docs_limit) || BETA_VIP_DOCS_LIMIT, BETA_VIP_DOCS_LIMIT);
+  // Cota de segurança oculta de até 30 documentos durante os 30 dias corridos
+  const docsLimit = Math.max(Number(data.trial_docs_limit) || MAX_TRIAL_DOCS_LIMIT, MAX_TRIAL_DOCS_LIMIT);
   const docsCount = Number(data.trial_docs_count) || (data.doc_processed ? 1 : 0);
   const remainingDocs = Math.max(0, docsLimit - docsCount);
 
@@ -80,7 +160,7 @@ export async function checkTrialStatus(phone: string): Promise<TrialStatus> {
   let isExpiredByDays = false;
   if (createdAt) {
     const daysSinceCreated = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
-    if (daysSinceCreated > BETA_VIP_DAYS) {
+    if (daysSinceCreated > TRIAL_EXPIRATION_DAYS) {
       isExpiredByDays = true;
     }
   }
@@ -134,12 +214,23 @@ export async function recordTrialUsage(
   phone: string,
   docData: any,
   grantedLimit?: number
-): Promise<{ isDuplicate: boolean; existingBill?: any }> {
+): Promise<{ isDuplicate: boolean; existingBill?: any; limitReached?: boolean }> {
   const supabase = createServiceRoleClient();
   const cleanPhone = phone.replace(/\D/g, '');
 
   // Consulta estado atual
   const current = await checkTrialStatus(cleanPhone);
+
+  // Trava estrita de segurança: se atingiu o teto de 30 documentos ou prazo expirado
+  const maxLimit = grantedLimit || current.docsLimit || MAX_TRIAL_DOCS_LIMIT;
+  if (current.hasUsedTrial || current.docsCount >= maxLimit) {
+    await sendEvolutionText({
+      phone,
+      text: getTrialLimitReachedMessage(maxLimit, current.docsCount),
+    });
+    return { isDuplicate: false, limitReached: true };
+  }
+
   const newCount = current.docsCount + 1;
 
   // 1. Identificação inteligente do perfil tributário do lead
@@ -179,7 +270,7 @@ export async function recordTrialUsage(
     }
   }
 
-  const newLimit = grantedLimit || Math.max(detectedLimit, BETA_VIP_DOCS_LIMIT);
+  const newLimit = grantedLimit || Math.max(detectedLimit, MAX_TRIAL_DOCS_LIMIT);
 
   let altPhone = cleanPhone;
   if (cleanPhone.length === 13 && cleanPhone.startsWith('55')) {
@@ -572,6 +663,14 @@ ${billsSnippet}${extraText}
     // Se o usuário ainda não possui contas cadastradas, a Mensagem 4 (Boas-vindas + Calibração PF x PJ x Ambos)
     // é o padrão para todos os novos contatos, independente da origem (seja convidado VIP, visitante ou lead de anúncio).
     const guestFirstName = whitelistEntry?.description ? whitelistEntry.description.split(' ')[0] : undefined;
+
+    // Se o usuário ainda não é um lead cadastrado, verifica a Trava Global de Capacidade Máxima
+    if (!leadRecord?.id) {
+      const globalLimitCheck = await checkGlobalTrialLimit(cleanPhone);
+      if (globalLimitCheck.isBlocked) {
+        return globalLimitCheck.waitingListMessage || TRIAL_WAITING_LIST_MESSAGE;
+      }
+    }
 
     // Registra/atualiza o onboarding_step para awaiting_pf_or_pj caso o lead já exista
     if (leadRecord?.id) {

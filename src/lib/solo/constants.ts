@@ -205,3 +205,19 @@ export const ASAAS_ONE_OFF = {
 // Aliases para compatibilidade total com o código legado
 export const INFINITE_PAY_PLANS = ASAAS_PLANS;
 export const INFINITE_PAY_ONE_OFF = ASAAS_ONE_OFF;
+
+/**
+ * Limites Estritos de Segurança da Degustação Gratuita (Campanha de Tráfego / Degustação)
+ */
+// Limite máximo global de vagas para a campanha de degustação
+export const MAX_GLOBAL_TRIAL_LEADS = 50;
+
+// Cota máxima individual de documentos por testador gratuito
+export const MAX_TRIAL_DOCS_LIMIT = 30; // Ajustado de 100 para 30 para proteger custos de OCR/tokens
+export const TRIAL_EXPIRATION_DAYS = 30;
+
+export const TRIAL_WAITING_LIST_MESSAGE = `Olá! 👋
+
+Atingimos a capacidade máxima de vagas gratuitas para a versão de degustação desta semana.
+
+Assim que abrirmos um novo lote de vagas, avisaremos por aqui!`;

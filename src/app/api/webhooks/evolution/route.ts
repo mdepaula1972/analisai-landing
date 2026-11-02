@@ -4389,6 +4389,20 @@ async function processMessageAsync(phone: string, body: EvolutionWebhookBody) {
       .catch((radarErr) => console.warn('[Radar Telemetry Error]:', radarErr));
   }
 
+  // ── 0.15 TRAVA GLOBAL DE CAPACIDADE MÁXIMA DE TESTADORES (PROTEÇÃO DE TRÁFEGO PAGO) ──
+  if (!client && !isCommand) {
+    const { checkGlobalTrialLimit } = await import('@/lib/solo/trial');
+    const globalLimitCheck = await checkGlobalTrialLimit(cleanPhone);
+    if (globalLimitCheck.isBlocked) {
+      const { TRIAL_WAITING_LIST_MESSAGE } = await import('@/lib/solo/constants');
+      await sendEvolutionText({
+        phone,
+        text: globalLimitCheck.waitingListMessage || TRIAL_WAITING_LIST_MESSAGE,
+      });
+      return;
+    }
+  }
+
   // ── 0.16 ONBOARDING DIDÁTICO DIRECIONADO (RESPOSTA DE PF x PJ OU SUBTIPO PF) ──
   if (!isMedia && !isCommand) {
     const { getOnboardingState, processOnboardingResponse } = await import('@/lib/solo/onboarding-flow');

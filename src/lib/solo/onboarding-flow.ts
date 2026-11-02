@@ -646,6 +646,17 @@ export async function startOnboarding(params: {
       doc_data: existingLead.doc_data,
     });
   } else {
+    const { checkGlobalTrialLimit } = await import('@/lib/solo/trial');
+    const globalCheck = await checkGlobalTrialLimit(cleanPhone);
+    if (globalCheck.isBlocked) {
+      const { TRIAL_WAITING_LIST_MESSAGE } = await import('@/lib/solo/constants');
+      await sendEvolutionText({
+        phone,
+        text: globalCheck.waitingListMessage || TRIAL_WAITING_LIST_MESSAGE,
+      });
+      return;
+    }
+
     await supabase.from('trial_leads').insert({
       whatsapp_number: cleanPhone,
       onboarding_step: 'awaiting_pf_or_pj',
@@ -697,8 +708,19 @@ export async function processOnboardingResponse(params: {
     .or(`whatsapp_number.eq.${cleanPhone},whatsapp_number.eq.${altPhone}`)
     .maybeSingle();
 
-  // Se o lead ainda não existe na base (primeiro contato do novo número), cria imediatamente!
+  // Se o lead ainda não existe na base (primeiro contato do novo número), cria imediatamente caso haja vagas!
   if (!lead && !client?.id) {
+    const { checkGlobalTrialLimit } = await import('@/lib/solo/trial');
+    const globalCheck = await checkGlobalTrialLimit(cleanPhone);
+    if (globalCheck.isBlocked) {
+      const { TRIAL_WAITING_LIST_MESSAGE } = await import('@/lib/solo/constants');
+      await sendEvolutionText({
+        phone,
+        text: globalCheck.waitingListMessage || TRIAL_WAITING_LIST_MESSAGE,
+      });
+      return { handled: true, completed: false };
+    }
+
     const { data: newLead } = await supabase
       .from('trial_leads')
       .insert({

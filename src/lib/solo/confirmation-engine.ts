@@ -1686,6 +1686,20 @@ export async function checkAndApplyLegalOptIn(params: {
         })
         .eq('id', lead.id);
     } else {
+      const { checkGlobalTrialLimit } = await import('@/lib/solo/trial');
+      const globalCheck = await checkGlobalTrialLimit(cleanPhone);
+      if (globalCheck.isBlocked) {
+        const { TRIAL_WAITING_LIST_MESSAGE } = await import('@/lib/solo/constants');
+        await sendEvolutionText({
+          phone,
+          text: globalCheck.waitingListMessage || TRIAL_WAITING_LIST_MESSAGE,
+        });
+        return {
+          optInSent: true,
+          shouldStopProcessing: true,
+        };
+      }
+
       await supabase.from('trial_leads').insert({
         whatsapp_number: cleanPhone,
         terms_accepted_at: nowIso,
