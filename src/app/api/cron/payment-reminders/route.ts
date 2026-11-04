@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
+import { formatOneTouchPaymentCodeMessage } from '@/lib/solo/confirmation-engine';
 import { processTrialReminders } from '@/lib/solo/trial';
 
 export const runtime = 'nodejs';
@@ -211,6 +212,16 @@ Você pode:
       phone: client.whatsapp_number,
       text: msg,
     });
+
+    // Dispara linha digitável isolada (One-Touch Copy) para contas de hoje com código de barras
+    for (const b of todayPayables) {
+      if (b.barcode_or_pix && b.barcode_or_pix.trim().length > 0) {
+        await sendEvolutionText({
+          phone: client.whatsapp_number,
+          text: formatOneTouchPaymentCodeMessage(b.counterparty_name || 'Conta', b.barcode_or_pix),
+        });
+      }
+    }
 
     // Atualiza last_reminder_sent_at em todas as contas notificadas
     const allNotifiedIds = [

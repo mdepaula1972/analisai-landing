@@ -1267,6 +1267,187 @@ async function handleDueDateChange(
   });
 }
 
+async function handleBarcodeUpdate(
+  client: any,
+  phone: string,
+  cleanPhone: string,
+  supplierOrCodeQuery: string,
+  newBarcode: string
+) {
+  const supabase = createServiceRoleClient();
+  const cleanCode = (newBarcode || '').trim();
+  const cleanDigits = cleanCode.replace(/\D/g, '');
+
+  if (cleanDigits.length < 11 && !cleanCode.startsWith('000201') && !cleanCode.includes('@')) {
+    await sendEvolutionText({
+      phone,
+      text: `⚠️ O código informado não parece ser uma linha digitável válida (mínimo 44 a 47 dígitos) ou chave Pix válida.\n\nPor favor, verifique e envie novamente.`,
+    });
+    return;
+  }
+
+  // 1. Cliente cadastrado
+  if (client?.id) {
+    const { data: openBills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .eq('type', 'payable')
+      .in('status', ['open', 'postponed', 'overdue', 'atrasado', 'pending']);
+
+    const cleanQuery = supplierOrCodeQuery.toLowerCase().trim();
+    const codeMatch = cleanQuery.match(/(?:c[oó]digo|c[oó]d\.?|n[uú]mero|#)?\s*#?(\d{1,4})\b/i);
+    const targetCode = codeMatch ? String(parseInt(codeMatch[1], 10)).padStart(3, '0') : null;
+
+    const matchedBill = openBills?.find((b: any, idx: number) => {
+      const bCode = b.code ? String(b.code).replace(/\D/g, '').padStart(3, '0') : String(idx + 1).padStart(3, '0');
+      if (targetCode && bCode === targetCode) return true;
+      const bName = (b.counterparty_name || '').toLowerCase();
+      return bName.includes(cleanQuery) || cleanQuery.includes(bName);
+    });
+
+    if (matchedBill) {
+      await supabase
+        .from('payables_receivables')
+        .update({
+          barcode_or_pix: cleanCode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', matchedBill.id);
+
+      const favName = matchedBill.counterparty_name || 'Fornecedor';
+      const valFmt = Number(matchedBill.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      await sendEvolutionText({
+        phone,
+        text: `✅ *Linha Digitável / Pix Vinculado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${favName}
+• *Valor:* ${valFmt}
+• *Status:* Código salvo pronto para pagamento!`,
+      });
+
+      await sendEvolutionText({
+        phone,
+        text: formatOneTouchPaymentCodeMessage(favName, cleanCode),
+      });
+
+      await sendActionSequenceMenu(phone, `O que deseja fazer a seguir com a conta de ${favName}?`);
+      return;
+    }
+  }
+
+  // 2. Lead em degustação
+  const trialRes = await updateTrialBill(cleanPhone, supplierOrCodeQuery, {
+    barcode_or_pix: cleanCode,
+  });
+
+  if (trialRes.updated && trialRes.newBill) {
+    const favName = trialRes.newBill.supplier_name || 'Fornecedor';
+    const valFmt = trialRes.newBill.amount
+      ? Number(trialRes.newBill.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : 'valor agendado';
+
+    await sendEvolutionText({
+      phone,
+      text: `✅ *Linha Digitável / Pix Vinculado com Sucesso!*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *Conta:* ${favName}
+• *Valor:* ${valFmt}
+• *Status:* Código salvo pronto para pagamento!`,
+    });
+
+    await sendEvolutionText({
+      phone,
+      text: formatOneTouchPaymentCodeMessage(favName, cleanCode),
+    });
+
+    await sendActionSequenceMenu(phone, `O que deseja fazer a seguir com a conta de ${favName}?`);
+    return;
+  }
+
+  await sendEvolutionText({
+    phone,
+    text: `⚠️ Não consegui localizar a conta "*${supplierOrCodeQuery}*" para vincular o código.\n\n💡 Digite *contas* para consultar a sua lista de compromissos.`,
+  });
+}
+
+async function handleStandaloneBarcodeOrPix(params: {
+  rawText: string;
+  phone: string;
+  cleanPhone: string;
+  client: any;
+}): Promise<boolean> {
+  const { rawText, phone, cleanPhone, client } = params;
+  const clean = rawText.trim();
+  const digitsOnly = clean.replace(/\D/g, '');
+  const isPixCopyPaste = clean.startsWith('000201') && clean.length >= 30;
+  const isBarcode = (digitsOnly.length === 44 || digitsOnly.length === 47 || digitsOnly.length === 48) && clean.length <= 65;
+
+  if (!isPixCopyPaste && !isBarcode) {
+    return false;
+  }
+
+  const supabase = createServiceRoleClient();
+
+  // Se for código de barras de 47 ou 48 dígitos, tenta extrair o valor (últimos 10 dígitos)
+  let extractedAmount: number | null = null;
+  if (digitsOnly.length === 47 || digitsOnly.length === 48) {
+    const rawAmt = parseInt(digitsOnly.slice(-10), 10);
+    if (!isNaN(rawAmt) && rawAmt > 0) {
+      extractedAmount = rawAmt / 100;
+    }
+  }
+
+  // 1. Se cliente cadastrado
+  if (client?.id) {
+    const { data: openBills } = await supabase
+      .from('payables_receivables')
+      .select('*')
+      .eq('client_id', client.id)
+      .eq('type', 'payable')
+      .in('status', ['open', 'postponed', 'overdue', 'atrasado', 'pending']);
+
+    const billsWithoutBarcode = openBills?.filter((b: any) => !b.barcode_or_pix) || [];
+    if (billsWithoutBarcode.length > 0) {
+      // Prioridade 1: Match por valor exato
+      let match = extractedAmount ? billsWithoutBarcode.find((b: any) => Math.abs(Number(b.amount || 0) - extractedAmount!) < 0.05) : null;
+      // Prioridade 2: Vencendo hoje
+      const todayIso = new Date().toISOString().split('T')[0];
+      if (!match) match = billsWithoutBarcode.find((b: any) => b.current_due_date === todayIso);
+      // Prioridade 3: Se houver apenas 1
+      if (!match && billsWithoutBarcode.length === 1) match = billsWithoutBarcode[0];
+
+      if (match) {
+        await handleBarcodeUpdate(client, phone, cleanPhone, match.counterparty_name, clean);
+        return true;
+      }
+    }
+  }
+
+  // 2. Se lead em degustação
+  const trialBills = await getTrialBills(cleanPhone);
+  const openTrialBills = trialBills.filter((b: any) => !b.is_paid && b.status !== 'paid');
+  const withoutCode = openTrialBills.filter((b: any) => !b.barcode_or_pix);
+
+  if (withoutCode.length > 0) {
+    // Prioridade 1: Match por valor exato
+    let match = extractedAmount ? withoutCode.find((b: any) => Math.abs(Number(b.amount || 0) - extractedAmount!) < 0.05) : null;
+    // Prioridade 2: Vencendo hoje
+    const todayIso = new Date().toISOString().split('T')[0];
+    if (!match) match = withoutCode.find((b: any) => b.due_date === todayIso);
+    // Prioridade 3: Se houver apenas 1
+    if (!match && withoutCode.length === 1) match = withoutCode[0];
+
+    if (match) {
+      await handleBarcodeUpdate(client, phone, cleanPhone, match.supplier_name, clean);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function levenshteinDistance(a: string, b: string): number {
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
@@ -2204,6 +2385,21 @@ Exemplo: *"Excluir conta da Sabesp"*`,
     const targetDate = dueDateMatch[2].replace(/[?.!]+$/, '').trim();
     if (rawSup.length >= 2 && targetDate) {
       await handleDueDateChange(client, phone, cleanPhone, rawSup, targetDate);
+      return true;
+    }
+  }
+
+  // G.1) Alteração / Cadastro de Código de Barras / Linha Digitável / Pix
+  const barcodeUpdateMatch =
+    clean.match(/(?:mudar|alterar|cadastrar|anexar|atualizar|salvar|vincular|incluir|colocar)\s+(?:o\s+)?(?:c[oó]digo|linha(?:\s+digit[aá]vel)?|c[oó]digo\s+de\s+barras|pix|chave\s+pix)\s+(?:d[ao]\s+|para\s+a\s+conta\s+|na\s+conta\s+|d[ao]\s+boleto\s+)?([a-zA-Z0-9\s#]+?)\s+(?:[eé]|para|:)\s*([0-9.\s-]{11,65}|000201[0-9a-zA-Z]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i) ||
+    clean.match(/(?:conta\s+|#)?([a-zA-Z0-9\s#]+?)\s+(?:c[oó]digo|linha(?:\s+digit[aá]vel)?|c[oó]digo\s+de\s+barras|pix)\s+(?:[eé]|:)\s*([0-9.\s-]{11,65}|000201[0-9a-zA-Z]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i) ||
+    clean.match(/(?:c[oó]digo|linha(?:\s+digit[aá]vel)?|c[oó]digo\s+de\s+barras|pix)\s+(?:d[ao]\s+)?([a-zA-Z0-9\s#]+?)\s+(?:[eé]|:)\s*([0-9.\s-]{11,65}|000201[0-9a-zA-Z]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+
+  if (barcodeUpdateMatch) {
+    const rawSup = barcodeUpdateMatch[1].replace(/^(conta\s+d[ao]|fornecedor\s+d[ao]|conta)\s+/i, '').trim();
+    const rawCode = barcodeUpdateMatch[2].replace(/[?.!]+$/, '').trim();
+    if (rawSup.length >= 2 && rawCode) {
+      await handleBarcodeUpdate(client, phone, cleanPhone, rawSup, rawCode);
       return true;
     }
   }

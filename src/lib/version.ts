@@ -2,10 +2,10 @@
  * Versão Oficial do Sistema AnalisAí
  * Atualizado a cada novo deploy em produção
  */
-export const APP_VERSION = 'v1.6.0';
-export const APP_BUILD_TIMESTAMP = '04/11/2026 10:05 BRT';
+export const APP_VERSION = 'v1.6.1';
+export const APP_BUILD_TIMESTAMP = '04/11/2026 10:38 BRT';
 export const APP_RELEASE_NAME =
-  'Inteligência Conversacional no Onboarding, Resolução Universal de Contas e Lembretes Diários na Degustação';
+  'Entrega de Código de Barras One-Touch nos Lembretes, Auto-Vínculo de Linha Digitável e Copy Oficial de Planos';
 
 export function getShortCommitSha(): string {
   const sha =

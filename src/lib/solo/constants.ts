@@ -216,6 +216,34 @@ export const MAX_GLOBAL_TRIAL_LEADS = 50;
 export const MAX_TRIAL_DOCS_LIMIT = 30; // Ajustado de 100 para 30 para proteger custos de OCR/tokens
 export const TRIAL_EXPIRATION_DAYS = 30;
 
+/**
+ * Mensagem Oficial de Apresentação dos Planos (Copy Oficial Unificada)
+ */
+export const OFFICIAL_PLANS_PRESENTATION_MESSAGE = `🤖 *Cada plano é desenhado para o estágio do seu negócio:*
+
+• *Para Autônomos & MEIs:*
+  - *Start (R$ 39,90/mês):* 30 lançamentos/mês via texto e lembretes diários.
+  - *Solo (R$ 87,99/mês):* 80 lançamentos/mês, comandos por voz/áudio, Livro Caixa em PDF e conciliação bancária mensal.
+
+• *Para Negócios em Crescimento:*
+  - *Solo Plus (R$ 157,99/mês):* 200 lançamentos/mês, integração PJ + PF (blindagem patrimonial) e 4 análises de caixa.
+
+• *Para Múltiplas Empresas:*
+  - *Pro (R$ 297,00/mês):* 500 lançamentos/mês, até 2 CNPJs e conciliação semanal.
+
+👉 *Ative agora com liberação instantânea no WhatsApp:*
+
+• *AnalisAí Solo* (Mais Escolhido - R$ 87,99/mês):
+https://www.asaas.com/c/5swlpaq9pb9gr6vj
+
+• *AnalisAí Start* (Econômico - R$ 39,90/mês):
+https://www.asaas.com/c/u6coqlztwsm1h4l8
+
+• *AnalisAí Pro* (Multi-CNPJ - R$ 297,00/mês):
+https://www.asaas.com/c/q8m0k46rrqv4jzvv
+
+🛡️ *Sem fidelidade: cancele quando quiser direto pelo WhatsApp.*`;
+
 export const TRIAL_WAITING_LIST_MESSAGE = `Olá! 👋
 
 Atingimos a capacidade máxima de vagas gratuitas para a versão de degustação desta semana.

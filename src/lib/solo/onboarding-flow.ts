@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { getGeminiClient } from '@/lib/solo/gemini';
+import { OFFICIAL_PLANS_PRESENTATION_MESSAGE } from '@/lib/solo/constants';
 
 export type ProfileType = 'pj' | 'pf_liberal' | 'pf_individual' | 'pf_family';
 export type OnboardingStep =
@@ -725,7 +726,7 @@ export async function handleIntelligentOnboardingQuery(params: {
   if (isPricingQuery) {
     await sendEvolutionText({
       phone,
-      text: `💡 *Nossos Planos e Degustação VIP Gratuita:*\n\nVocê tem direito a **30 dias de Degustação VIP 100% gratuita** — sem precisar cadastrar cartão de crédito e sem nenhum compromisso! Durante o teste você pode enviar fotos de boletos, notas, extratos, receber lembretes no Zap e testar tudo na prática.\n\nApós os 30 dias, temos planos acessíveis para cada perfil:\n• 🟢 *Start (R$ 39,90/mês):* Ideal para autônomos e MEIs que buscam organização essencial e lembretes diários.\n• ⭐ *Solo (R$ 87,99/mês):* O mais escolhido! Gestão completa com DRE, conciliação bancária, relatórios de fluxo de caixa e código de barras/Pix pronto para pagar.\n• 🚀 *Solo+ (R$ 137,99/mês):* Para negócios em expansão que precisam de múltiplos operadores de equipe e fechamento contábil mensal.${stepTransitionPrompt}`,
+      text: `${OFFICIAL_PLANS_PRESENTATION_MESSAGE}${stepTransitionPrompt}`,
     });
     return true;
   }

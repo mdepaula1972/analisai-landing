@@ -8,6 +8,7 @@ import {
   MAX_TRIAL_DOCS_LIMIT,
   TRIAL_EXPIRATION_DAYS,
   TRIAL_WAITING_LIST_MESSAGE,
+  OFFICIAL_PLANS_PRESENTATION_MESSAGE,
 } from '@/lib/solo/constants';
 
 export {
@@ -15,6 +16,7 @@ export {
   MAX_TRIAL_DOCS_LIMIT,
   TRIAL_EXPIRATION_DAYS,
   TRIAL_WAITING_LIST_MESSAGE,
+  OFFICIAL_PLANS_PRESENTATION_MESSAGE,
 };
 
 // Aliases para compatibilidade total com o código legado
@@ -25,6 +27,7 @@ export const BETA_VIP_DAYS = TRIAL_EXPIRATION_DAYS;
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
 import { sendEvolutionText } from '@/lib/solo/evolution';
+import { formatOneTouchPaymentCodeMessage } from '@/lib/solo/confirmation-engine';
 import { classifyTaxId, TaxClassification } from '@/lib/solo/tax-classifier';
 import { addDays, format } from 'date-fns';
 import { getWelcomeAndPfPjMessage } from '@/lib/solo/onboarding-flow';
@@ -1048,58 +1051,7 @@ export function formatMultipleTrialEntriesConfirmation(entries: any[], remaining
  * Menu de conversão e apresentação dos recursos dos planos ativos
  */
 export function getTrialConversionMenu(actualDocsCount: number = 0): string {
-  // Se o usuário utilizou volume leve/moderado (padrão até 15 contas)
-  if (actualDocsCount <= 15) {
-    return `🚀 *Assinatura Antecipada — Escolha o Plano Ideal*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Selecionamos as 2 melhores opções para a sua rotina:
-
-⭐ *1️⃣ AnalisAí Start — Apenas R$ 39,90/mês* (menos de R$ 1,35/dia!)
-_(A proposta mais próxima do que você utilizou no seu dia a dia)_
-• Até 15 lançamentos/mês por fotos de notas, boletos ou texto;
-• Lembretes pontuais no WhatsApp na véspera e no dia do vencimento;
-• Relatório completo do Livro Caixa em PDF para você e seu contador.
-👉 ${ASAAS_PLANS.monthly.start.checkoutUrl}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ *2️⃣ AnalisAí Solo — R$ 87,99/mês* ⭐ *Mais Escolhido*
-*(O diferencial completo em relação ao Start por menos de R$ 2,90/dia)*
-🔥 **O que você ganha a mais no Solo:**
-• 🎙️ *Comandos por Áudio/Voz:* Mande áudios na correria para registrar despesas e receitas sem precisar digitar;
-• 💡 *Consultor Estratégico de Caixa:* IA que orienta quais contas priorizar e projeta seu saldo futuro;
-• 🔔 *Cobrança Amigável:* Lembretes de cobrança via Pix para clientes no WhatsApp com 1 toque;
-• 📈 *Cota ampliada:* Até 30 lançamentos/mês inclusos!
-👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💳 *Ativação instantânea após confirmação no Asaas.*
-💬 Dúvidas ou faturamento corporativo? Pode responder por aqui!`;
-  }
-
-  // Se o usuário já opera com volume maior (> 15 contas)
-  return `🚀 *Assinatura Antecipada — Escolha o Plano Ideal*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Pelo seu ritmo de lançamentos, selecionamos as 2 opções sob medida:
-
-⭐ *1️⃣ AnalisAí Solo — R$ 87,99/mês* (menos de R$ 2,90/dia — Mais Escolhido)
-_(A proposta ideal para o seu volume atual de despesas)_
-• Até 30 lançamentos/mês por foto, PDF, áudio ou texto;
-• Lembretes na véspera às 10h com código de barras/Pix prontos;
-• Consultor estratégico de caixa e DRE contábil em PDF.
-👉 ${ASAAS_PLANS.monthly.solo.checkoutUrl}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ *2️⃣ AnalisAí Solo Plus — R$ 157,99/mês*
-*(O diferencial para quem busca separar finanças da Empresa e Pessoais)*
-🔥 **O que você ganha a mais no Solo Plus:**
-• 👥 *Separação Blindada PJ x PF:* Dois caixas independentes na mesma conversa de WhatsApp;
-• 📊 *Cota Dupla:* Até 60 lançamentos/mês para empresas em expansão;
-• 🛡️ *Suporte Prioritário VIP:* Conciliação financeira assistida.
-👉 ${ASAAS_PLANS.monthly.solo_plus.checkoutUrl}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💳 *Ativação instantânea após confirmação no Asaas.*
-💬 Dúvidas? Pode responder por aqui!`;
+  return OFFICIAL_PLANS_PRESENTATION_MESSAGE;
 }
 
 export const BANK_SAFETY_NOTICE = `🛡️ *Segurança Bancária:* Antes de confirmar o pagamento no aplicativo do seu banco, confira sempre se o nome do favorecido, CNPJ e o valor na tela de confirmação correspondem exatamente ao seu credor/fornecedor. O AnalisAí realiza a leitura digital automatizada dos dados, cabendo exclusivamente ao pagador a conferência final e autorização da operação junto à sua instituição financeira.`;
@@ -1160,9 +1112,11 @@ export function getEveReminderMessage(leadOrBills: any): string {
 
     txt += `Olá! Passando para te lembrar que a sua conta de *${fornecedor}* (${valFormatted}${provTag}) vence **AMANHÃ**!\n\n`;
 
-    if (single.barcode_or_pix) {
-      txt += `📋 *Código de barras para pagar sem multas:*\n`;
-      txt += `${single.barcode_or_pix.trim()}\n\n`;
+    if (single.barcode_or_pix && single.barcode_or_pix.trim().length > 0) {
+      txt += `📋 *Código de barras / Chave Pix:*\n`;
+      txt += '`' + single.barcode_or_pix.trim() + '`\n\n';
+    } else {
+      txt += `ℹ️ _(Linha digitável não identificada nesta conta. Se você tiver a foto do boleto ou chave Pix, envie aqui para salvar!)_\n\n`;
     }
   } else {
     txt += `Olá! Passando para te avisar que você tem *${bills.length} contas* agendadas para vencer **AMANHÃ**:\n\n`;
@@ -1174,14 +1128,7 @@ export function getEveReminderMessage(leadOrBills: any): string {
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   txt += `✨ *O Poder da Rotina no Piloto Automático:*\n`;
   txt += `Viu a tranquilidade de não ser pego de surpresa na véspera?\n\n`;
-  txt += `Conheça os recursos disponíveis nos nossos planos oficiais:\n`;
-  txt += `• *AnalisAí Start (R$ 39,90/mês):* 15 lançamentos/mês e lembretes diários pontuais no WhatsApp;\n`;
-  txt += `• *AnalisAí Solo (R$ 87,99/mês):* 30 lançamentos, comandos por áudio, consultor de caixa e relatório de Livro Caixa em PDF;\n`;
-  txt += `• *Planos Pro & Super (a partir de R$ 297/mês):* Para empresas com múltiplos CNPJs, centenas de lançamentos e conciliação bancária contínua.\n\n`;
-  txt += `👉 *Escolha o plano sob medida para sua empresa:*\n`;
-  txt += `• Assinar Start: ${ASAAS_PLANS.monthly.start.checkoutUrl}\n`;
-  txt += `• Assinar Solo: ${ASAAS_PLANS.monthly.solo.checkoutUrl}\n`;
-  txt += `• Conhecer todos os planos: https://analisai.me#planos`;
+  txt += `${OFFICIAL_PLANS_PRESENTATION_MESSAGE}`;
 
   return txt;
 }
@@ -1213,9 +1160,11 @@ export function getDueReminderMessage(leadOrBills: any): string {
     txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     txt += `A conta de *${fornecedor}* (${valFormatted}${provTag}) vence no dia de hoje. Evite multas e juros de atraso!\n\n`;
 
-    if (single.barcode_or_pix) {
+    if (single.barcode_or_pix && single.barcode_or_pix.trim().length > 0) {
       txt += `📋 *Código de barras pronto para cópia:*\n`;
-      txt += `${single.barcode_or_pix.trim()}\n\n`;
+      txt += '`' + single.barcode_or_pix.trim() + '`\n\n';
+    } else {
+      txt += `ℹ️ _(Linha digitável não identificada nesta conta. Se você tiver a foto do boleto ou chave Pix, basta me enviar a foto ou texto aqui que vinculo para você!)_\n\n`;
     }
   } else {
     txt += `🚨 *Atenção: Você tem ${bills.length} contas vencendo HOJE!*\n`;
@@ -1227,16 +1176,16 @@ export function getDueReminderMessage(leadOrBills: any): string {
 
   txt += `${BANK_SAFETY_NOTICE}\n\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  txt += `⚡ *Agilidade e Organização Financeira:*\n`;
-  txt += `Copie os dados acima e liquide no app do seu banco para não pagar juros ou multas de atraso!\n\n`;
-  txt += `🤖 *Cada plano é desenhado para o estágio do seu negócio:*\n`;
-  txt += `• *Para Autônomos & MEIs:* Planos Start e Solo cuidam do básico essencial e avisos pontuais no WhatsApp;\n`;
-  txt += `• *Para Empresas em Crescimento:* Plano Solo Plus (60 lançamentos) com conciliação mensal do seu extrato bancário;\n`;
-  txt += `• *Para Grupos e Médias Empresas:* Planos Pro e Super gerenciam de 2 a 4 CNPJs com conciliação semanal e até 1.000 lançamentos/mês.\n\n`;
-  txt += `👉 *Ative agora mesmo com liberação instantânea no WhatsApp:*\n`;
-  txt += `• *AnalisAí Solo* (Mais Escolhido - R$ 87,99/mês): ${ASAAS_PLANS.monthly.solo.checkoutUrl}\n`;
-  txt += `• *AnalisAí Pro* (Multi-CNPJ - R$ 297,00/mês): ${ASAAS_PLANS.monthly.pro.checkoutUrl}\n`;
-  txt += `• *Análise de Caixa Avulsa (R$ 14,90):* ${ASAAS_ONE_OFF.cashFlowAnalysis.checkoutUrl}`;
+  const hasAnyBarcode = bills.some((b) => b.barcode_or_pix && b.barcode_or_pix.trim().length > 0);
+  if (hasAnyBarcode) {
+    txt += `⚡ *Agilidade e Organização Financeira:*\n`;
+    txt += `Copie a linha digitável e liquide no app do seu banco para não pagar juros ou multas de atraso!\n\n`;
+  } else {
+    txt += `⚡ *Agilidade e Organização Financeira:*\n`;
+    txt += `Liquide no app do seu banco para manter suas contas em dia. Se tiver a linha digitável ou chave Pix, envie aqui para vincularmos!\n\n`;
+  }
+
+  txt += `${OFFICIAL_PLANS_PRESENTATION_MESSAGE}`;
 
   return txt;
 }
@@ -1283,8 +1232,7 @@ export function getConsolidatedDailyReminderMessage(params: {
   txt += `${BANK_SAFETY_NOTICE}\n\n`;
   txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   txt += `⚡ *Dica de Gestão:* Liquide as contas de hoje logo pela manhã para manter seu fluxo de caixa desimpedido.\n\n`;
-  txt += `👉 *Gostou do lembrete consolidado? Ative o plano Solo por R$ 87,99/mês:*\n`;
-  txt += `${ASAAS_PLANS.monthly.solo.checkoutUrl}`;
+  txt += `${OFFICIAL_PLANS_PRESENTATION_MESSAGE}`;
 
   return txt;
 }
@@ -1371,6 +1319,23 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
 
       if (consolidatedMessage) {
         await sendEvolutionText({ phone: lead.whatsapp_number, text: consolidatedMessage });
+
+        // Dispara mensagem individual de Linha Digitável em bloco isolado (One-Touch Copy)
+        // para todas as contas de hoje que possuam código de barras ou Pix cadastrado
+        const billsToCopy = dueToday.filter(
+          (b) => (b.barcode_or_pix && b.barcode_or_pix.trim().length > 0) || (b.pix_key && b.pix_key.trim().length > 0)
+        );
+
+        for (const b of billsToCopy) {
+          const favName = b.supplier_name || b.counterparty_name || 'Conta';
+          const code = (b.barcode_or_pix || b.pix_key || '').trim();
+          if (code) {
+            await sendEvolutionText({
+              phone: lead.whatsapp_number,
+              text: formatOneTouchPaymentCodeMessage(favName, code),
+            });
+          }
+        }
 
         // Marca flags em cada conta processada
         for (const b of dueToday) {

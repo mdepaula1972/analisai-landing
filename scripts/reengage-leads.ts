@@ -90,10 +90,11 @@ Vi que você nos perguntou sobre os *custos e planos* do AnalisAí!
 💡 *Você tem 30 dias de Degustação VIP 100% gratuita:*
 Você não precisa cadastrar cartão de crédito e não tem fidelidade nenhuma. Durante esse mês de teste você pode enviar fotos de boletos, faturas, notas, extratos e receber os lembretes com código de barras/Pix direto aqui no seu WhatsApp!
 
-Após os 30 dias, temos planos bem acessíveis:
-• 🟢 *Start (R$ 39,90/mês):* Organização essencial e lembretes diários.
-• ⭐ *Solo (R$ 87,99/mês):* O mais popular! Gestão completa, DRE, conciliação e fluxo de caixa.
-• 🚀 *Solo+ (R$ 137,99/mês):* Para empresas com operadores de equipe e fechamento contábil.
+Após os 30 dias, cada plano é desenhado para o seu estágio:
+• 🟢 *Start (R$ 39,90/mês):* 30 lançamentos/mês via texto e lembretes diários.
+• ⭐ *Solo (R$ 87,99/mês):* 80 lançamentos/mês, comandos por voz/áudio, Livro Caixa em PDF e conciliação mensal.
+• 🚀 *Solo Plus (R$ 157,99/mês):* 200 lançamentos/mês, integração PJ + PF e 4 análises de caixa.
+• 💼 *Pro (R$ 297,00/mês):* 500 lançamentos/mês, até 2 CNPJs e conciliação semanal.
 
 👉 *Que tal fazer um teste rápido agora sem compromisso?*
 Envie a foto ou PDF de um boleto ou conta de consumo (luz, água, aluguel) aqui para você ver a nossa inteligência artificial lendo os dados em tempo real! 🚀`;
