@@ -6,6 +6,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/cron/trial-reminders",
+      "schedule": "0 13 * * *"
+    },
+    {
       "path": "/api/cron/das-reminders",
       "schedule": "0 12 18,19,20 * *"
     },

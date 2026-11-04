@@ -1677,6 +1677,13 @@ Lançamos esta obrigação particular com a anotação para pagamento via **Dist
       clean === 'primeira opcao' || clean === 'primeira opção' ||
       clean.includes('ver minhas contas') || clean.includes('ver_minhas_contas') ||
       clean.includes('ver todas as contas') || clean === '📅 ver minhas contas' ||
+      clean.includes('ver as contas') || clean.includes('ver contas') ||
+      clean.includes('mostrar as contas') || clean.includes('mostrar contas') ||
+      clean.includes('quais as contas') || clean.includes('quais são as contas') ||
+      clean.includes('quais sao as contas') || clean.includes('listar as contas') || clean.includes('listar contas') ||
+      clean.includes('meus boletos') || clean.includes('ver boletos') || clean.includes('ver os boletos') ||
+      clean.includes('agenda financeira') || clean.includes('lista de contas') ||
+      clean.includes('o que tenho pra pagar') || clean.includes('o que tenho para pagar') ||
       isWeeklyBillsQuery(clean) || clean === 'contas' || clean === '!contas' || clean === 'minhas contas' ||
       clean.includes('listar contas') || clean.includes('mostrar contas') || clean.includes('quais contas') ||
       clean.includes('o que tenho a pagar') || clean.includes('o que tenho que pagar') ||
@@ -2595,8 +2602,8 @@ Para cadastrar ${guestName} como operadora/operador para lançar despesas na sua
 
     // 3. Consulta de Contas / Agenda de Pagamentos
     if (decision.intent === 'QUERY_BILLS') {
-      const period = (decision.bills_query_params?.period || 'week') as any;
-      const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, period);
+      const periodOption = extractBillsQueryPeriod(text);
+      const billsMsg = await getUpcomingBillsSummary(client?.id || null, cleanPhone, periodOption);
       await sendEvolutionText({ phone, text: billsMsg });
       await sendActionSequenceMenu(phone, 'O que deseja fazer com as suas contas?');
       return true;

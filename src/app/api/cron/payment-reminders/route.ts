@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
 import { formatDueDateDetails } from '@/lib/solo/date-utils';
+import { processTrialReminders } from '@/lib/solo/trial';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -320,6 +321,15 @@ Você pode:
     d1ChecksSent++;
   }
 
+  // 4. Dispara os lembretes diários para Leads na Degustação VIP (trial_leads)
+  let trialRemindersResult = { eveCount: 0, dueCount: 0 };
+  try {
+    trialRemindersResult = await processTrialReminders();
+    console.log('[Cron Reminders] Lembretes de degustação disparados:', trialRemindersResult);
+  } catch (trialErr) {
+    console.error('[Cron Reminders] Erro ao processar lembretes da degustação:', trialErr);
+  }
+
   return NextResponse.json({
     success: true,
     today_br: today,
@@ -327,5 +337,6 @@ Você pode:
     notified_clients: sentCount,
     processed_bills: processedBillsCount,
     d1_checks_sent: d1ChecksSent,
+    trial_reminders: trialRemindersResult,
   });
 }

@@ -2,10 +2,10 @@
  * Versão Oficial do Sistema AnalisAí
  * Atualizado a cada novo deploy em produção
  */
-export const APP_VERSION = 'v1.5.9';
-export const APP_BUILD_TIMESTAMP = '04/11/2026 09:15 BRT';
+export const APP_VERSION = 'v1.6.0';
+export const APP_BUILD_TIMESTAMP = '04/11/2026 10:05 BRT';
 export const APP_RELEASE_NAME =
-  'Trava Global de 50 Testadores, Cota Máxima de 30 Documentos & Onboarding Otimizado (PF/PJ)';
+  'Inteligência Conversacional no Onboarding, Resolução Universal de Contas e Lembretes Diários na Degustação';
 
 export function getShortCommitSha(): string {
   const sha =
@@ -31,4 +31,3 @@ export function getVersionStatusWhatsAppMessage(): string {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ _Webhook conectado à última versão publicada._`;
 }
-

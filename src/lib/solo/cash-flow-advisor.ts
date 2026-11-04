@@ -172,6 +172,16 @@ export function isWeeklyBillsQuery(cleanText: string): boolean {
     return false;
   }
 
+  // Regex abrangente para consultas diretas de contas, boletos ou agenda
+  const billsQueryRegex =
+    /\b(ver|mostr\w+|quais|list\w+|consult\w+|exib\w+)\s+(as\s+|os\s+|todas\s+as\s+|todos\s+os\s+|minhas\s+|meus\s+)?(contas|boletos|vencimentos|despesas|agendamentos)\b/i;
+  const whatToPayRegex =
+    /\b(o\s+que\s+(eu\s+)?tenho\s+(a|para|pra|que)\s+pagar|o\s+que\s+tem\s+(a|para|pra)\s+pagar|o\s+que\s+vence)\b/i;
+
+  if (billsQueryRegex.test(query) || whatToPayRegex.test(query)) {
+    return true;
+  }
+
   // 2. Comandos ou frases curtas de consulta
   const shortQueryKeywords = [
     '!semana',
@@ -188,6 +198,22 @@ export function isWeeklyBillsQuery(cleanText: string): boolean {
     '/contas',
     'minhas contas',
     'ver contas',
+    'ver as contas',
+    'ver os boletos',
+    'meus boletos',
+    'ver boletos',
+    'mostrar as contas',
+    'quais as contas',
+    'quais são as contas',
+    'quais sao as contas',
+    'todas as contas',
+    'agenda financeira',
+    'agenda de contas',
+    'lista de contas',
+    'o que tenho pra pagar',
+    'o que tenho para pagar',
+    'o que tem pra pagar',
+    'o que tem para pagar',
     'listar contas',
     'mostrar contas',
     'quais contas',
@@ -314,7 +340,7 @@ export function extractBillsQueryPeriod(cleanText: string): BillsPeriodOption {
 export async function getUpcomingBillsSummary(
   clientId: string | null,
   phone?: string,
-  periodOption?: BillsPeriodOption
+  periodOption?: BillsPeriodOption | string
 ): Promise<string> {
   const supabase = createServiceRoleClient();
   const cleanPhone = (phone || '').replace(/\D/g, '');
@@ -325,13 +351,24 @@ export async function getUpcomingBillsSummary(
     altPhone = cleanPhone.slice(0, 4) + '9' + cleanPhone.slice(4);
   }
 
-  const period = periodOption || { periodDays: 30, periodLabel: 'Próximos 30 Dias' };
+  let period: BillsPeriodOption;
+  if (!periodOption || typeof periodOption === 'string') {
+    period = typeof periodOption === 'string'
+      ? extractBillsQueryPeriod(periodOption)
+      : { periodDays: 30, periodLabel: 'Próximos 30 Dias' };
+  } else {
+    period = periodOption;
+  }
+  if (!period.periodDays || (typeof period.periodDays !== 'number' && period.periodDays !== 'all')) {
+    period = { periodDays: 30, periodLabel: 'Próximos 30 Dias' };
+  }
+
   const now = new Date();
   const todayIso = now.toISOString().split('T')[0];
   const maxDueIso =
     period.periodDays === 'all'
       ? '9999-12-31'
-      : new Date(now.getTime() + period.periodDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      : new Date(now.getTime() + (period.periodDays as number) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   let rawBills: any[] = [];
 

@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { sendEvolutionText } from '@/lib/solo/evolution';
+import { getGeminiClient } from '@/lib/solo/gemini';
 
 export type ProfileType = 'pj' | 'pf_liberal' | 'pf_individual' | 'pf_family';
 export type OnboardingStep =
@@ -679,6 +680,104 @@ export async function startOnboarding(params: {
 /**
  * Processa a resposta do usuário durante as etapas do onboarding
  */
+/**
+ * Trata dúvidas conversacionais e perguntas feitas por leads durante qualquer etapa do onboarding,
+ * impedindo que o robô envie menus repetitivos e demonstrando inteligência autônoma imediata.
+ */
+export async function handleIntelligentOnboardingQuery(params: {
+  phone: string;
+  cleanPhone: string;
+  rawText: string;
+  currentStep: OnboardingStep;
+  lead?: any;
+}): Promise<boolean> {
+  const { phone, cleanPhone, rawText, currentStep, lead } = params;
+  const clean = rawText.trim().toLowerCase();
+
+  // Se for apenas saudação, número direto ou opção simples, deixa o fluxo normal tratar
+  if (/^(oi|ol[aá]|bom dia|boa tarde|boa noite|1|2|3|4|pf|pj|mei|simples|epp|outro)$/i.test(clean)) {
+    return false;
+  }
+
+  // 1. Dúvidas sobre Preços, Custos, Planos, Valores
+  const isPricingQuery = /\b(custo|custos|pre[çc]o|pre[çc]os|valor|valores|plano|planos|quanto custa|qual o valor|tabela|pagamento|mensalidade|tarifa|investimento|quanto [eé]|quanto cobra)\b/i.test(clean);
+
+  // 2. Dúvidas sobre Como Funciona, pelo Zap, O que é, Mais Informações
+  const isHowItWorksQuery = /\b(como funciona|como [eé] pelo zap|como funciona o controle|o que faz|como usar|como opera|o que [eé] o analisai|como voc[eê]s funcionam|o que voc[eê] faz|como [eé] isso|mais informa[çc][oõ]es|mais info|explica|me explica)\b/i.test(clean);
+
+  // 3. Dúvidas sobre Funcionários, Solo, Autônomo, Pequeno Negócio
+  const isSoloOrEmployeesQuery = /\b(n[aã]o temos funcion[aá]rio|n[aã]o tenho funcion[aá]rio|sem funcion[aá]rio|sou sozinho|trabalho sozinho|sou aut[oô]nomo|equipe|apenas eu|pequeno neg[oó]cio|empresa pequena|s[oó] eu)\b/i.test(clean);
+
+  // 4. Dúvidas sobre Segurança, Privacidade, LGPD
+  const isSecurityQuery = /\b(seguran[çc]a|[eé] seguro|privacidade|lgpd|dados banc[aá]rios|meus dados|golpe|confi[aá]vel)\b/i.test(clean);
+
+  let stepTransitionPrompt = '';
+  if (currentStep === 'awaiting_pf_or_pj') {
+    stepTransitionPrompt = `\n\n🎁 *Para iniciarmos sua Degustação VIP de 30 dias grátis (sem cartão de crédito):*\nQual opção mais se parece com você?\n*1* ou *PJ* → Negócio Próprio ou Empresa com CNPJ (loja, comércio, oficina, MEI)\n*2* ou *PF* → Pessoa Física (autônomos sem CNPJ ou contas pessoais de casa)\n*3* ou *Ambos* → Misturo as contas do meu negócio com as de casa`;
+  } else if (currentStep === 'awaiting_pj_regime') {
+    stepTransitionPrompt = `\n\n🎯 *Para calibrar o Termômetro Tributário do seu negócio:*\nQual é o enquadramento tributário da sua empresa?\n• Digite *1* para *MEI* (teto R$ 81 mil/ano)\n• Digite *2* para *Simples Nacional — ME* (teto R$ 360 mil/ano)\n• Digite *3* para *Simples Nacional — EPP* (teto R$ 4,8 mi/ano)\n• Ou simplesmente me diga sua média mensal (ex: *"faturo 15 mil por mês"*).`;
+  } else if (currentStep === 'awaiting_pf_subtype') {
+    stepTransitionPrompt = `\n\n🎯 *Para configurarmos suas categorias ideais:*\nQual é o seu formato principal de uso?\n• Digite *1* para *Profissional Liberal ou Autônomo* (médicos, advogados, dentistas, autônomos sem CNPJ)\n• Digite *2* para *Uso Pessoal Individual* (salário, cartão e contas individuais)\n• Digite *3* para *Família / Casal* (orçamento doméstico da casa)`;
+  } else if (currentStep === 'awaiting_initial_balance') {
+    stepTransitionPrompt = `\n\n💰 *Para concluirmos seu marco zero de caixa:*\nQual é o seu saldo aproximado disponível em conta hoje? (ou digite *0* ou *pular* para começar sem saldo inicial)`;
+  }
+
+  if (isPricingQuery) {
+    await sendEvolutionText({
+      phone,
+      text: `💡 *Nossos Planos e Degustação VIP Gratuita:*\n\nVocê tem direito a **30 dias de Degustação VIP 100% gratuita** — sem precisar cadastrar cartão de crédito e sem nenhum compromisso! Durante o teste você pode enviar fotos de boletos, notas, extratos, receber lembretes no Zap e testar tudo na prática.\n\nApós os 30 dias, temos planos acessíveis para cada perfil:\n• 🟢 *Start (R$ 39,90/mês):* Ideal para autônomos e MEIs que buscam organização essencial e lembretes diários.\n• ⭐ *Solo (R$ 87,99/mês):* O mais escolhido! Gestão completa com DRE, conciliação bancária, relatórios de fluxo de caixa e código de barras/Pix pronto para pagar.\n• 🚀 *Solo+ (R$ 137,99/mês):* Para negócios em expansão que precisam de múltiplos operadores de equipe e fechamento contábil mensal.${stepTransitionPrompt}`,
+    });
+    return true;
+  }
+
+  if (isHowItWorksQuery) {
+    await sendEvolutionText({
+      phone,
+      text: `📲 *Como funciona o AnalisAí pelo WhatsApp:*\n\nO AnalisAí é o seu assistente financeiro inteligente que cuida da sua rotina direto aqui pelo WhatsApp, sem precisar baixar apps nem preencher planilhas chatas:\n\n📸 *1. Envie fotos ou PDFs:* Boletos, faturas, recibos ou notas fiscais. Nossa inteligência artificial lê os valores, vencimentos, favorecido e código de barras em segundos.\n🎙️ *2. Fale por áudio ou texto:* Diga *"Paguei 150 na padaria"* ou *"Recebi 800 do cliente X"* e seu Livro Caixa é atualizado na hora.\n⏰ *3. Lembretes às 10h:* No dia e na véspera do vencimento, enviamos o aviso com o código de barras ou Pix pronto para você copiar e pagar sem multas.\n📊 *4. Relatórios em tempo real:* Peça *"saldo"*, *"o que tenho a pagar"* ou *"relatório do mês"* e receba na hora.${stepTransitionPrompt}`,
+    });
+    return true;
+  }
+
+  if (isSoloOrEmployeesQuery) {
+    await sendEvolutionText({
+      phone,
+      text: `🤝 *O AnalisAí foi feito exatamente para você!*\n\nMais de **80% dos nossos clientes são autônomos, MEIs e empreendedores solo** que não possuem funcionários nem departamento financeiro.\n\nO robô atua como o seu **assistente financeiro particular**: você só manda o documento por foto ou fala o gasto por áudio, e ele organiza suas contas, avisa quando pagar e protege seu fluxo de caixa — economizando horas da sua semana!${stepTransitionPrompt}`,
+    });
+    return true;
+  }
+
+  if (isSecurityQuery) {
+    await sendEvolutionText({
+      phone,
+      text: `🔒 *Sua segurança e privacidade são prioridade absoluta:*\n\n• *Proteção de Dados:* Seus documentos e lançamentos são criptografados com padrões bancários e total conformidade com a LGPD.\n• *Sem Acesso Bancário Direto:* Nós não movimentamos nem debitamos da sua conta. O AnalisAí é um assistente de gestão, conferência e lembretes.\n• *Controle Total:* Você decide o que compartilhar e pode solicitar a exclusão dos seus dados a qualquer momento.${stepTransitionPrompt}`,
+    });
+    return true;
+  }
+
+  // 5. Perguntas abertas / Dúvidas gerais (Fallback inteligente com Gemini)
+  const isQuestionOrLongText = clean.includes('?') || clean.length >= 8;
+  if (isQuestionOrLongText) {
+    try {
+      const genAI = getGeminiClient();
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-3-flash-preview',
+        systemInstruction: `Você é o concierge e assistente inteligente do AnalisAí no WhatsApp. O AnalisAí é um assistente financeiro no WhatsApp (leitura de fotos de boletos/notas, áudios de despesas, conciliação e lembretes diários às 10h com Pix/código).\nO lead enviou uma dúvida ou comentário durante o início do contato.\nDiretrizes:\n- Responda à dúvida de forma extremamente empática, profissional, concisa e acolhedora (no máximo 2 parágrafos curtos).\n- Destaque que ele tem 30 dias de Degustação VIP 100% gratuita, sem necessidade de cartão de crédito.\n- NÃO invente funcionalidades inexistentes.\n- Ao final, conecte naturalmente com a pergunta da etapa atual para avançar no cadastro.`,
+      });
+
+      const res = await model.generateContent(`Mensagem do usuário: "${rawText}"\n\nEtapa atual de cadastro: "${currentStep}"\nTransição sugerida: "${stepTransitionPrompt.trim()}"`);
+      const reply = res.response.text();
+      if (reply && reply.trim().length > 15) {
+        await sendEvolutionText({ phone, text: reply.trim() });
+        return true;
+      }
+    } catch (gErr) {
+      console.warn('[handleIntelligentOnboardingQuery] Gemini fallback erro:', gErr);
+    }
+  }
+
+  return false;
+}
+
 export async function processOnboardingResponse(params: {
   phone: string;
   cleanPhone: string;
@@ -987,6 +1086,18 @@ export async function processOnboardingResponse(params: {
       return { handled: true, completed: false };
     }
 
+    // Se o usuário fez uma pergunta ou comentário inteligente
+    const handledQuery = await handleIntelligentOnboardingQuery({
+      phone,
+      cleanPhone,
+      rawText,
+      currentStep,
+      lead,
+    });
+    if (handledQuery) {
+      return { handled: true, completed: false };
+    }
+
     // Se o usuário digitou algo não reconhecido durante a pergunta PF x PJ
     import('@/lib/solo/friction-radar')
       .then((m) =>
@@ -1061,6 +1172,18 @@ export async function processOnboardingResponse(params: {
       });
 
       return { handled: true, completed: false, profile: chosenProfile };
+    }
+
+    // Se o usuário fez uma pergunta ou comentário inteligente
+    const handledSubtypeQuery = await handleIntelligentOnboardingQuery({
+      phone,
+      cleanPhone,
+      rawText,
+      currentStep,
+      lead,
+    });
+    if (handledSubtypeQuery) {
+      return { handled: true, completed: false };
     }
 
     // Se não compreendeu o subtipo
@@ -1157,6 +1280,18 @@ export async function processOnboardingResponse(params: {
         text: buildTaxRegimeProposalMessage(inference),
       });
 
+      return { handled: true, completed: false };
+    }
+
+    // Se o usuário fez uma pergunta ou comentário inteligente
+    const handledRegimeQuery = await handleIntelligentOnboardingQuery({
+      phone,
+      cleanPhone,
+      rawText,
+      currentStep,
+      lead,
+    });
+    if (handledRegimeQuery) {
       return { handled: true, completed: false };
     }
 

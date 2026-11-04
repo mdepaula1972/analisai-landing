@@ -1,13 +1,15 @@
 {
   "name": "analisai-landing",
-  "version": "1.5.9",
+  "version": "1.6.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test:stress": "ts-node --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/stress-test.ts"
+    "test:stress": "ts-node --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/stress-test.ts",
+    "reengage:leads": "ts-node -r tsconfig-paths/register --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/reengage-leads.ts",
+    "reengage:send": "ts-node -r tsconfig-paths/register --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/reengage-leads.ts --send"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

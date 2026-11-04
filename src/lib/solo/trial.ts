@@ -1346,8 +1346,8 @@ export async function processTrialReminders(): Promise<{ eveCount: number; dueCo
       }
 
       // Agrupa contas que vencem hoje e que vencem amanhã
-      const dueToday = billsList.filter((b) => b.due_date === todayIso && !b.reminder_due_sent);
-      const dueTomorrow = billsList.filter((b) => b.due_date === tomorrowIso && !b.reminder_eve_sent);
+      const dueToday = billsList.filter((b) => b.due_date === todayIso && !b.reminder_due_sent && !b.is_paid && b.status !== 'paid');
+      const dueTomorrow = billsList.filter((b) => b.due_date === tomorrowIso && !b.reminder_eve_sent && !b.is_paid && b.status !== 'paid');
 
       if (dueToday.length === 0 && dueTomorrow.length === 0) {
         continue;
