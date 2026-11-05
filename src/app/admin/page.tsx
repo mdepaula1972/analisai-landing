@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import type { AdminMetricsData, LeadItem } from '@/lib/solo/admin-metrics';
 
 export default function AdminDashboardPage() {
@@ -165,6 +166,27 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href={`/admin/bpo?token=${encodeURIComponent(token)}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
+          >
+            <span>🎛️</span>
+            <span className="hidden sm:inline">Torre BPO</span>
+          </Link>
+          <Link
+            href={`/admin/bpo/auditoria?token=${encodeURIComponent(token)}`}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
+          >
+            <span>📋</span>
+            <span>Auditorias</span>
+          </Link>
+          <Link
+            href={`/contador/dashboard?token=${encodeURIComponent(token)}`}
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
+          >
+            <span>🏢</span>
+            <span>Portal Contador</span>
+          </Link>
           <button
             onClick={() => fetchMetrics(token)}
             disabled={loading}

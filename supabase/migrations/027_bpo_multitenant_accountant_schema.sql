@@ -81,3 +81,4 @@ FOR ALL USING (
     WHERE auth_user_id = auth.uid() AND is_admin = true
   )
 );
+

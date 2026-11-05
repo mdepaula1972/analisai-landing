@@ -92,4 +92,6 @@ export interface AuditDailyOpsSummary {
     amount?: number;
     reason: string;
   }>;
+  clientsList?: BpoClientOverview[];
 }
+

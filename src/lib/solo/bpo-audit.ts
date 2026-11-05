@@ -213,12 +213,41 @@ export async function collectDailyBpoAudit(): Promise<AuditDailyOpsSummary> {
     { onConflict: 'key' }
   );
 
+  // ── 6. LISTA RESUMIDA DE CLIENTES BPO (MULTITENANT) ──────────────
+  const clientsList: BpoClientOverview[] = activeClients.map((c: any) => {
+    const pD0 = d0PayablesList.filter((p) => p.clientId === c.id);
+    const pDocs = pendingReviewDocuments.filter((d) => d.clientId === c.id);
+    const pIncons = inconsistenciesList.filter((i) => i.clientId === c.id);
+    const todayPayablesAmount = pD0.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+    let status: BpoClientOverview['status'] = 'up_to_date';
+    if (pIncons.length > 0) {
+      status = 'critical';
+    } else if (pDocs.length > 0 || pD0.some((p) => !p.isSentToday)) {
+      status = 'attention_required';
+    }
+
+    return {
+      clientId: c.id,
+      companyName: c.company_name || c.name || 'Cliente',
+      phone: c.whatsapp_number || '',
+      serviceTier: (c.service_tier as any) || 'self_service',
+      accountantOfficeName: c.accountant_name || null,
+      monthlyFee: Number(c.monthly_fee) || 0,
+      pendingDocumentsCount: pDocs.length,
+      todayPayablesCount: pD0.length,
+      todayPayablesAmount,
+      status,
+    };
+  });
+
   return {
     audit: auditData,
     d0PayablesList,
     d1PayablesList,
     pendingReviewDocuments,
     inconsistenciesList,
+    clientsList,
   };
 }
 
@@ -303,3 +332,4 @@ export async function dispatchPendingReminders(billIds?: string[]): Promise<{
 
   return { sent, failed };
 }
+
