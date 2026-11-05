@@ -370,6 +370,14 @@ export default function BpoControlTowerPage() {
           </Link>
 
           <Link
+            href={`/contador/dashboard?token=${encodeURIComponent(token)}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Portal do Contador</span>
+          </Link>
+
+          <Link
             href={`/admin?token=${encodeURIComponent(token)}`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
           >
@@ -1097,3 +1105,4 @@ export default function BpoControlTowerPage() {
     </div>
   );
 }
+
