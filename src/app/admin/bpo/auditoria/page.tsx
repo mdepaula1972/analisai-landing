@@ -6,12 +6,14 @@ import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, ShieldCheck, RefreshCw }
 import type { DailyBpoAudit } from '@/types/bpo';
 
 export default function BpoAuditoriaHistoryPage() {
+  const [mounted, setMounted] = useState<boolean>(false);
   const [audits, setAudits] = useState<DailyBpoAudit[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string>('');
 
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('token');
@@ -49,6 +51,19 @@ export default function BpoAuditoriaHistoryPage() {
       fetchHistory(token);
     }
   }, [token]);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-bold text-white animate-pulse">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-xs text-slate-400">Carregando histórico de auditorias...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-white pb-16">
@@ -129,7 +144,20 @@ export default function BpoAuditoriaHistoryPage() {
                     const [y, m, d] = (item.audit_date || '').split('-');
                     const dateFormatted = d && m && y ? `${d}/${m}/${y}` : item.audit_date;
 
-                    return (
+                    if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-bold text-white animate-pulse">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-xs text-slate-400">Carregando histórico de auditorias...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
                       <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
                         <td className="px-5 py-4 font-semibold text-white whitespace-nowrap">
                           {dateFormatted}

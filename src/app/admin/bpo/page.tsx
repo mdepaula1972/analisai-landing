@@ -37,6 +37,7 @@ import type {
 } from '@/types/bpo';
 
 export default function BpoControlTowerPage() {
+  const [mounted, setMounted] = useState<boolean>(false);
   const [data, setData] = useState<AuditDailyOpsSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export default function BpoControlTowerPage() {
 
   // Carrega token administrativo
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('token');
@@ -317,8 +319,23 @@ export default function BpoControlTowerPage() {
     }).format(new Date());
   }, []);
 
-  // Tela de Login com Token
-  if (!token && !loading) {
+  // 1. Guard de montagem no cliente (evita erros de hidratação ou renderização prematura no SSR)
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-bold text-white shadow-xl shadow-emerald-500/20 animate-pulse">
+            🎛️
+          </div>
+          <p className="text-sm font-semibold text-slate-200">Torre de Controle Operacional BPO</p>
+          <p className="text-xs text-slate-500">Iniciando ambiente de auditoria segura...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Tela de Login com Token se não houver token configurado
+  if (!token) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
@@ -352,6 +369,18 @@ export default function BpoControlTowerPage() {
               Acessar Torre de Controle
             </button>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Estado de Carregamento inicial com token ativo
+  if (loading && !data) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+          <p className="text-sm font-semibold text-slate-200">Carregando auditoria operacional...</p>
         </div>
       </div>
     );
@@ -984,7 +1013,7 @@ export default function BpoControlTowerPage() {
                           {client.todayPayablesCount > 0 ? (
                             <span className="font-bold text-rose-400">
                               {client.todayPayablesCount} conta(s) (
-                              {client.todayPayablesAmount.toLocaleString('pt-BR', {
+                              {(client.todayPayablesAmount || 0).toLocaleString('pt-BR', {
                                 style: 'currency',
                                 currency: 'BRL',
                               })}

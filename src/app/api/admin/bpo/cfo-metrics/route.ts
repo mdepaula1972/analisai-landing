@@ -45,3 +45,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: err?.message || 'Erro ao calcular métricas CFO.' }, { status: 500 });
   }
 }
+

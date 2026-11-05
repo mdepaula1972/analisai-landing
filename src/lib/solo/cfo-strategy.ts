@@ -274,3 +274,4 @@ export async function predictCashTightness(clientId: string): Promise<CashTightn
     dailyTimeline,
   };
 }
+
