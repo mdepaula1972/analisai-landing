@@ -95,3 +95,65 @@ export interface AuditDailyOpsSummary {
   clientsList?: BpoClientOverview[];
 }
 
+export interface BpoPortalData {
+  client: {
+    id: string;
+    name: string;
+    companyName: string;
+    cnpjCpf: string;
+    serviceTier: ServiceTier;
+    accountantOfficeName?: string | null;
+    operatorName?: string;
+    whatsappNumber?: string;
+  };
+  card1_reconciledBalance: {
+    currentBalance: number;
+    lastConciliatedAt: string;
+    status: 'up_to_date' | 'pending_receipts';
+    todayInflow: number;
+    todayOutflow: number;
+  };
+  card2_weekPayables: {
+    totalPayable: number;
+    count: number;
+    overdueCount: number;
+    overdueAmount: number;
+    bills: Array<{
+      id: string;
+      counterpartyName: string;
+      amount: number;
+      dueDate: string;
+      status: 'open' | 'overdue' | 'paid';
+      barcodeOrPix?: string | null;
+      daysUntilDue: number;
+      humanDueDate: string;
+    }>;
+  };
+  card3_profitSummary: {
+    months: Array<{
+      monthKey: string;
+      monthLabel: string;
+      revenue: number;
+      expenses: number;
+      netProfit: number;
+      marginPercent: number;
+      isProfitable: boolean;
+    }>;
+    averageMonthlyProfit: number;
+  };
+  cfoStrategy: {
+    avoidedInterest: number;
+    avoidedInterestRoiText: string;
+    personalExpenseLeakAmount: number;
+    personalExpensePercent: number;
+    cashTightnessRisk: 'healthy' | 'tight' | 'critical';
+    cashTightnessAlert: string | null;
+  };
+  support: {
+    whatsappNumber: string;
+    whatsappLink: string;
+    operatorName: string;
+  };
+}
+
+

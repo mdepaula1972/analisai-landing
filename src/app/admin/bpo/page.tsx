@@ -27,6 +27,7 @@ import {
   Sparkles,
   ArrowRight,
   ExternalLink,
+  Smartphone,
 } from 'lucide-react';
 import type {
   DailyBpoAudit,
@@ -399,6 +400,15 @@ export default function BpoControlTowerPage() {
           >
             <Building2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Portal do Contador</span>
+          </Link>
+
+          <Link
+            href={`/portal?demo=true`}
+            target="_blank"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 transition-all cursor-pointer"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Portal do Cliente (PWA)</span>
           </Link>
 
           <Link
