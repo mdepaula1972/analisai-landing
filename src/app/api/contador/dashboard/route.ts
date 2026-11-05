@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
         name: 'Escritório Modelo Contabilidade',
         contact_name: 'Contador Parceiro Teste',
         email: 'contato@escritoriomodelo.com.br',
-        phone: '5514930855878',
+        phone: '5511988887777',
         crc_number: 'SP-123456/O',
         commission_rate: 10.0,
         pix_key: 'contato@escritoriomodelo.com.br',

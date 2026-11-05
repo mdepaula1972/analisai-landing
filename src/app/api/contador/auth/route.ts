@@ -80,14 +80,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Suporte ao parceiro modelo
-    if (!office && (cleanPhone === '5514930855878' || cleanInput.includes('escritoriomodelo') || cleanInput === 'demo')) {
+    // Suporte ao parceiro modelo para testes
+    if (!office && (cleanInput.includes('escritoriomodelo') || cleanInput === 'demo')) {
       office = {
         id: 'seed-office-modelo-01',
         name: 'Escritório Modelo Contabilidade',
         contact_name: 'Contador Parceiro Teste',
         email: 'contato@escritoriomodelo.com.br',
-        phone: '5514930855878',
+        phone: '5511988887777',
         crc_number: 'SP-123456/O',
         commission_rate: 10.0,
         pix_key: 'contato@escritoriomodelo.com.br',

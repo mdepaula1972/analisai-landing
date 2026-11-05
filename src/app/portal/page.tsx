@@ -272,19 +272,6 @@ export default function PortalClientePage() {
                 </>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                const masterPhone = '14-930855878';
-                setLoginInput(masterPhone);
-                setToken(masterPhone);
-                localStorage.setItem('analisai_portal_token', masterPhone);
-                loadPortalData(masterPhone, false);
-              }}
-              className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <span>🔑 Entrar com meu telefone master (14-930855878)</span>
-            </button>
           </form>
 
           <div className="mt-6 pt-6 border-t border-slate-900 text-center">
