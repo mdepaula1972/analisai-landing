@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:stress": "ts-node --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/stress-test.ts",
+    "bpo:provision": "ts-node --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/bpo-provision-db.ts",
     "reengage:leads": "ts-node -r tsconfig-paths/register --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/reengage-leads.ts",
     "reengage:send": "ts-node -r tsconfig-paths/register --compiler-options \"{\\\"module\\\":\\\"commonjs\\\"}\" scripts/reengage-leads.ts --send"
   },

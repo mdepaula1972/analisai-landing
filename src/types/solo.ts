@@ -1,3 +1,5 @@
+import type { ServiceTier } from './bpo';
+
 export type PlanCode = 'start' | 'solo' | 'solo_plus' | 'pro' | 'super';
 
 export interface Plan {
@@ -33,6 +35,9 @@ export interface Client {
   initial_cash_in_hand?: number;
   last_balance_update_date?: string | null;
   last_balance_prompt_at?: string | null;
+  service_tier?: ServiceTier;
+  accountant_office_id?: string | null;
+  assigned_operator_id?: string | null;
   created_at: string;
 }
 
