@@ -290,3 +290,4 @@ async function handleDownload(req: NextRequest) {
     );
   }
 }
+

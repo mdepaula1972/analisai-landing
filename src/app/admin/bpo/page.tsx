@@ -44,10 +44,12 @@ export default function BpoControlTowerPage() {
 
   // Filtros e estados
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'queue' | 'd0_d1' | 'inconsistencies' | 'clients'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'd0_d1' | 'inconsistencies' | 'clients' | 'cfo'>('queue');
   const [dispatchingReminders, setDispatchingReminders] = useState<boolean>(false);
   const [completingAudit, setCompletingAudit] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [cfoData, setCfoData] = useState<any | null>(null);
+  const [loadingCfo, setLoadingCfo] = useState<boolean>(false);
 
   // Estados de modais
   const [editingItem, setEditingItem] = useState<{
@@ -108,6 +110,28 @@ export default function BpoControlTowerPage() {
       fetchData(token);
     }
   }, [token]);
+
+  const targetCfoClientId = useMemo(() => {
+    if (selectedClientId !== 'all') return selectedClientId;
+    return data?.clientsList?.[0]?.clientId || null;
+  }, [selectedClientId, data?.clientsList]);
+
+  useEffect(() => {
+    if (activeTab === 'cfo' && targetCfoClientId && token) {
+      setLoadingCfo(true);
+      fetch(
+        `/api/admin/bpo/cfo-metrics?client_id=${encodeURIComponent(
+          targetCfoClientId
+        )}&token=${encodeURIComponent(token)}`
+      )
+        .then((r) => r.json())
+        .then((json) => {
+          if (json.success) setCfoData(json);
+        })
+        .catch((err) => console.warn('Erro ao carregar métricas CFO:', err))
+        .finally(() => setLoadingCfo(false));
+    }
+  }, [activeTab, targetCfoClientId, token]);
 
   const handleManualLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -624,6 +648,18 @@ export default function BpoControlTowerPage() {
             <Users className="w-4 h-4" />
             <span>Carteira BPO ({data?.clientsList?.length || 0})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('cfo')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'cfo'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                : 'bg-slate-900 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            <span>Raio-X CFO Strategy</span>
+          </button>
         </div>
 
         {/* ── ABA 1: FILA RÁPIDA DE HOMOLOGAÇÃO EM 1 CLIQUE ───────────── */}
@@ -976,6 +1012,158 @@ export default function BpoControlTowerPage() {
                 </tbody>
               </table>
             </div>
+          </section>
+        )}
+        {/* ── ABA 5: RAIO-X DE INTELIGÊNCIA CFO STRATEGY ─────────────── */}
+        {activeTab === 'cfo' && (
+          <section className="space-y-6">
+            {loadingCfo ? (
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-16 text-center text-slate-400">
+                <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-xs">Processando inteligência analítica CFO Strategy...</p>
+              </div>
+            ) : !cfoData ? (
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                <Sparkles className="w-10 h-10 text-purple-400 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-slate-200">Selecione uma empresa para visualizar o Raio-X CFO.</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Utilize o seletor de clientes acima para auditar gastos pessoais, juros evitados e projeção D+15/D+30.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Cabeçalho do Raio-X */}
+                <div className="bg-gradient-to-r from-purple-900/40 via-slate-900/60 to-slate-900/80 border border-purple-500/30 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
+                      💎
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-white">
+                        Diagnóstico CFO Consultivo —{' '}
+                        {data?.clientsList?.find((c) => c.clientId === targetCfoClientId)?.companyName || 'Empresa'}
+                      </h3>
+                      <p className="text-xs text-purple-300">
+                        Indicadores de alto valor para justificar mensalidades de controladoria e blindar a saúde do cliente.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {cfoData.cashTightness?.riskLevel === 'healthy' ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Caixa Saudável
+                      </span>
+                    ) : cfoData.cashTightness?.riskLevel === 'tight' ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" /> Caixa Apertado
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1.5 animate-pulse">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Caixa Crítico
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Grid dos 3 Pilares Consultivos */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Card 1: Juros e Multas Evitados (ROI) */}
+                  <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <DollarSign className="w-4 h-4 text-emerald-400" />
+                          Proteção de Pontualidade
+                        </span>
+                        <span className="text-xs font-bold text-emerald-400">ROI Direto</span>
+                      </div>
+                      <div className="text-2xl font-extrabold text-emerald-400 mb-1">
+                        {cfoData.avoidedInterest?.formattedAvoidedInterest || 'R$ 0,00'}
+                      </div>
+                      <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                        Economia real apurada em multas (2%) e juros de mora evitados por pagamentos 100% no prazo.
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-[11px] text-emerald-300">
+                      ✨ <strong>{cfoData.avoidedInterest?.totalPaidBillsCount || 0}</strong> conta(s) gerida(s) e pagas pontualmente.
+                    </div>
+                  </div>
+
+                  {/* Card 2: Contaminação PF x PJ */}
+                  <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          Contaminação PF x PJ
+                        </span>
+                        <span className="text-xs font-bold text-amber-400">
+                          {cfoData.pfLeak?.percentageOfExpenses?.toFixed(1) || '0.0'}% do total
+                        </span>
+                      </div>
+                      <div className="text-2xl font-extrabold text-amber-400 mb-1">
+                        {(cfoData.pfLeak?.totalPfAmount || 0).toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                      </div>
+                      <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                        Total de gastos com perfil pessoal (supermercado, condomínio, escola) pagos na conta jurídica.
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-300 leading-relaxed">
+                      💡 {cfoData.pfLeak?.totalPfAmount > 0 ? 'Orientação: unificar em pró-labore fixo.' : 'Blindagem 100% íntegra no período.'}
+                    </div>
+                  </div>
+
+                  {/* Card 3: Previsão de Liquidez D+15 / D+30 */}
+                  <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-purple-400" />
+                          Projeção D+15 e D+30
+                        </span>
+                        <span className="text-xs font-bold text-purple-400">Preditivo</span>
+                      </div>
+                      <div className="space-y-1 mb-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Saldo Hoje:</span>
+                          <span className="font-bold text-white">
+                            {(cfoData.cashTightness?.currentBalance || 0).toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Projeção D+15:</span>
+                          <span className={`font-bold ${cfoData.cashTightness?.projectedBalanceD15 < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {(cfoData.cashTightness?.projectedBalanceD15 || 0).toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Projeção D+30:</span>
+                          <span className={`font-bold ${cfoData.cashTightness?.projectedBalanceD30 < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {(cfoData.cashTightness?.projectedBalanceD30 || 0).toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 text-[11px] text-purple-300">
+                      {cfoData.cashTightness?.alertMessage || 'Fluxo de caixa futuro equilibrado para os próximos 30 dias.'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
       </main>
