@@ -4,56 +4,32 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  try {
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vccpvhxcqshxiysawxtp.supabase.co';
+    const supabaseKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjY3B2aHhjcXNoeGl5c2F3eHRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MjgxOTMsImV4cCI6MjA5NDUwNDE5M30.Ynqtf82s-XvDUi59-z1Z7osquZezdil812cAcoaZCAk';
+
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
         },
       },
-    }
-  );
+    });
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
-
-  // Rotas protegidas do portal do cliente
-  if (pathname.startsWith('/portal')) {
-    if (!user) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = '/login';
-      redirectUrl.searchParams.set('from', pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-  }
-
-  // Rotas do admin BPO
-  if (pathname.startsWith('/admin')) {
-    if (!user) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = '/login';
-      redirectUrl.searchParams.set('from', pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-  }
-
-  // Redireciona usuário já logado que tenta acessar login/registro
-  if ((pathname === '/login' || pathname === '/registro') && user) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = '/portal';
-    return NextResponse.redirect(redirectUrl);
+    // Atualiza a sessão Supabase se houver cookies de autenticação
+    await supabase.auth.getUser();
+  } catch {
+    // Falha silenciosa para não bloquear requisições
   }
 
   return supabaseResponse;
@@ -61,9 +37,12 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/portal/:path*',
-    '/admin/:path*',
-    '/login',
-    '/registro',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
