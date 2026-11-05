@@ -29,6 +29,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { BpoPortalData } from '@/types/bpo';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 
 export default function PortalClientePage() {
   const [data, setData] = useState<BpoPortalData | null>(null);
@@ -62,18 +63,22 @@ export default function PortalClientePage() {
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
 
-  // Extração e verificação de token ou modo demo
+  // Extração e verificação de token, telefone master ou modo demo
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
+    const urlPhone = urlParams.get('phone');
     const localToken =
       localStorage.getItem('analisai_portal_token') ||
       localStorage.getItem('analisai_dash_token');
     const isDemo = urlParams.get('demo') === 'true';
 
-    const effective = urlToken || localToken || '';
+    let effective = urlToken || localToken || '';
+    if (!effective && urlPhone && isMasterPhone(urlPhone)) {
+      effective = '5514930855878';
+    }
 
     if (effective) {
       setToken(effective);
@@ -266,6 +271,19 @@ export default function PortalClientePage() {
                   <ChevronRight className="w-4 h-4" />
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const masterPhone = '14-930855878';
+                setLoginInput(masterPhone);
+                setToken(masterPhone);
+                localStorage.setItem('analisai_portal_token', masterPhone);
+                loadPortalData(masterPhone, false);
+              }}
+              className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>🔑 Entrar com meu telefone master (14-930855878)</span>
             </button>
           </form>
 

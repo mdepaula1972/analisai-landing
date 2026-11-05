@@ -18,9 +18,10 @@ export default function AdminDashboardPage() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('token');
+      const urlPhone = urlParams.get('phone');
       const savedToken = localStorage.getItem('analisai_admin_token');
 
-      const effectiveToken = urlToken || savedToken || '';
+      const effectiveToken = urlToken || urlPhone || savedToken || '';
       if (effectiveToken) {
         setToken(effectiveToken);
         localStorage.setItem('analisai_admin_token', effectiveToken);
@@ -117,11 +118,11 @@ export default function AdminDashboardPage() {
           <form onSubmit={handleManualLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Token ou Chave de Acesso
+                Token ou Telefone Master
               </label>
               <input
-                type="password"
-                placeholder="Ex: marcos_admin_..."
+                type="text"
+                placeholder="Ex: 14-930855878 ou marcos_admin_..."
                 value={inputToken}
                 onChange={(e) => setInputToken(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
@@ -133,6 +134,20 @@ export default function AdminDashboardPage() {
               className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
             >
               Entrar no Painel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const masterPhone = '14-930855878';
+                setInputToken(masterPhone);
+                setToken(masterPhone);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('analisai_admin_token', masterPhone);
+                }
+              }}
+              className="w-full py-2.5 px-3 bg-slate-800/80 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>🔑 Entrar com meu telefone master (14-930855878)</span>
             </button>
           </form>
 

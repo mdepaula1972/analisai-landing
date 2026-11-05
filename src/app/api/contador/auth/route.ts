@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,26 @@ export async function POST(req: NextRequest) {
 
     const cleanInput = identifier.trim().toLowerCase();
     const cleanPhone = cleanInput.replace(/\D/g, '');
+
+    // Master Access Bypass para o telefone pessoal do Marcos (14-930855878)
+    if (isMasterPhone(cleanPhone) || isMasterPhone(cleanInput)) {
+      return NextResponse.json({
+        success: true,
+        office: {
+          id: 'master-admin-office',
+          name: 'Diretoria Geral BPO (Marcos)',
+          contact_name: 'Marcos Antonio de Paula',
+          email: 'contato@analisai.me',
+          phone: '5514930855878',
+          crc_number: 'ADMIN-MASTER',
+          commission_rate: 100.0,
+          pix_key: '14930855878',
+          status: 'active',
+        },
+        message: 'Acesso Master autorizado ao Portal do Contador!',
+      });
+    }
+
     const supabase = createServiceRoleClient();
 
     let office = null;

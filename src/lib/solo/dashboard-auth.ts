@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import crypto from 'crypto';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 
 export interface DashboardAuthResult {
   valid: boolean;
@@ -79,6 +80,25 @@ export async function generateDashboardAccessLink(params: {
  * Valida o token do dashboard (verificando hash, expiração e buscando dados do cliente)
  */
 export async function validateDashboardToken(rawToken?: string | null): Promise<DashboardAuthResult> {
+  // Master Bypass para o telefone pessoal do Marcos (14-930855878)
+  if (rawToken && isMasterPhone(rawToken)) {
+    return {
+      valid: true,
+      clientId: null,
+      phoneNumber: '5514930855878',
+      role: 'admin',
+      client: {
+        id: 'master-marcos-admin',
+        name: 'Marcos de Paula (Master Admin)',
+        company_name: 'AnalisAí.me — Controladoria Central',
+        whatsapp_number: '5514930855878',
+        is_admin: true,
+        status: 'active',
+      },
+      isTrial: false,
+    };
+  }
+
   if (!rawToken || typeof rawToken !== 'string' || rawToken.trim().length < 16) {
     return { valid: false, reason: 'Token ausente ou formato inválido' };
   }

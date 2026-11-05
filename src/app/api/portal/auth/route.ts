@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { generateDashboardAccessLink } from '@/lib/solo/dashboard-auth';
 import { WHATSAPP_NUMBER } from '@/lib/contact';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,18 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanDigits = rawIdentifier.replace(/\D/g, '');
+
+    // Master Access Bypass para o telefone do Marcos (14-930855878)
+    if (isMasterPhone(cleanDigits) || isMasterPhone(rawIdentifier)) {
+      return NextResponse.json({
+        success: true,
+        token: '5514930855878',
+        portalUrl: '/portal?token=5514930855878',
+        clientName: 'Marcos Antonio de Paula (Master Admin)',
+        message: 'Acesso Master autorizado com sucesso!',
+      });
+    }
+
     const supabase = createServiceRoleClient();
 
     // 1. Tenta buscar por WhatsApp ou por CNPJ/CPF

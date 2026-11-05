@@ -84,7 +84,7 @@ export default function BpoLandingPage() {
     },
     {
       question: 'Como meu contador recebe os documentos e o fechamento do mês?',
-      answer: 'Eliminamos completamente o envio de extratos amassados e a digitação manual na contabilidade. No 1º dia útil do mês seguinte, o escritório contábil recebe o Pacote Fiscal completo em arquivo .ZIP estruturado, contendo o Livro Caixa em PDF, a DRE Gerencial, a pasta com todos os comprovantes originais e um arquivo CSV formatado para importação direta no sistema contábil (Domínio, Questor, Alterdata, etc.).',
+      answer: 'Eliminamos completamente o envio de extratos amassados e a digitação manual na contabilidade. Até o 5º dia útil do mês seguinte, o escritório contábil recebe o Pacote Fiscal completo em arquivo .ZIP estruturado, contendo o Livro Caixa em PDF, a DRE Gerencial, a pasta com todos os comprovantes originais e um arquivo CSV formatado para importação direta no sistema contábil (Domínio, Questor, Alterdata, etc.).',
     },
     {
       question: 'Como é calculada a mensalidade do serviço de BPO?',
@@ -124,7 +124,7 @@ export default function BpoLandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
             {[
-              { valor: '1º Dia Útil', label: 'Pacote fiscal entregue ao contador' },
+              { valor: 'Até 5º Dia Útil', label: 'Pacote fiscal entregue ao contador' },
               { valor: 'Zero Senhas', label: 'Sua conta bancária 100% blindada' },
               { valor: '100% no Zap', label: 'Sem planilhas ou sistemas complexos' },
               { valor: 'DRE & Radar', label: 'Previsibilidade semanal e mensal' },
@@ -320,7 +320,7 @@ export default function BpoLandingPage() {
                     <FolderArchive className="w-5 h-5" />
                   </div>
                   <div>
-                    <strong className="text-white text-sm font-bold block mb-1">Pacote Fiscal Completo em .ZIP no 1º Dia Útil</strong>
+                    <strong className="text-white text-sm font-bold block mb-1">Pacote Fiscal Completo em .ZIP até o 5º Dia Útil</strong>
                     <span className="text-slate-400 text-xs leading-relaxed">
                       Download com 1 clique do Livro Caixa em PDF, DRE Gerencial, pasta de comprovantes originais e CSV estruturado para Domínio, Questor, Alterdata e outros.
                     </span>
@@ -386,7 +386,7 @@ export default function BpoLandingPage() {
                   </div>
                 </div>
                 <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-[11px] font-bold text-emerald-300">
-                  Pronto no Dia 1
+                  Pronto até o 5º Dia Útil
                 </span>
               </div>
 

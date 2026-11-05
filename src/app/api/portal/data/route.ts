@@ -58,6 +58,31 @@ export async function GET(req: NextRequest) {
         if (auth.client?.company_name || auth.client?.name) {
           fallbackClientName = auth.client.company_name || auth.client.name;
         }
+      } else if (auth.valid && !auth.clientId) {
+        // Master Admin Phone (Marcos: 14-930855878)
+        const supabaseClient = createServiceRoleClient();
+        const { data: myClient } = await supabaseClient
+          .from('clients')
+          .select('id, name, company_name')
+          .ilike('whatsapp_number', '%930855878%')
+          .limit(1)
+          .maybeSingle();
+
+        if (myClient) {
+          targetClientId = myClient.id;
+          fallbackClientName = myClient.company_name || myClient.name;
+        } else {
+          const { data: firstClient } = await supabaseClient
+            .from('clients')
+            .select('id, name, company_name')
+            .eq('status', 'active')
+            .limit(1)
+            .maybeSingle();
+          if (firstClient) {
+            targetClientId = firstClient.id;
+            fallbackClientName = firstClient.company_name || firstClient.name;
+          }
+        }
       } else if (!auth.valid) {
         return NextResponse.json(
           { error: 'Link de acesso expirado ou inválido. Solicite um novo link via WhatsApp.' },

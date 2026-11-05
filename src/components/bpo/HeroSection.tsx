@@ -127,7 +127,7 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
 
               {/* Subheadline Oficial Reestruturada */}
               <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-300 max-w-xl">
-                Elimine o trabalho operacional de contas a pagar, receber e conciliação bancária direto pelo WhatsApp. Sua empresa organizada e sua contabilidade abastecida no 1º dia útil.
+                Elimine o trabalho operacional de contas a pagar, receber e conciliação bancária direto pelo WhatsApp. Sua empresa organizada e sua contabilidade abastecida até o 5º dia útil.
               </p>
 
               {/* Botões de Ação Primária (CTAs Conforme Ordem de Engenharia) */}
@@ -169,7 +169,7 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
                   <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-emerald-500/30 transition-colors shadow-sm">
                     <span className="text-lg shrink-0 select-none">📦</span>
                     <div className="text-xs">
-                      <strong className="text-white font-bold block">Pacote Fiscal no 1º Dia Útil</strong>
+                      <strong className="text-white font-bold block">Pacote Fiscal até o 5º Dia Útil</strong>
                       <span className="text-slate-400 text-[11px] leading-snug">ZIP pronto com Livro Caixa, DRE, CSV contábil e comprovantes.</span>
                     </div>
                   </div>
@@ -224,7 +224,7 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
                 <FileText className="w-4 h-4 font-black shrink-0" />
                 <div>
                   <p className="text-[9px] font-bold leading-none uppercase tracking-wide">Para seu Contador</p>
-                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">Pacote Fiscal em .ZIP no Dia 1</p>
+                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">Pacote Fiscal em .ZIP até o 5º Dia Útil</p>
                 </div>
               </div>
 

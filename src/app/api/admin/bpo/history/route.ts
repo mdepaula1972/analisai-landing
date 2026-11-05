@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { getOrCreateAdminWebToken } from '@/lib/solo/admin-metrics';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 import type { DailyBpoAudit } from '@/types/bpo';
 
 export const runtime = 'nodejs';
@@ -12,8 +13,12 @@ export async function GET(req: NextRequest) {
     const token = searchParams.get('token') || searchParams.get('key') || req.headers.get('x-admin-token');
     const adminToken = await getOrCreateAdminWebToken();
     const cronSecret = process.env.CRON_SECRET;
+    const isAuthorized =
+      isMasterPhone(token) ||
+      isMasterPhone(searchParams.get('phone')) ||
+      (token && (token.trim() === adminToken.trim() || token === cronSecret));
 
-    if (!token || (token.trim() !== adminToken.trim() && token !== cronSecret)) {
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 

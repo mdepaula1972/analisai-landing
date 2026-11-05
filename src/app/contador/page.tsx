@@ -132,16 +132,28 @@ export default function ContadorLoginPage() {
             </button>
           </form>
 
-          {/* Sugestão Rápida para Demonstração */}
-          <div className="mt-8 pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
-            <span>Deseja testar com o escritório modelo?</span>
-            <button
-              type="button"
-              onClick={handleUseDemo}
-              className="text-emerald-400 hover:underline font-semibold cursor-pointer"
-            >
-              Preencher dados de teste
-            </button>
+          {/* Sugestão Rápida para Demonstração e Master */}
+          <div className="mt-8 pt-6 border-t border-slate-800/80 space-y-3 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>Acesso Master do Gestor:</span>
+              <button
+                type="button"
+                onClick={() => setIdentifier('14-930855878')}
+                className="text-amber-400 hover:text-amber-300 font-bold cursor-pointer"
+              >
+                Preencher meu WhatsApp (14-930855878)
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>Deseja testar com o escritório modelo?</span>
+              <button
+                type="button"
+                onClick={handleUseDemo}
+                className="text-emerald-400 hover:underline font-semibold cursor-pointer"
+              >
+                Preencher dados de teste
+              </button>
+            </div>
           </div>
         </div>
       </main>

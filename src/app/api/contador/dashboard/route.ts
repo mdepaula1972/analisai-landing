@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase-server';
 import { getOrCreateAdminWebToken } from '@/lib/solo/admin-metrics';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 import type { AccountantOffice } from '@/types/bpo';
 
 export const runtime = 'nodejs';
@@ -40,12 +41,34 @@ export async function GET(req: NextRequest) {
 
     const adminToken = searchParams.get('token') || searchParams.get('key');
     const systemAdminToken = await getOrCreateAdminWebToken();
-    const isAdmin = adminToken && (adminToken.trim() === systemAdminToken.trim() || adminToken === process.env.CRON_SECRET);
+    const isMaster =
+      isMasterPhone(officeIdentifier) ||
+      isMasterPhone(adminToken) ||
+      isMasterPhone(searchParams.get('phone')) ||
+      officeIdentifier === 'master-admin-office';
+
+    const isAdmin = isMaster || (adminToken && (adminToken.trim() === systemAdminToken.trim() || adminToken === process.env.CRON_SECRET));
 
     const supabase = createServiceRoleClient();
 
     // ── 1. LOCALIZAÇÃO DO ESCRITÓRIO CONTÁBIL ─────────────────────────
     let office: AccountantOffice | null = null;
+
+    if (isMaster) {
+      office = {
+        id: 'master-admin-office',
+        name: 'Diretoria Geral BPO (Marcos)',
+        contact_name: 'Marcos Antonio de Paula',
+        email: 'contato@analisai.me',
+        phone: '5514930855878',
+        crc_number: 'ADMIN-MASTER',
+        commission_rate: 100.0,
+        pix_key: '14930855878',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
 
     // A) Busca na tabela accountant_offices
     try {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateAdminWebToken } from '@/lib/solo/admin-metrics';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 import {
   auditPersonalExpenseLeak,
   calculateAvoidedInterest,
@@ -17,8 +18,12 @@ export async function GET(req: NextRequest) {
 
     const adminToken = await getOrCreateAdminWebToken();
     const cronSecret = process.env.CRON_SECRET;
+    const isAuthorized =
+      isMasterPhone(token) ||
+      isMasterPhone(searchParams.get('phone')) ||
+      (token && (token.trim() === adminToken.trim() || token === cronSecret));
 
-    if (!token || (token.trim() !== adminToken.trim() && token !== cronSecret)) {
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 

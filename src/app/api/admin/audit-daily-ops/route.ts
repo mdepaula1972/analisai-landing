@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateAdminWebToken } from '@/lib/solo/admin-metrics';
 import { collectDailyBpoAudit, dispatchPendingReminders } from '@/lib/solo/bpo-audit';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,13 @@ async function validateAdminAccess(req: NextRequest): Promise<boolean> {
     const adminSecret = process.env.ADMIN_TOKEN || process.env.ADMIN_SECRET;
     const authHeader = req.headers.get('authorization') || '';
     const searchParams = req.nextUrl.searchParams;
-    const token = searchParams.get('token') || searchParams.get('key') || req.headers.get('x-admin-token');
+    const token = searchParams.get('token') || searchParams.get('key') || searchParams.get('phone') || req.headers.get('x-admin-token');
+    const rawBearer = authHeader.replace(/^Bearer\s+/i, '');
+
+    // 0. Acesso Livre Master — Telefone pessoal do Marcos (14-930855878)
+    if (isMasterPhone(token) || isMasterPhone(rawBearer) || isMasterPhone(searchParams.get('phone'))) {
+      return true;
+    }
 
     // 1. Vercel Cron Secret
     if (cronSecret && (authHeader === `Bearer ${cronSecret}` || token === cronSecret)) {

@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server';
 import { getOrCreateAdminWebToken } from '@/lib/solo/admin-metrics';
 import { getBrasiliaDate } from '@/lib/solo/bpo-audit';
 import { sendEvolutionText } from '@/lib/solo/evolution';
+import { isMasterPhone } from '@/lib/solo/master-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,13 @@ async function validateAdminAccess(req: NextRequest): Promise<boolean> {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get('authorization') || '';
   const searchParams = req.nextUrl.searchParams;
-  const token = searchParams.get('token') || searchParams.get('key') || req.headers.get('x-admin-token');
+  const token = searchParams.get('token') || searchParams.get('key') || searchParams.get('phone') || req.headers.get('x-admin-token');
+  const rawBearer = authHeader.replace(/^Bearer\s+/i, '');
+
+  // Master Access Bypass para o telefone pessoal do Marcos (14-930855878)
+  if (isMasterPhone(token) || isMasterPhone(rawBearer) || isMasterPhone(searchParams.get('phone'))) {
+    return true;
+  }
 
   if (cronSecret && (authHeader === `Bearer ${cronSecret}` || token === cronSecret)) {
     return true;
