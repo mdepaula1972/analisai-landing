@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   description:
     "Simulações financeiras avançadas e análise preditiva sem necessidade de integração bancária direta. Tome decisões estratégicas com total segurança e sigilo.",
   keywords: ["inteligência financeira", "fluxo de caixa", "simulação financeira", "IA financeira", "análise preditiva"],
+  verification: {
+    google: "Fj5XcrJk9iIsl-S0L0eQwENzdYFxoY8Xb_wErkFI9TY",
+  },
   openGraph: {
     title: "AnalisAI.me — Inteligência Financeira de Alta Precisão",
     description:
@@ -29,6 +32,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={`${inter.variable} h-full overflow-x-hidden`}>
+      <head>
+        <meta name="google-site-verification" content="Fj5XcrJk9iIsl-S0L0eQwENzdYFxoY8Xb_wErkFI9TY" />
+      </head>
       <body className="min-h-full flex flex-col antialiased overflow-x-hidden">
         <Script id="meta-pixel" strategy="afterInteractive">
           {`
