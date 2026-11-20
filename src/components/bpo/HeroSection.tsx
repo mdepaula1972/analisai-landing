@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import DashboardMockup from './DashboardMockup';
 import { WHATSAPP } from '@/lib/contact';
+import { APP_VERSION } from '@/lib/version';
 
 interface HeroSectionProps {
   scrolled: boolean;
@@ -51,6 +52,12 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="AnalisAI.me — início">
             <Image src="/logo-horizontal.jpg" alt="AnalisAI.me" width={480} height={132} className="h-8 sm:h-10 lg:h-11 w-auto object-contain" priority />
+            <span
+              title={`Versão ${APP_VERSION}`}
+              className="whitespace-nowrap rounded-md border border-slate-800 bg-slate-900/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-tight text-slate-500"
+            >
+              {APP_VERSION}
+            </span>
             <span className="hidden xl:inline-flex whitespace-nowrap rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-emerald-300">
               Controladoria & BPO
             </span>

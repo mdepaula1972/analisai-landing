@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import {
   Shield, Lock, Users, Building2, Stethoscope,
-  Briefcase, FileText, Zap, Award, Camera,
+  Briefcase, FileText, Zap, Award,
   BarChart3, Layers, UserCheck,
 } from 'lucide-react';
 
@@ -88,21 +89,17 @@ export default function TrustSection({ waUrl }: { waUrl: string }) {
             </h2>
           </div>
 
-          {/* Bloco de Liderança com espaço reservado para foto profissional */}
+          {/* Bloco de Liderança com foto profissional */}
           <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 sm:p-8 mb-8 shadow-2xl">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8">
-              {/* Espaço reservado para foto profissional — substituir por <Image src="/marcos-paula.jpg" alt="Marcos Antonio de Paula" width={160} height={160} className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl object-cover border border-amber-500/40 shrink-0" /> */}
-              <div
-                aria-label="Espaço reservado para foto profissional de Marcos Antonio de Paula"
-                className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl border-2 border-dashed border-amber-500/40 bg-slate-950/90 flex flex-col items-center justify-center text-center p-3 shrink-0"
-              >
-                <Camera className="w-7 h-7 text-amber-400 mb-2" />
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
-                  Foto Profissional
-                </span>
-                <span className="text-[10px] text-slate-500 mt-1 leading-tight">
-                  Marcos A. de Paula
-                </span>
+              <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-2xl overflow-hidden border-2 border-amber-500/40 bg-slate-950 shadow-xl shadow-black/40 shrink-0">
+                <Image
+                  src="/marcos-paula.jpg"
+                  alt="Marcos Antonio de Paula — Liderança e Controladoria Sênior AnalisAí.me"
+                  fill
+                  sizes="(max-width: 640px) 128px, 160px"
+                  className="object-cover object-top"
+                />
               </div>
 
               <div className="flex-1 text-center sm:text-left">
