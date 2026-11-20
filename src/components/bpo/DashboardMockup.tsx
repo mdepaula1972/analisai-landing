@@ -10,22 +10,22 @@ import {
 // ── Dados do mockup ──────────────────────────────────────────────────────────
 
 const METRICS = [
-  { id: 1, label: 'Margem Bruta',         value: '55,7%',   trend: +2.1, icon: <TrendingUp className="w-3.5 h-3.5" />, color: 'emerald' },
-  { id: 2, label: 'Margem Operacional',   value: '10,7%',   trend: +1.4, icon: <Activity className="w-3.5 h-3.5" />,   color: 'amber'   },
-  { id: 3, label: 'EBITDA Gerencial',     value: 'R$ 513k', trend: +5.2, icon: <DollarSign className="w-3.5 h-3.5" />, color: 'amber'   },
-  { id: 4, label: 'Fluxo de Caixa Livre', value: 'R$ 1,3M', trend: -0.8, icon: <Wallet className="w-3.5 h-3.5" />,     color: 'red'     },
+  { id: 1, label: 'Margem Bruta',         value: '56,0%',   trend: +2.1, icon: <TrendingUp className="w-3.5 h-3.5" />, color: 'emerald' },
+  { id: 2, label: 'Margem Operacional',   value: '15,4%',   trend: +1.4, icon: <Activity className="w-3.5 h-3.5" />,   color: 'amber'   },
+  { id: 3, label: 'EBITDA Gerencial',     value: 'R$ 218k', trend: +4.8, icon: <DollarSign className="w-3.5 h-3.5" />, color: 'amber'   },
+  { id: 4, label: 'Fluxo de Caixa Livre', value: 'R$ 191k', trend: -0.8, icon: <Wallet className="w-3.5 h-3.5" />,     color: 'red'     },
 ];
 
 const DRE_ROWS = [
-  { label: '(+) Receita Bruta',        value: 'R$ 5.549k', signal: '+' as const },
-  { label: '(-) Impostos',             value: 'R$ 1.028k', signal: '-' as const },
-  { label: '(-) Custos Operac.',       value: 'R$ 2.129k', signal: '-' as const },
-  { label: '(-) Despesas Rateadas',    value: 'R$ 1.879k', signal: '-' as const },
-  { label: '(=) Resultado Líquido',    value: 'R$ 514k',   signal: '=' as const, highlight: true },
+  { label: '(+) Receita Bruta',        value: 'R$ 1.414k', signal: '+' as const },
+  { label: '(-) Impostos',             value: 'R$ 177k',   signal: '-' as const },
+  { label: '(-) Custos Operac.',       value: 'R$ 544k',   signal: '-' as const },
+  { label: '(-) Despesas Rateadas',    value: 'R$ 502k',   signal: '-' as const },
+  { label: '(=) Resultado Líquido',    value: 'R$ 191k',   signal: '=' as const, highlight: true },
 ];
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul'];
-const MARGIN  = [59.5, 45.7, 41.5, 55.7, 49.7, 53.1, 56.2];
+const MARGIN  = [54.8, 52.3, 51.9, 55.4, 54.1, 55.6, 56.0];
 
 // ── Sparkline SVG Responsivo ──────────────────────────────────────────────────
 
@@ -143,7 +143,7 @@ export default function DashboardMockup() {
                 </span>
               </div>
               <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
-                Empresa Modelo · Jan–Jul/26 · DRE Gerencial
+                Empresa Modelo · Jan–Jul/26 · Média R$ 202k/mês
               </p>
             </div>
             <span className="text-[9px] bg-emerald-500 text-slate-950 px-2 py-1 rounded-lg font-extrabold shrink-0">
@@ -155,7 +155,7 @@ export default function DashboardMockup() {
           <div className="flex items-start sm:items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
             <p className="text-[9px] sm:text-[10px] text-amber-300 font-semibold leading-tight">
-              <span className="font-bold">Alerta:</span> FCL caiu 32% em Jul/26 vs Jun/26. Verifique custos operacionais do período.
+              <span className="font-bold">Alerta:</span> FCL caiu 28% em Jul/26 vs Jun/26 (R$ 31k → R$ 22k). Verifique manutenção pontual do período.
             </p>
           </div>
 
@@ -208,7 +208,7 @@ export default function DashboardMockup() {
                   </span>
                 </div>
                 <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                  56,2% atual
+                  56,0% atual
                 </span>
               </div>
               <MiniChart />
@@ -227,7 +227,7 @@ export default function DashboardMockup() {
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span className="text-[9px] sm:text-[10px] font-extrabold text-slate-300 uppercase tracking-wide">
-                    DRE Sintética (Jul/26)
+                    DRE Sintética (Jan–Jul/26)
                   </span>
                 </div>
                 <span className="text-[8px] text-slate-500">Consolidado</span>

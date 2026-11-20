@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { APP_VERSION } from '@/lib/version';
+import { WHATSAPP_NUMBER } from '@/lib/contact';
 import {
   TrendingUp,
   TrendingDown,
@@ -239,7 +240,7 @@ export default function PainelPage() {
           </p>
 
           <a
-            href="https://wa.me/5513920099874?text=painel"
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=painel`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full inline-flex items-center justify-center gap-2 py-4 px-6 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black rounded-2xl shadow-xl shadow-emerald-400/25 transition-all transform active:scale-95 text-sm"
@@ -298,7 +299,7 @@ export default function PainelPage() {
           <h2 className="text-lg font-bold text-white mb-2">Link Expirado ou Inválido</h2>
           <p className="text-slate-400 text-xs sm:text-sm mb-6 leading-relaxed">{error}</p>
           <a
-            href="https://wa.me/5513920099874?text=painel"
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=painel`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black rounded-2xl shadow-lg shadow-emerald-400/20 text-xs sm:text-sm"
@@ -880,7 +881,7 @@ export default function PainelPage() {
       <nav className="fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-2xl border-t border-slate-800/80 p-3 z-40">
         <div className="max-w-md mx-auto flex items-center justify-between gap-2.5">
           <a
-            href="https://wa.me/5513920099874"
+            href={`https://wa.me/${WHATSAPP_NUMBER}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black rounded-2xl shadow-xl shadow-emerald-400/25 transition active:scale-95 text-xs sm:text-sm"
@@ -890,7 +891,7 @@ export default function PainelPage() {
           </a>
 
           <a
-            href="https://wa.me/5513920099874?text=relatorio"
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=relatorio`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-1.5 py-3.5 px-4 bg-slate-900/90 border border-slate-800 text-slate-200 hover:text-white hover:border-slate-600 rounded-2xl text-xs font-bold transition active:scale-95 shadow-sm"

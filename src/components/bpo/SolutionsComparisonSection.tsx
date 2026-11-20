@@ -3,85 +3,94 @@
 import React from 'react';
 import {
   X, Check, ShieldCheck, ArrowRight, MessageCircle,
-  Lock, Users, FileSpreadsheet, Scale, ShieldAlert
+  Lock, Users, FileSpreadsheet, Scale, DollarSign,
+  TrendingUp, EyeOff,
 } from 'lucide-react';
 import { WHATSAPP } from '@/lib/contact';
 
 const COMPARATIVO_ITEMS = [
   {
-    criterio: 'Acesso a senhas e Open Finance',
-    icone: <Lock className="w-4 h-4 text-amber-400" />,
-    outras: {
-      titulo: 'Exigem conexão bancária direta',
-      detalhe: 'Exigem senhas, tokens ou Open Finance, expondo credenciais e movimentações em servidores externos.',
-      negativo: true,
+    criterio: 'Custo Mensal',
+    icone: <DollarSign className="w-4 h-4 text-amber-400" />,
+    clt: {
+      titulo: 'R$ 4.000+ (salário, encargos, benefícios e provisões)',
+      detalhe: 'Custo fixo elevado somando salário base, FGTS, INSS, provisão de férias, 13º, benefícios e risco rescisório.',
     },
-    analisai: {
-      titulo: 'Zero acesso: sua conta bancária fica blindada',
-      detalhe: 'Não pedimos senhas nem Open Finance. Toda a auditoria é feita a partir dos comprovantes que você envia.',
+    bpo: {
+      titulo: 'Fração do valor em contrato B2B previsível',
+      detalhe: 'Reduza seus custos financeiros em mais de 50% logo no primeiro mês, sem encargos trabalhistas ou surpresas.',
+      destaque: 'Economia Real',
+    },
+  },
+  {
+    criterio: 'Risco e Continuidade',
+    icone: <Users className="w-4 h-4 text-blue-400" />,
+    clt: {
+      titulo: 'Férias, 13º, faltas, turnover e passivo trabalhista',
+      detalhe: 'Ausências, férias, pedidos de demissão e curva de treinamento interrompem o financeiro e geram passivo trabalhista.',
+    },
+    bpo: {
+      titulo: 'Zero vínculo trabalhista e operação contínua com equipe de 4 especialistas',
+      detalhe: 'Operação contínua o ano inteiro com time dedicado de analistas de faturamento, contas a pagar e contas a receber.',
+      destaque: 'Continuidade',
+    },
+  },
+  {
+    criterio: 'Nível de Entrega',
+    icone: <TrendingUp className="w-4 h-4 text-emerald-400" />,
+    clt: {
+      titulo: 'Operador focado apenas em lançar boletos',
+      detalhe: 'Rotina operacional reativa em planilhas manuais, sem análise de margens, DRE gerencial ou visão de controladoria.',
+    },
+    bpo: {
+      titulo: 'Controladoria sênior (+30 anos de experiência) + Painel Executivo em tempo real',
+      detalhe: 'Conciliação bancária diária, DRE gerencial completa, fluxo de caixa e parecer analítico revisado por liderança sênior.',
+      destaque: 'Nível Sênior',
+    },
+  },
+  {
+    criterio: 'Segurança Bancária',
+    icone: <Lock className="w-4 h-4 text-emerald-400" />,
+    clt: {
+      titulo: 'Risco de acesso a senhas e movimentações',
+      detalhe: 'Compartilhamento de credenciais bancárias ou tokens internos expõe o caixa da empresa a erros e fraudes.',
+    },
+    bpo: {
+      titulo: 'Zero acesso às suas contas (você aprova tudo no seu banco)',
+      detalhe: 'Segurança Total: não pedimos senhas nem acessos bancários. Você mantém 100% do controle das aprovações e pagamentos.',
       destaque: '100% Blindado',
     },
   },
   {
-    criterio: 'Risco de transação indevida',
-    icone: <ShieldAlert className="w-4 h-4 text-red-400" />,
-    outras: {
-      titulo: 'Movimentam Pix e pagamentos pelo app',
-      detalhe: 'Aplicativos integrados criam brechas para transferências incorretas ou fraudes em caso de perda do aparelho.',
-      negativo: true,
+    criterio: 'Sigilo de Dados',
+    icone: <EyeOff className="w-4 h-4 text-amber-400" />,
+    clt: {
+      titulo: 'Funcionário interno com visão de saldos e lucros',
+      detalhe: 'Colaborador interno acaba visualizando faturamento real, saldos bancários, margem de lucro e retiradas dos sócios.',
     },
-    analisai: {
-      titulo: 'Risco zero: você aprova e paga no seu banco',
-      detalhe: 'O AnalisAí audita e avisa vencimentos, mas você mantém 100% da soberania e paga exclusivamente no app do seu banco.',
-      destaque: 'Risco Zero',
-    },
-  },
-  {
-    criterio: 'Acesso para secretária / operador',
-    icone: <Users className="w-4 h-4 text-blue-400" />,
-    outras: {
-      titulo: 'Perigoso (teria acesso a pagar contas)',
-      detalhe: 'Delegar o WhatsApp do banco tradicional permite que ajudantes vejam saldos da empresa ou façam pagamentos.',
-      negativo: true,
-    },
-    analisai: {
-      titulo: 'Modo Equipe com sigilo total de saldos',
-      detalhe: 'Sua secretária ou operador pode anexar notas e boletos no WhatsApp sem jamais ter acesso a extratos, saldos ou lucros.',
-      destaque: 'Sigilo de Saldos',
+    bpo: {
+      titulo: 'Modo Equipe com sigilo absoluto de saldos',
+      detalhe: 'Sua equipe interna envia boletos e notas pelo WhatsApp sem jamais ter acesso a extratos, saldos ou lucros da empresa.',
+      destaque: 'Sigilo Absoluto',
     },
   },
   {
-    criterio: 'Apoio com impostos e teto fiscal',
-    icone: <Scale className="w-4 h-4 text-emerald-400" />,
-    outras: {
-      titulo: 'Tratamento genérico',
-      detalhe: 'Não diferenciam caixa real de notas declaradas, ignorando risco fiscal e limites de enquadramento tributário.',
-      negativo: true,
-    },
-    analisai: {
-      titulo: 'Alerta DAS-MEI e monitoramento de teto',
-      detalhe: 'Sensibilidade fiscal inteligente: lembretes automáticos do DAS e termômetro do teto de faturamento para evitar desenquadramento.',
-      destaque: 'Proteção Fiscal',
-    },
-  },
-  {
-    criterio: 'Fechamento para Contabilidade',
+    criterio: 'Fechamento Contábil',
     icone: <FileSpreadsheet className="w-4 h-4 text-purple-400" />,
-    outras: {
-      titulo: 'Apenas extrato comum',
-      detalhe: 'Geram listas simples de transações que exigem horas do contador para decifrar a que cada pagamento se referia.',
-      negativo: true,
+    clt: {
+      titulo: 'Envio manual e despadronizado',
+      detalhe: 'Comprovantes soltos, pastas incompletas e atrasos recorrentes que geram retrabalho constante com a contabilidade.',
     },
-    analisai: {
-      titulo: 'CSV estruturado + pacote ZIP de comprovantes',
-      detalhe: 'Gera relatório fiscal completo em CSV e consolida todos os PDFs e fotos de notas fiscais renomeados em um único arquivo ZIP para o seu contador.',
-      destaque: '1 Clique',
+    bpo: {
+      titulo: 'Pacote Fiscal em .ZIP + CSV estruturado entregue até o 5º dia útil',
+      detalhe: 'Todos os comprovantes organizados, notas fiscais renomeadas e conciliação estruturada prontos para o seu contador.',
+      destaque: 'Até o 5º Dia Útil',
     },
   },
 ];
 
 export default function SolutionsComparisonSection({ waUrl }: { waUrl?: string }) {
-  const soloUrl = waUrl || WHATSAPP.soloTeste;
+  const diagnosticoUrl = waUrl || WHATSAPP.diagnostico;
 
   return (
     <section
@@ -97,40 +106,43 @@ export default function SolutionsComparisonSection({ waUrl }: { waUrl?: string }
         {/* Cabeçalho */}
         <div className="text-center max-w-3xl mx-auto mb-14">
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[.14em] text-emerald-300 mb-5">
-            <ShieldCheck className="h-3.5 w-3.5" /> Segurança & Controle Total
+            <ShieldCheck className="h-3.5 w-3.5" /> BPO vs. Contratação CLT
           </span>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.08] tracking-tight mb-5">
-            AnalisAí vs.{' '}
-            <span className="text-slate-400 line-through decoration-red-500/60 decoration-2 font-extrabold">Outras Soluções</span>
+            BPO AnalisAí.me vs.{' '}
+            <span className="text-slate-400 line-through decoration-red-500/60 decoration-2 font-extrabold">
+              Analista Financeiro CLT
+            </span>
           </h2>
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto">
-            Por que conectar suas contas bancárias a robôs é um risco desnecessário. Compare e entenda por que o AnalisAí é a escolha de empresários que prezam por <strong className="text-emerald-300">segurança e sigilo absoluto</strong>.
+            Compare custos reais, continuidade e nível de entrega e entenda por que empresas em crescimento substituem a folha fixa CLT por uma{' '}
+            <strong className="text-emerald-300">controladoria sênior terceirizada</strong>.
           </p>
         </div>
 
         {/* ── DESKTOP: TABELA COMPARATIVA ── */}
         <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80 shadow-2xl backdrop-blur-xl">
           {/* Header das Colunas */}
-          <div className="grid grid-cols-[1.4fr_1.3fr_1.8fr] border-b border-slate-800 bg-slate-900/90 text-sm font-extrabold">
+          <div className="grid grid-cols-[1.2fr_1.4fr_1.8fr] border-b border-slate-800 bg-slate-900/90 text-sm font-extrabold">
             <div className="px-6 py-4 text-xs uppercase tracking-widest text-slate-400 flex items-center gap-2">
               <Scale className="w-4 h-4 text-slate-400" />
               Critério de Escolha
             </div>
-            <div className="px-6 py-4 border-l border-slate-800/80 text-slate-400 flex items-center gap-2.5">
+            <div className="px-6 py-4 border-l border-slate-800/80 text-slate-300 flex items-center gap-2.5">
               <div className="w-6 h-6 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
                 <X className="w-3.5 h-3.5 text-red-400" />
               </div>
-              <span>Bancos / Fintechs no WhatsApp</span>
+              <span>Analista Financeiro CLT (R$ 4.000+/mês)</span>
             </div>
-            <div className="px-6 py-4 border-l border-emerald-500/40 bg-emerald-500/10 text-emerald-300 flex items-center justify-between">
+            <div className="px-6 py-4 border-l border-emerald-500/40 bg-emerald-500/10 text-emerald-300 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/25 border border-emerald-400/50 flex items-center justify-center shrink-0">
                   <Check className="w-4 h-4 text-emerald-300 stroke-[3]" />
                 </div>
-                <span className="font-black text-white text-base">AnalisAí</span>
+                <span className="font-black text-white text-base">BPO AnalisAí.me</span>
               </div>
-              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-sm">
-                100% Seguro
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-sm whitespace-nowrap">
+                Recomendado
               </span>
             </div>
           </div>
@@ -139,7 +151,7 @@ export default function SolutionsComparisonSection({ waUrl }: { waUrl?: string }
           {COMPARATIVO_ITEMS.map((item, idx) => (
             <div
               key={item.criterio}
-              className={`grid grid-cols-[1.4fr_1.3fr_1.8fr] border-b border-slate-800/60 transition-colors last:border-b-0 ${
+              className={`grid grid-cols-[1.2fr_1.4fr_1.8fr] border-b border-slate-800/60 transition-colors last:border-b-0 ${
                 idx % 2 === 0 ? 'bg-slate-950/40' : 'bg-slate-900/30'
               } hover:bg-slate-800/20`}
             >
@@ -153,37 +165,37 @@ export default function SolutionsComparisonSection({ waUrl }: { waUrl?: string }
                 </span>
               </div>
 
-              {/* Bancos / Fintechs */}
+              {/* Analista Financeiro CLT */}
               <div className="px-6 py-5 border-l border-slate-800/80 bg-red-950/10 flex items-start gap-2.5">
                 <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center shrink-0 mt-0.5">
                   <X className="w-3 h-3 text-red-400" />
                 </div>
                 <div>
                   <p className="text-sm font-bold text-red-300 mb-1 leading-snug">
-                    {item.outras.titulo}
+                    {item.clt.titulo}
                   </p>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    {item.outras.detalhe}
+                    {item.clt.detalhe}
                   </p>
                 </div>
               </div>
 
-              {/* AnalisAí */}
+              {/* BPO AnalisAí.me */}
               <div className="px-6 py-5 border-l border-emerald-500/30 bg-emerald-500/5 flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/25 border border-emerald-400/40 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                   <Check className="w-3.5 h-3.5 text-emerald-300 stroke-[3]" />
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <p className="text-sm font-extrabold text-white leading-snug">
-                      {item.analisai.titulo}
+                      {item.bpo.titulo}
                     </p>
                     <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-md whitespace-nowrap">
-                      {item.analisai.destaque}
+                      {item.bpo.destaque}
                     </span>
                   </div>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    {item.analisai.detalhe}
+                    {item.bpo.detalhe}
                   </p>
                 </div>
               </div>
@@ -208,29 +220,29 @@ export default function SolutionsComparisonSection({ waUrl }: { waUrl?: string }
 
               {/* Conteúdo Comparativo */}
               <div className="p-4 space-y-3">
-                {/* Outras soluções */}
+                {/* CLT */}
                 <div className="rounded-xl border border-red-950/40 bg-red-950/15 p-3">
                   <div className="flex items-center gap-2 mb-1 text-red-400 text-xs font-bold uppercase tracking-wider">
-                    <X className="w-3.5 h-3.5" />
-                    <span>Bancos / Fintechs no WhatsApp</span>
+                    <X className="w-3.5 h-3.5 shrink-0" />
+                    <span>Analista Financeiro CLT (R$ 4.000+/mês)</span>
                   </div>
-                  <p className="text-xs font-bold text-red-200 mb-0.5">{item.outras.titulo}</p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{item.outras.detalhe}</p>
+                  <p className="text-xs font-bold text-red-200 mb-0.5">{item.clt.titulo}</p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">{item.clt.detalhe}</p>
                 </div>
 
-                {/* AnalisAí */}
+                {/* BPO AnalisAí.me */}
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 shadow-sm">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-1.5 text-emerald-300 text-xs font-black uppercase tracking-wider">
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      <span>AnalisAí</span>
+                      <Check className="w-4 h-4 stroke-[3] shrink-0" />
+                      <span>BPO AnalisAí.me</span>
                     </div>
-                    <span className="text-[9px] font-black uppercase bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full">
-                      {item.analisai.destaque}
+                    <span className="text-[9px] font-black uppercase bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      {item.bpo.destaque}
                     </span>
                   </div>
-                  <p className="text-xs font-black text-white mb-0.5">{item.analisai.titulo}</p>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">{item.analisai.detalhe}</p>
+                  <p className="text-xs font-black text-white mb-0.5">{item.bpo.titulo}</p>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">{item.bpo.detalhe}</p>
                 </div>
               </div>
             </div>
@@ -245,23 +257,23 @@ export default function SolutionsComparisonSection({ waUrl }: { waUrl?: string }
             </div>
             <div>
               <h4 className="text-base sm:text-lg font-black text-white">
-                Princípio da Blindagem Máxima
+                Segurança Total e Economia Comprovada
               </h4>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mt-0.5">
-                No AnalisAí, seu dinheiro nunca sai da sua conta e nenhuma senha é compartilhada. Experimente sem compromisso.
+                No BPO AnalisAí.me você reduz custos pela metade frente a um CLT, mantém segurança total sem acesso à sua conta bancária e recebe fechamento até o 5º dia útil.
               </p>
             </div>
           </div>
 
           <a
-            href={soloUrl}
+            href={diagnosticoUrl}
             target="_blank"
             rel="noopener noreferrer"
             id="comparativo-cta-whatsapp"
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-6 py-3.5 text-xs sm:text-sm font-black text-slate-950 shadow-lg shadow-emerald-400/25 transition hover:-translate-y-0.5 hover:bg-emerald-300 shrink-0 w-full md:w-auto"
           >
             <MessageCircle className="h-4 w-4 fill-slate-950 stroke-none" />
-            <span>Testar no WhatsApp Agora</span>
+            <span>Solicitar Diagnóstico Financeiro</span>
             <ArrowRight className="h-4 w-4" />
           </a>
         </div>

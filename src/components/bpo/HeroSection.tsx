@@ -1,24 +1,47 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  ArrowRight, Shield, Zap, ChevronDown,
-  Sparkles, MessageCircle, FileText, Check,
+  ArrowRight, Shield, ChevronDown,
+  MessageCircle, FileText, Check,
   Building2, Smartphone, Settings, ShieldCheck,
-  TrendingUp, BarChart3, Lock
+  Lock,
 } from 'lucide-react';
 import DashboardMockup from './DashboardMockup';
+import { WHATSAPP } from '@/lib/contact';
 
 interface HeroSectionProps {
   scrolled: boolean;
 }
 
-export const WA_DIAGNOSTICO =
-  'https://wa.me/5513920099874?text=Ol%C3%A1%2C%20gostaria%20de%20um%20diagn%C3%B3stico%20financeiro%20para%20minha%20empresa';
+export const WA_DIAGNOSTICO = WHATSAPP.diagnostico;
 
 export default function HeroSection({ scrolled }: HeroSectionProps) {
+  const [loginOpen, setLoginOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setLoginOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLoginOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
     <>
       {/* ── NAVBAR ── */}
@@ -35,56 +58,78 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
 
           {/* Nav principal */}
           <nav className="hidden items-center gap-4 lg:gap-5 text-xs font-semibold text-slate-300 lg:flex" aria-label="Navegação principal">
-            <a href="#como-funciona" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Como Funciona</a>
-            <a href="#pilares" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Pilares BPO</a>
-            <a href="#contadores" className="whitespace-nowrap hover:text-emerald-300 transition-colors text-amber-300 flex items-center gap-1.5">
+            <a href="#pilares" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Como Funciona</a>
+            <a href="#painel" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Painel</a>
+            <a href="#entregamos" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Relatórios</a>
+            <a href="#comparativo" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Diferenciais</a>
+            <a href="#proposta" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Proposta</a>
+            <a href="#faq" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Dúvidas</a>
+            <a href="#contadores" className="whitespace-nowrap hover:text-amber-200 transition-colors text-amber-300 flex items-center gap-1.5">
               <Building2 className="w-3.5 h-3.5" /> Para Contadores
             </a>
-            <a href="#comparativo" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Diferenciais</a>
-            <a href="#proposta" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Diagnóstico</a>
-            <a href="#faq" className="whitespace-nowrap hover:text-emerald-300 transition-colors">Dúvidas</a>
           </nav>
 
-          {/* Portais & CTA */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Acesso Cliente */}
-            <Link
-              href="/portal"
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:text-white hover:border-emerald-500/40 transition-colors"
-              title="Acessar Área do Cliente"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">Área do Cliente</span>
-              <span className="md:hidden">Cliente</span>
-            </Link>
+          {/* Menu Entrar + CTA Diagnóstico */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Dropdown discreto Entrar */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setLoginOpen((prev) => !prev)}
+                aria-expanded={loginOpen}
+                aria-haspopup="menu"
+                id="nav-entrar-trigger"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-1.5 sm:py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:text-white"
+              >
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Entrar</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${loginOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-            {/* Portal do Contador */}
-            <Link
-              href="/contador"
-              className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-[11px] font-bold text-amber-300/90 hover:text-amber-200 hover:border-amber-500/40 transition-colors"
-              title="Acessar Portal do Escritório Contábil"
-            >
-              <Building2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>Contador</span>
-            </Link>
+              {loginOpen && (
+                <div
+                  role="menu"
+                  aria-label="Acessos ao sistema"
+                  className="absolute right-0 mt-2 min-w-[190px] rounded-xl border border-slate-800 bg-slate-950/95 py-1.5 shadow-2xl backdrop-blur-xl z-50"
+                >
+                  <Link
+                    href="/portal"
+                    role="menuitem"
+                    onClick={() => setLoginOpen(false)}
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-900 hover:text-emerald-300 transition-colors"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Área do Cliente</span>
+                  </Link>
+                  <Link
+                    href="/contador"
+                    role="menuitem"
+                    onClick={() => setLoginOpen(false)}
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-900 hover:text-amber-300 transition-colors"
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Contador</span>
+                  </Link>
+                  <Link
+                    href="/admin/bpo"
+                    role="menuitem"
+                    onClick={() => setLoginOpen(false)}
+                    className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-900 hover:text-white transition-colors"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Gestor</span>
+                  </Link>
+                </div>
+              )}
+            </div>
 
-            {/* Torre BPO */}
-            <Link
-              href="/admin/bpo"
-              className="hidden xl:inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-200 hover:border-slate-700 transition-colors"
-              title="Acessar Torre de Controle Operacional"
-            >
-              <Settings className="w-3.5 h-3.5 text-slate-400" />
-              <span>Gestor</span>
-            </Link>
-
-            {/* CTA Diagnóstico */}
+            {/* Único botão verde de destaque no topo */}
             <a
               href={WA_DIAGNOSTICO}
               target="_blank"
               rel="noopener noreferrer"
               id="nav-cta-hero"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3 py-1.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-400/25 transition hover:-translate-y-0.5 hover:bg-emerald-300 sm:px-3.5 sm:py-2"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400 px-3.5 py-1.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-400/25 transition hover:-translate-y-0.5 hover:bg-emerald-300 sm:px-4 sm:py-2"
             >
               <MessageCircle className="h-3.5 w-3.5 shrink-0 fill-slate-950 stroke-none" />
               <span>Diagnóstico</span>
@@ -107,51 +152,37 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
 
             {/* Coluna de texto */}
             <div className="max-w-2xl">
-              {/* Badges de destaque */}
+              {/* Badge único de destaque */}
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-300">
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                   Controladoria Financeira Terceirizada
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3.5 py-1.5 text-xs font-bold text-amber-300">
-                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                  Parceria Oficial com Escritórios Contábeis
-                </span>
               </div>
 
-              {/* Headline Oficial Reestruturada */}
+              {/* Headline */}
               <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] xl:text-[3.1rem] font-black leading-[1.1] tracking-[-0.03em] text-white">
-                Controladoria Financeira Terceirizada e{' '}
-                <span className="text-shimmer-emerald block mt-1">BPO Inteligente</span>
+                Tenha um Financeiro Sênior{' '}
+                <span className="text-shimmer-emerald">pela metade do custo de um CLT.</span>
               </h1>
 
-              {/* Subheadline Oficial Reestruturada */}
+              {/* Subheadline */}
               <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-300 max-w-xl">
-                Elimine o trabalho operacional de contas a pagar, receber e conciliação bancária direto pelo WhatsApp. Sua empresa organizada e sua contabilidade abastecida até o 5º dia útil.
+                Elimine os R$ 4.000+/mês com encargos e risco trabalhista. Nossa equipe especialista cuida do seu contas a pagar, receber e conciliação diária pelo WhatsApp, com painel executivo em tempo real e contabilidade abastecida até o 5º dia útil.
               </p>
 
-              {/* Botões de Ação Primária (CTAs Conforme Ordem de Engenharia) */}
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-                {/* Botão 1: Solicitar Diagnóstico */}
+              {/* CTA Principal único */}
+              <div className="mt-8">
                 <a
                   href={WA_DIAGNOSTICO}
                   target="_blank"
                   rel="noopener noreferrer"
                   id="hero-cta-diagnostico"
-                  className="inline-flex items-center justify-center gap-2.5 rounded-2xl bg-emerald-400 px-7 py-4 text-base font-black text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300 sm:w-auto w-full"
+                  className="inline-flex items-center justify-center gap-2.5 rounded-2xl bg-emerald-400 px-8 py-4 text-base font-black text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300 sm:w-auto w-full"
                 >
                   <MessageCircle className="h-5 w-5 fill-slate-950 stroke-none" />
                   Solicitar Diagnóstico Financeiro
                   <ArrowRight className="h-5 w-5" />
-                </a>
-
-                {/* Botão 2: Sou Escritório Contábil */}
-                <a
-                  href="#contadores"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-6 py-4 font-bold text-amber-200 transition hover:bg-amber-500/20 hover:border-amber-400"
-                >
-                  <Building2 className="h-5 w-5 text-amber-400" />
-                  Sou Escritório Contábil
                 </a>
               </div>
 
@@ -161,7 +192,7 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
                   <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-emerald-500/30 transition-colors shadow-sm">
                     <span className="text-lg shrink-0 select-none">🛡️</span>
                     <div className="text-xs">
-                      <strong className="text-white font-bold block">Protocolo Zero Banking Access</strong>
+                      <strong className="text-white font-bold block">Segurança Total: Sem Acesso à Sua Conta Bancária</strong>
                       <span className="text-slate-400 text-[11px] leading-snug">Nunca pedimos senhas, tokens ou acesso ao seu internet banking.</span>
                     </div>
                   </div>
@@ -177,8 +208,8 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
                   <div className="flex items-start gap-2.5 rounded-xl border border-slate-800/90 bg-slate-900/80 p-3 hover:border-amber-500/30 transition-colors shadow-sm">
                     <span className="text-lg shrink-0 select-none">📊</span>
                     <div className="text-xs">
-                      <strong className="text-white font-bold block">Radar Semanal & DRE Analítica</strong>
-                      <span className="text-slate-400 text-[11px] leading-snug">Projeção de saldo livre toda segunda-feira e fechamento mensal claro.</span>
+                      <strong className="text-white font-bold block">Conciliação Diária & DRE Analítica</strong>
+                      <span className="text-slate-400 text-[11px] leading-snug">Conciliação bancária diária e fechamento mensal entregue até o 5º dia útil.</span>
                     </div>
                   </div>
 
@@ -194,7 +225,7 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
                 <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <Check className="h-3.5 w-3.5 text-emerald-400" />
-                    Diagnóstico inicial sem compromisso
+                    Conciliação bancária diária
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Shield className="h-3.5 w-3.5 text-emerald-400" />
@@ -202,7 +233,7 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5 text-amber-400" />
-                    Contabilidade abastecida pontualmente
+                    Contabilidade abastecida até o 5º dia útil
                   </span>
                 </div>
               </div>
@@ -214,8 +245,8 @@ export default function HeroSection({ scrolled }: HeroSectionProps) {
               <div className="absolute -top-3 -right-2 sm:right-2 z-20 hidden sm:flex items-center gap-2 bg-emerald-500 text-slate-950 rounded-xl px-3.5 py-2 shadow-xl shadow-emerald-500/30 pointer-events-none animate-pulse">
                 <MessageCircle className="w-4 h-4 font-black shrink-0 fill-slate-950 stroke-none" />
                 <div>
-                  <p className="text-[9px] font-bold leading-none uppercase tracking-wide">WhatsApp Oficial</p>
-                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">Contas e Comprovantes em Segundos</p>
+                  <p className="text-[9px] font-bold leading-none uppercase tracking-wide">Conciliação Diária</p>
+                  <p className="text-xs sm:text-sm font-black leading-none mt-0.5">Contas e Comprovantes no Zap</p>
                 </div>
               </div>
 

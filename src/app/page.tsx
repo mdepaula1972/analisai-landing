@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { CONTACT_EMAIL } from '@/lib/contact';
+import { WHATSAPP, WHATSAPP_DISPLAY, CONTACT_EMAIL } from '@/lib/contact';
 import {
   ChevronDown, MessageCircle, ArrowRight,
-  Sparkles, HeartHandshake, ShieldCheck, Building2,
+  Sparkles, ShieldCheck, Building2,
   Smartphone, Settings, Check, FileText, Lock,
-  TrendingUp, BarChart3, Clock, HelpCircle,
-  FileCheck2, FolderArchive, ArrowUpRight, CheckCircle2
+  TrendingUp, BarChart3,
+  FileCheck2, FolderArchive, ArrowUpRight, CheckCircle2,
 } from 'lucide-react';
 
 // Componentes BPO
@@ -20,7 +20,7 @@ import DashboardShowcase from '@/components/DashboardShowcase';
 
 // Link comercial oficial do WhatsApp
 const WA_COMERCIAL = WA_DIAGNOSTICO;
-const WA_PARCERIA = 'https://wa.me/5513920099874?text=Ol%C3%A1%2C%20sou%20contador%20e%20gostaria%20de%20conhecer%20a%20parceria%20de%20BPO%20do%20AnalisA%C3%AD';
+const WA_PARCERIA = WHATSAPP.parceria;
 
 // ── Hook de visibilidade ─────────────────────────────────────────────────────
 function useInView(threshold = 0.1) {
@@ -76,11 +76,11 @@ export default function BpoLandingPage() {
   const faqs = [
     {
       question: 'Como funciona o BPO Financeiro do AnalisAí no dia a dia?',
-      answer: 'O processo é extremamente natural e integrado ao WhatsApp. Ao longo do dia, você ou sua equipe fotografam boletos, notas fiscais ou mandam áudios com despesas de rua. Nossa inteligência faz a extração inicial e o time de controladoria valida, agenda os pagamentos, concilia centavo por centavo e mantém o fluxo de caixa sempre em dia.',
+      answer: 'O processo é extremamente natural e integrado ao WhatsApp. Ao longo do dia, você ou sua equipe fotografam boletos, notas fiscais ou mandam áudios com despesas de rua. Nossa inteligência faz a extração inicial e o time de controladoria valida, agenda os pagamentos, realiza a conciliação bancária diária centavo por centavo e mantém o fluxo de caixa sempre em dia.',
     },
     {
       question: 'O AnalisAí terá acesso à minha conta bancária ou senhas?',
-      answer: 'Não! Adotamos o Protocolo Zero Banking Access. Jamais solicitamos senhas, tokens ou permissão de movimentação bancária. O AnalisAí organiza, agenda e envia a linha digitável ou código Pix pronto para que você, titular da conta, efetue a aprovação final em 1 clique dentro do aplicativo do seu próprio banco.',
+      answer: 'Não! Adotamos o princípio de Segurança Total: Sem Acesso à Sua Conta Bancária. Jamais solicitamos senhas, tokens ou permissão de movimentação bancária. O AnalisAí organiza, agenda e envia a linha digitável ou código Pix pronto para que você, titular da conta, efetue a aprovação final em 1 clique dentro do aplicativo do seu próprio banco.',
     },
     {
       question: 'Como meu contador recebe os documentos e o fechamento do mês?',
@@ -88,15 +88,15 @@ export default function BpoLandingPage() {
     },
     {
       question: 'Como é calculada a mensalidade do serviço de BPO?',
-      answer: 'Nossa precificação é consultiva e personalizada de acordo com o porte e o volume operacional da sua empresa (quantidade média de lançamentos por mês, número de contas bancárias a conciliar e complexidade fiscal). Agendamos um diagnóstico inicial de 15 minutos para entender sua rotina e apresentar uma proposta sob medida com excelente relação custo-benefício.',
+      answer: 'Nossa precificação é consultiva e personalizada de acordo com o porte e o volume operacional da sua empresa (quantidade média de lançamentos por mês, número de contas bancárias a conciliar e complexidade fiscal). Agendamos um diagnóstico inicial para entender sua rotina e apresentar uma proposta sob medida pela metade do custo de um analista CLT.',
     },
     {
       question: 'Minha secretária ou assistente pode lançar contas sem ver meu saldo ou lucros?',
-      answer: 'Sim! Nosso fluxo pelo WhatsApp conta com proteção hierárquica de dados. Operadores e assistentes cadastrados podem enviar comprovantes, cadastrar contas e consultar vencimentos operacionais sem jamais ter acesso a extratos consolidados, saldos bancários ou margens de lucro da empresa.',
+      answer: 'Sim! Nosso fluxo pelo WhatsApp conta com Modo Equipe e proteção hierárquica de dados. Operadores e assistentes cadastrados podem enviar comprovantes, cadastrar contas e consultar vencimentos operacionais sem jamais ter acesso a extratos consolidados, saldos bancários ou margens de lucro da empresa.',
     },
     {
       question: 'O que é o Radar Semanal de Caixa e a DRE Gerencial?',
-      answer: 'Toda segunda-feira de manhã, enviamos um resumo preditivo com as entradas e saídas programadas para a semana e o saldo livre projetado. Até o dia 5 de cada mês, emitimos a DRE analítica detalhada com receitas, custos fixos/variáveis, apuração de margem e auditoria preventiva para evitar despesas pessoais na conta jurídica.',
+      answer: 'Toda segunda-feira de manhã, enviamos um resumo preditivo com as entradas e saídas programadas para a semana e o saldo livre projetado. Até o 5º dia útil de cada mês, emitimos a DRE analítica detalhada com receitas, custos fixos/variáveis, apuração de margem e auditoria preventiva para evitar despesas pessoais na conta jurídica.',
     },
   ];
 
@@ -124,13 +124,13 @@ export default function BpoLandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 text-center">
             {[
-              { valor: 'Até 5º Dia Útil', label: 'Pacote fiscal entregue ao contador' },
+              { valor: 'Até o 5º Dia Útil', label: 'Relatórios e pacote fiscal ao contador' },
+              { valor: 'Conciliação Diária', label: 'Acompanhamento financeiro todos os dias' },
               { valor: 'Zero Senhas', label: 'Sua conta bancária 100% blindada' },
-              { valor: '100% no Zap', label: 'Sem planilhas ou sistemas complexos' },
               { valor: 'DRE & Radar', label: 'Previsibilidade semanal e mensal' },
             ].map((stat) => (
               <div key={stat.label}>
-                <p className="text-3xl sm:text-4xl font-black text-amber-300 mb-1">{stat.valor}</p>
+                <p className="text-2xl sm:text-3xl lg:text-4xl font-black text-amber-300 mb-1">{stat.valor}</p>
                 <p className="text-xs sm:text-sm text-slate-400">{stat.label}</p>
               </div>
             ))}
@@ -200,7 +200,7 @@ export default function BpoLandingPage() {
                   <Lock className="w-7 h-7" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-3">
-                  Protocolo Zero Banking Access
+                  Segurança Total: Sem Acesso à Sua Conta Bancária
                 </h3>
                 <p className="text-slate-400 text-sm leading-relaxed mb-6">
                   Sua segurança é inegociável. Nunca pedimos senhas, tokens ou autorização de movimentação bancária. Agendamos e entregamos linhas digitáveis prontas para autorização em 1 clique pelo titular.
@@ -235,17 +235,17 @@ export default function BpoLandingPage() {
                   Inteligência e Previsibilidade
                 </h3>
                 <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Não somos apenas digitadores de contas passadas. Toda segunda-feira você recebe o Radar Semanal de Caixa e, no fechamento do mês, uma DRE analítica detalhada com suporte de controladoria consultiva.
+                  Não somos apenas digitadores de contas passadas. Realizamos conciliação bancária diária, enviamos toda segunda-feira o Radar Semanal de Caixa e entregamos até o 5º dia útil a DRE analítica com suporte de controladoria consultiva.
                 </p>
               </div>
               <ul className="space-y-2.5 text-xs text-slate-300 border-t border-slate-800/80 pt-5">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-teal-400 shrink-0" />
-                  <span>Radar Semanal de Liquidez às segundas</span>
+                  <span>Conciliação bancária diária e Radar às segundas</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-teal-400 shrink-0" />
-                  <span>DRE Gerencial detalhada no dia 5</span>
+                  <span>DRE Gerencial detalhada até o 5º dia útil</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-teal-400 shrink-0" />
@@ -282,7 +282,7 @@ export default function BpoLandingPage() {
               id="painel-cta-whatsapp"
               className="inline-flex items-center gap-2.5 rounded-2xl bg-emerald-400 px-7 py-3.5 text-sm font-black text-slate-950 shadow-xl shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-300"
             >
-              <MessageCircle className="h-4 w-4 fill-slate-950 stroke-none" /> Agendar Demonstração Operacional
+              <MessageCircle className="h-4 w-4 fill-slate-950 stroke-none" /> Solicitar Diagnóstico Financeiro
             </a>
             <Link
               href="/portal"
@@ -294,8 +294,187 @@ export default function BpoLandingPage() {
         </div>
       </section>
 
+      {/* ── O QUE ENTREGAMOS TODO MÊS (RELATÓRIOS) ── */}
+      <ReportShowcase />
+
+      {/* ── TABELA COMPARATIVA (BPO ANALISAÍ.ME VS ANALISTA CLT) ── */}
+      <SolutionsComparisonSection waUrl={WA_COMERCIAL} />
+
+      {/* ── AUTORIDADE + SEGURANÇA + SETORES ── */}
+      <TrustSection waUrl={WA_COMERCIAL} />
+
+      {/* ── SEÇÃO: DIAGNÓSTICO CONSULTIVO & PROPOSTA SOB MEDIDA ── */}
+      <section id="proposta" className="relative py-24 sm:py-32 overflow-hidden bg-slate-950 border-t border-slate-800/60">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_40%,rgba(16,185,129,0.1),transparent)]" />
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[.14em] text-emerald-300 mb-4">
+              <ShieldCheck className="h-3.5 w-3.5" /> Proposta Consultiva
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black text-white mb-5 leading-tight">
+              Precificação sob medida para o volume da sua empresa
+            </h2>
+            <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+              Não acreditamos em pacotes genéricos com taxas ocultas. Cada empresa tem um volume específico de contas, contas bancárias e rotinas. Fazemos um diagnóstico rápido para entregar a solução ideal pela metade do custo de um CLT.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {/* Modalidade 1 */}
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8 sm:p-10 flex flex-col justify-between hover:border-emerald-500/30 transition-all">
+              <div>
+                <span className="inline-block rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400 uppercase tracking-wider mb-4">
+                  Modalidade Operacional
+                </span>
+                <h3 className="text-2xl font-black text-white mb-2">BPO Gestão Financeira</h3>
+                <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                  Ideal para empresas que precisam eliminar a rotina pesada de lançar pagamentos, emitir lembretes e conciliar contas com rigor.
+                </p>
+
+                <ul className="space-y-3 text-sm text-slate-300 mb-8">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Contas a pagar e receber via WhatsApp</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Conciliação bancária diária conferida</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Segurança Total: Sem Acesso à Sua Conta Bancária</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Fechamento fiscal e envio ao contador até o 5º dia útil</span>
+                  </li>
+                </ul>
+              </div>
+
+              <a
+                href={WA_COMERCIAL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 text-sm transition-colors border border-slate-700"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                Solicitar Diagnóstico Financeiro
+              </a>
+            </div>
+
+            {/* Modalidade 2 */}
+            <div className="rounded-3xl border-2 border-emerald-500/60 bg-gradient-to-b from-slate-900/90 to-slate-900/50 p-8 sm:p-10 flex flex-col justify-between shadow-2xl shadow-emerald-500/10 relative">
+              <div className="absolute top-0 right-8 -translate-y-1/2 rounded-full bg-emerald-400 px-3.5 py-1 text-[11px] font-black text-slate-950 uppercase tracking-wider">
+                Mais Solicitado
+              </div>
+              <div>
+                <span className="inline-block rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs font-black text-emerald-300 uppercase tracking-wider mb-4">
+                  Modalidade Estratégica
+                </span>
+                <h3 className="text-2xl font-black text-white mb-2">BPO Controladoria & CFO</h3>
+                <p className="text-slate-400 text-sm leading-relaxed mb-6">
+                  Para empresários que buscam visão de futuro, previsibilidade de fluxo de caixa e consultoria para redução de custos e blindagem.
+                </p>
+
+                <ul className="space-y-3 text-sm text-slate-300 mb-8">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Tudo da modalidade Gestão Financeira</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Radar Semanal de Liquidez toda segunda-feira</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>DRE Gerencial analítica entregue até o 5º dia útil</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Auditoria de despesas particulares (PF x PJ)</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Reunião mensal de alinhamento e estratégia</span>
+                  </li>
+                </ul>
+              </div>
+
+              <a
+                href={WA_COMERCIAL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black py-4 text-sm transition-all shadow-xl shadow-emerald-500/25 hover:-translate-y-0.5"
+              >
+                <MessageCircle className="w-4 h-4 fill-slate-950 stroke-none" />
+                Solicitar Diagnóstico Financeiro
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section id="faq" className="py-20 sm:py-28 bg-slate-900/30 border-t border-slate-800/60">
+        <div
+          ref={faqRef}
+          className={`mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+        >
+          <div className="text-center mb-14">
+            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Perguntas frequentes</h2>
+            <p className="text-slate-400">Tudo o que você precisa saber sobre a Controladoria e BPO AnalisAí.</p>
+          </div>
+          <div className="space-y-3">
+            {faqs.map((faq) => (
+              <FaqItem key={faq.question} {...faq} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA FINAL ── */}
+      <section className="relative py-24 overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_50%,rgba(245,158,11,0.12),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-grid-amber opacity-20" />
+
+        <div
+          ref={ctaRef}
+          className={`mx-auto max-w-3xl px-4 sm:px-6 text-center transition-all duration-700 ${ctaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+        >
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[.14em] text-amber-300">
+            <Sparkles className="h-3.5 w-3.5" /> Comece agora mesmo
+          </div>
+          <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 leading-tight">
+            Pronto para colocar seu financeiro{' '}
+            <span className="text-shimmer-amber">nas mãos de especialistas?</span>
+          </h2>
+          <p className="text-xl text-slate-300 mb-10 leading-relaxed">
+            Elimine a desordem fiscal, ganhe previsibilidade e abasteça seu contador até o 5º dia útil sem custo de CLT.
+          </p>
+          <div className="flex justify-center">
+            <a
+              href={WA_COMERCIAL}
+              target="_blank"
+              rel="noopener noreferrer"
+              id="final-cta-primary"
+              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-400 px-8 py-4 text-base font-black text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300"
+            >
+              <MessageCircle className="h-5 w-5 fill-slate-950 stroke-none" />
+              Solicitar Diagnóstico Financeiro
+              <ArrowRight className="h-5 w-5" />
+            </a>
+          </div>
+          <p className="mt-8 text-sm text-slate-500">
+            Ou envie um e-mail para nossa equipe:{' '}
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-amber-300 hover:text-amber-200 font-semibold transition-colors">
+              {CONTACT_EMAIL}
+            </a>
+          </p>
+        </div>
+      </section>
+
       {/* ── SEÇÃO: PARA ESCRITÓRIOS DE CONTABILIDADE (PARCERIA) ── */}
-      <section id="contadores" className="relative py-24 sm:py-32 overflow-hidden bg-slate-950 border-b border-slate-800/60">
+      <section id="contadores" className="relative py-24 sm:py-32 overflow-hidden bg-slate-950 border-t border-slate-800/60">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_80%_20%,rgba(245,158,11,0.08),transparent)]" />
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div
@@ -334,7 +513,7 @@ export default function BpoLandingPage() {
                   <div>
                     <strong className="text-white text-sm font-bold block mb-1">Conciliação Conferida Centavo por Centavo</strong>
                     <span className="text-slate-400 text-xs leading-relaxed">
-                      Acabe com as lacunas de conciliação. Toda entrada e saída é checada ao longo do mês pelo nosso time de controladoria.
+                      Acabe com as lacunas de conciliação. Toda entrada e saída é checada diariamente pelo nosso time de controladoria.
                     </span>
                   </div>
                 </div>
@@ -447,192 +626,6 @@ export default function BpoLandingPage() {
         </div>
       </section>
 
-      {/* ── O QUE ENTREGAMOS TODO MÊS (RELATÓRIOS) ── */}
-      <ReportShowcase />
-
-      {/* ── TABELA COMPARATIVA (ANALISAÍ VS OUTRAS SOLUÇÕES) ── */}
-      <SolutionsComparisonSection waUrl={WA_COMERCIAL} />
-
-      {/* ── SEGURANÇA + SETORES ── */}
-      <TrustSection waUrl={WA_COMERCIAL} />
-
-      {/* ── SEÇÃO: DIAGNÓSTICO CONSULTIVO & PROPOSTA SOB MEDIDA ── */}
-      <section id="proposta" className="relative py-24 sm:py-32 overflow-hidden bg-slate-950 border-t border-slate-800/60">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_40%,rgba(16,185,129,0.1),transparent)]" />
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[.14em] text-emerald-300 mb-4">
-              <ShieldCheck className="h-3.5 w-3.5" /> Proposta Consultiva
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white mb-5 leading-tight">
-              Precificação sob medida para o volume da sua empresa
-            </h2>
-            <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-              Não acreditamos em pacotes genéricos com taxas ocultas. Cada empresa tem um volume específico de contas, contas bancárias e rotinas. Fazemos um diagnóstico rápido de 15 minutos para entregar a solução ideal.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-            {/* Modalidade 1 */}
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8 sm:p-10 flex flex-col justify-between hover:border-emerald-500/30 transition-all">
-              <div>
-                <span className="inline-block rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400 uppercase tracking-wider mb-4">
-                  Modalidade Operacional
-                </span>
-                <h3 className="text-2xl font-black text-white mb-2">BPO Gestão Financeira</h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Ideal para empresas que precisam eliminar a rotina pesada de lançar pagamentos, emitir lembretes e conciliar contas com rigor.
-                </p>
-
-                <ul className="space-y-3 text-sm text-slate-300 mb-8">
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Contas a pagar e receber via WhatsApp</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Conciliação bancária diária conferida</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Protocolo Zero Banking Access (segurança total)</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Fechamento fiscal e envio direto ao contador</span>
-                  </li>
-                </ul>
-              </div>
-
-              <a
-                href={WA_COMERCIAL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 text-sm transition-colors border border-slate-700"
-              >
-                <MessageCircle className="w-4 h-4 text-emerald-400" />
-                Solicitar Proposta para Gestão
-              </a>
-            </div>
-
-            {/* Modalidade 2 */}
-            <div className="rounded-3xl border-2 border-emerald-500/60 bg-gradient-to-b from-slate-900/90 to-slate-900/50 p-8 sm:p-10 flex flex-col justify-between shadow-2xl shadow-emerald-500/10 relative">
-              <div className="absolute top-0 right-8 -translate-y-1/2 rounded-full bg-emerald-400 px-3.5 py-1 text-[11px] font-black text-slate-950 uppercase tracking-wider">
-                Mais Solicitado
-              </div>
-              <div>
-                <span className="inline-block rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs font-black text-emerald-300 uppercase tracking-wider mb-4">
-                  Modalidade Estratégica
-                </span>
-                <h3 className="text-2xl font-black text-white mb-2">BPO Controladoria & CFO</h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Para empresários que buscam visão de futuro, previsibilidade de fluxo de caixa e consultoria para redução de custos e blindagem.
-                </p>
-
-                <ul className="space-y-3 text-sm text-slate-300 mb-8">
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Tudo da modalidade Gestão Financeira</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Radar Semanal de Liquidez toda segunda-feira</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>DRE Gerencial analítica detalhada com indicadores</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Auditoria de despesas particulares (PF x PJ)</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Reunião mensal de alinhamento e estratégia</span>
-                  </li>
-                </ul>
-              </div>
-
-              <a
-                href={WA_COMERCIAL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black py-4 text-sm transition-all shadow-xl shadow-emerald-500/25 hover:-translate-y-0.5"
-              >
-                <MessageCircle className="w-4 h-4 fill-slate-950 stroke-none" />
-                Agendar Diagnóstico Gratuito
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── FAQ ── */}
-      <section id="faq" className="py-20 sm:py-28 bg-slate-900/30 border-t border-slate-800/60">
-        <div
-          ref={faqRef}
-          className={`mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 transition-all duration-700 ${faqInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-        >
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">Perguntas frequentes</h2>
-            <p className="text-slate-400">Tudo o que você precisa saber sobre a Controladoria e BPO AnalisAí.</p>
-          </div>
-          <div className="space-y-3">
-            {faqs.map((faq) => (
-              <FaqItem key={faq.question} {...faq} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA FINAL ── */}
-      <section className="relative py-24 overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_50%,rgba(245,158,11,0.12),transparent)]" />
-        <div className="pointer-events-none absolute inset-0 bg-grid-amber opacity-20" />
-
-        <div
-          ref={ctaRef}
-          className={`mx-auto max-w-3xl px-4 sm:px-6 text-center transition-all duration-700 ${ctaInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-        >
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[.14em] text-amber-300">
-            <Sparkles className="h-3.5 w-3.5" /> Comece agora mesmo
-          </div>
-          <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 leading-tight">
-            Pronto para colocar seu financeiro{' '}
-            <span className="text-shimmer-amber">nas mãos de especialistas?</span>
-          </h2>
-          <p className="text-xl text-slate-300 mb-10 leading-relaxed">
-            Elimine a desordem fiscal, ganhe previsibilidade e abasteça seu contador sem atrito.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href={WA_COMERCIAL}
-              target="_blank"
-              rel="noopener noreferrer"
-              id="final-cta-primary"
-              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-400 px-8 py-4 text-base font-black text-slate-950 shadow-xl shadow-emerald-500/25 transition hover:-translate-y-1 hover:bg-emerald-300"
-            >
-              <MessageCircle className="h-5 w-5 fill-slate-950 stroke-none" />
-              Solicitar Diagnóstico Financeiro
-              <ArrowRight className="h-5 w-5" />
-            </a>
-            <Link
-              href="/contador"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 px-6 py-4 font-bold text-slate-200 transition hover:border-amber-300/50 hover:text-amber-200"
-            >
-              <Building2 className="w-5 h-5 text-amber-400" />
-              Sou Escritório Contábil
-            </Link>
-          </div>
-          <p className="mt-8 text-sm text-slate-500">
-            Ou envie um e-mail para nossa equipe:{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-amber-300 hover:text-amber-200 font-semibold transition-colors">
-              {CONTACT_EMAIL}
-            </a>
-          </p>
-        </div>
-      </section>
-
       {/* ── FOOTER REFORMULADO COM PORTAIS DE ACESSO ── */}
       <footer className="border-t border-slate-800/60 bg-slate-950 py-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -641,7 +634,7 @@ export default function BpoLandingPage() {
             <div className="lg:col-span-2">
               <p className="text-base font-black text-white mb-2">AnalisAI.me</p>
               <p className="text-sm text-slate-400 leading-relaxed max-w-sm mb-4">
-                Plataforma de Controladoria Terceirizada (BPO Financeiro) para pequenas e médias empresas e escritórios contábeis. Gestão de pagamentos, conciliação e previsibilidade sem fricção.
+                Plataforma de Controladoria Terceirizada (BPO Financeiro) para pequenas e médias empresas e escritórios contábeis. Gestão de pagamentos, conciliação diária e fechamento até o 5º dia útil.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -683,6 +676,17 @@ export default function BpoLandingPage() {
                 <li><Link href="/privacidade" className="hover:text-amber-300 transition-colors">Política de Privacidade</Link></li>
                 <li><Link href="/termos" className="hover:text-amber-300 transition-colors">Termos de Uso</Link></li>
                 <li><Link href="/contrato" className="hover:text-amber-300 transition-colors">Contrato de BPO Modular</Link></li>
+                <li>
+                  <a
+                    href={WA_COMERCIAL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-emerald-400 transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                    WhatsApp: {WHATSAPP_DISPLAY}
+                  </a>
+                </li>
                 <li>
                   <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-amber-300 transition-colors">{CONTACT_EMAIL}</a>
                 </li>

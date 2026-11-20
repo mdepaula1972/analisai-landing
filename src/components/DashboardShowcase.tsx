@@ -54,7 +54,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 1,
     label: 'Margem Bruta',
-    value: pct(55.7),
+    value: pct(56.0),
     trend: +2.1,
     benchmarkLabel: 'Eficiência da atividade principal',
     icon: <TrendingUp className="w-3.5 h-3.5" />,
@@ -62,7 +62,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 2,
     label: 'Margem Contribuição',
-    value: pct(34.6),
+    value: pct(42.5),
     trend: -0.8,
     benchmarkLabel: 'Após despesas variáveis',
     icon: <BarChart2 className="w-3.5 h-3.5" />,
@@ -70,7 +70,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 3,
     label: 'Margem Operacional',
-    value: pct(10.7),
+    value: pct(15.4),
     trend: +1.4,
     benchmarkLabel: 'Após despesas operacionais',
     icon: <Activity className="w-3.5 h-3.5" />,
@@ -78,8 +78,8 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 4,
     label: 'EBITDA Gerencial',
-    value: fmt(513507),
-    trend: +5.2,
+    value: fmt(217756),
+    trend: +4.8,
     benchmarkLabel: 'Geração operacional de caixa',
     highlight: true,
     icon: <DollarSign className="w-3.5 h-3.5" />,
@@ -87,15 +87,15 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 5,
     label: 'Margem EBITDA',
-    value: pct(10.7),
-    trend: +0.3,
+    value: pct(15.4),
+    trend: +0.9,
     benchmarkLabel: 'EBITDA / Receita Bruta',
     icon: <Sparkles className="w-3.5 h-3.5" />,
   },
   {
     id: 6,
     label: 'Índice Custos Op.',
-    value: pct(44.3),
+    value: pct(44.0),
     trend: -1.2,
     benchmarkLabel: 'Custos / Receita Líquida',
     icon: <Wallet className="w-3.5 h-3.5" />,
@@ -103,7 +103,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 7,
     label: 'Margem Pré-IR/CSLL',
-    value: pct(20.9),
+    value: pct(14.8),
     trend: +0.7,
     benchmarkLabel: 'Após ajustes do exercício',
     icon: <BarChart2 className="w-3.5 h-3.5" />,
@@ -111,7 +111,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 8,
     label: 'Margem Líquida',
-    value: pct(14.9),
+    value: pct(13.5),
     trend: +1.1,
     benchmarkLabel: 'Lucro / Receita Bruta',
     icon: <TrendingUp className="w-3.5 h-3.5" />,
@@ -119,7 +119,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 9,
     label: 'Despesas Operac.',
-    value: pct(3.1),
+    value: pct(4.2),
     trend: -0.5,
     benchmarkLabel: 'Despesas / Receita Bruta',
     icon: <Activity className="w-3.5 h-3.5" />,
@@ -127,7 +127,7 @@ const METRIC_CARDS: MetricCard[] = [
   {
     id: 10,
     label: 'Despesas Rateadas',
-    value: pct(39.1),
+    value: pct(35.5),
     trend: -2.3,
     highlight: true,
     benchmarkLabel: 'Despesas Gerais / Rateio',
@@ -136,21 +136,21 @@ const METRIC_CARDS: MetricCard[] = [
 ];
 
 const CASH_FLOW_CARDS = [
-  { label: 'Entradas Operacionais', value: fmt(5549609), sub: 'Vendas, Serviços + Recorrentes', up: true },
-  { label: 'Total de Saídas', value: fmt(5454103), sub: 'Custos + Despesas + Impostos', up: false },
-  { label: 'Fluxo de Caixa Livre (FCL)', value: fmt(1317262), sub: 'Margem FCL: 23,7%', up: true },
+  { label: 'Entradas Operacionais', value: fmt(1414000), sub: 'Média R$ 202k/mês · Vendas e Serviços', up: true },
+  { label: 'Total de Saídas', value: fmt(1223110), sub: 'Custos + Despesas + Impostos', up: false },
+  { label: 'Fluxo de Caixa Livre (FCL)', value: fmt(190890), sub: 'Margem FCL: 13,5% (R$ 27,3k/mês)', up: true },
 ];
 
 const DRE_ROWS: DRERow[] = [
-  { label: '(+) Receita Operacional Bruta', total: 5549609, media: 792801, signal: '+' },
-  { label: '(-) Total de Impostos', total: 1027978, signal: '-', media: 146854 },
-  { label: '(-) Custos Operacionais', total: 2128653, signal: '-', media: 304092 },
-  { label: '(-) Despesas Rateadas / Gerais', total: 1879469, signal: '-', media: 268495 },
-  { label: '(=) Resultado (Lucro/Prejuízo)', total: 513506, media: 73358, signal: '=', highlight: true },
+  { label: '(+) Receita Operacional Bruta', total: 1414000, media: 202000, signal: '+' },
+  { label: '(-) Total de Impostos', total: 176750, signal: '-', media: 25250 },
+  { label: '(-) Custos Operacionais', total: 544390, signal: '-', media: 77770 },
+  { label: '(-) Despesas Rateadas / Gerais', total: 501970, signal: '-', media: 71710 },
+  { label: '(=) Resultado (Lucro/Prejuízo)', total: 190890, media: 27270, signal: '=', highlight: true },
 ];
 
 const MONTHS = ['Jan/26', 'Fev/26', 'Mar/26', 'Abr/26', 'Mai/26', 'Jun/26', 'Jul/26'];
-const MARGIN_EVOLUTION = [59.5, 45.7, 41.5, 55.7, 49.7, 53.1, 56.2];
+const MARGIN_EVOLUTION = [54.8, 52.3, 51.9, 55.4, 54.1, 55.6, 56.0];
 
 // ── Sub-componentes ──────────────────────────────────────────────────────────
 
@@ -328,7 +328,7 @@ export default function DashboardShowcase() {
                   </span>
                 </div>
                 <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">
-                  Empresa Modelo · Período: Jan–Jul/26 (7 meses) · DRE Gerencial
+                  Empresa Modelo · Jan–Jul/26 (7 meses · R$ 202k/mês) · DRE Gerencial
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -345,7 +345,7 @@ export default function DashboardShowcase() {
             <div className="flex items-start sm:items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
               <p className="text-[9px] sm:text-[10px] text-amber-300 font-semibold leading-tight">
-                <span className="font-black">Queda de Margem:</span> A margem do FCL caiu 32% em Jul/26 vs Jun/26. Verifique os custos operacionais deste período.
+                <span className="font-black">Queda de Margem:</span> O FCL mensal caiu 28% em Jul/26 vs Jun/26 (R$ 31k → R$ 22k). Verifique manutenção pontual do período.
               </p>
             </div>
 
@@ -372,7 +372,7 @@ export default function DashboardShowcase() {
                       <TrendingUp className="w-3 h-3 text-amber-400" /> Evolução Mensal — Margem Bruta
                     </p>
                     <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                      56,2% no último mês
+                      56,0% no último mês
                     </span>
                   </div>
 
@@ -391,7 +391,7 @@ export default function DashboardShowcase() {
                       <polygon
                         points={`0,80 ${MARGIN_EVOLUTION.map((v, i) => {
                           const x = (i / (MARGIN_EVOLUTION.length - 1)) * 360;
-                          const y = 80 - ((v - 35) / 30) * 65;
+                          const y = 80 - ((v - 49) / 10) * 65;
                           return `${x.toFixed(1)},${y.toFixed(1)}`;
                         }).join(' ')} 360,80`}
                         fill="url(#showcase-area-grad)"
@@ -399,7 +399,7 @@ export default function DashboardShowcase() {
                       <polyline
                         points={MARGIN_EVOLUTION.map((v, i) => {
                           const x = (i / (MARGIN_EVOLUTION.length - 1)) * 360;
-                          const y = 80 - ((v - 35) / 30) * 65;
+                          const y = 80 - ((v - 49) / 10) * 65;
                           return `${x.toFixed(1)},${y.toFixed(1)}`;
                         }).join(' ')}
                         fill="none"
@@ -410,7 +410,7 @@ export default function DashboardShowcase() {
                       />
                       {MARGIN_EVOLUTION.map((v, i) => {
                         const x = (i / (MARGIN_EVOLUTION.length - 1)) * 360;
-                        const y = 80 - ((v - 35) / 30) * 65;
+                        const y = 80 - ((v - 49) / 10) * 65;
                         return (
                           <g key={i}>
                             <circle cx={x} cy={y} r="3.5" fill="#f59e0b" />
@@ -494,7 +494,7 @@ export default function DashboardShowcase() {
                 <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
                   <span className="text-[9px] sm:text-[10px] text-slate-400 font-semibold">Margem Líquida Consolidada</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm font-black text-emerald-400">9,3%</span>
+                    <span className="text-xs sm:text-sm font-black text-emerald-400">13,5%</span>
                     <TrendBadge trend={+1.1} />
                   </div>
                 </div>

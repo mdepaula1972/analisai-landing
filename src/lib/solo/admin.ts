@@ -1332,7 +1332,7 @@ export async function inviteContactVip(
     };
   }
 
-  const botVariations = getIdentifierVariations(OFFICIAL_BOT_WHATSAPP || '5513920099874');
+  const botVariations = getIdentifierVariations(OFFICIAL_BOT_WHATSAPP || '551331500987');
   if (targetVariations.some((v) => botVariations.includes(v))) {
     return {
       success: false,

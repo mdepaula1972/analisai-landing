@@ -6,46 +6,46 @@ import {
   Sparkles, CheckCircle2, BarChart2, TrendingUp,
 } from 'lucide-react';
 
-// ── Dados simulados ───────────────────────────────────────────────────────────
+// ── Dados simulados (PME realista · média R$ 202k/mês) ────────────────────────
 
 const DRE_ROWS = [
-  { label: '(+) Receita Operacional Bruta',  value: 5_549_609, signal: '+' as const },
-  { label: '(-) Total de Impostos',          value: 1_027_978, signal: '-' as const },
-  { label: '(-) Custos Operacionais',        value: 2_128_653, signal: '-' as const },
-  { label: '(-) Despesas Rateadas / Gerais', value: 1_879_469, signal: '-' as const },
-  { label: '(=) Resultado (Lucro/Prejuízo)', value: 513_506,   signal: '=' as const, highlight: true },
+  { label: '(+) Receita Operacional Bruta',  value: 1_414_000, signal: '+' as const },
+  { label: '(-) Total de Impostos',          value: 176_750,   signal: '-' as const },
+  { label: '(-) Custos Operacionais',        value: 544_390,   signal: '-' as const },
+  { label: '(-) Despesas Rateadas / Gerais', value: 501_970,   signal: '-' as const },
+  { label: '(=) Resultado (Lucro/Prejuízo)', value: 190_890,   signal: '=' as const, highlight: true },
 ];
 
 function fmt(n: number) {
-  return `R$ ${(n / 1000).toFixed(0)}k`;
+  return `R$ ${Math.round(n / 1000).toLocaleString('pt-BR')}k`;
 }
 
 // Waterfall: Receita → Impostos → Custos → Despesas → Resultado
 const WATERFALL = [
-  { label: 'Receita',   value: 5549, color: '#10b981', type: 'bar' },
-  { label: 'Impostos',  value: 1028, color: '#ef4444', type: 'sub' },
-  { label: 'Custos',    value: 2129, color: '#ef4444', type: 'sub' },
-  { label: 'Despesas',  value: 1879, color: '#f97316', type: 'sub' },
-  { label: 'FCL',       value: 513,  color: '#f59e0b', type: 'result' },
+  { label: 'Receita',   value: 1414, color: '#10b981', type: 'bar' },
+  { label: 'Impostos',  value: 177,  color: '#ef4444', type: 'sub' },
+  { label: 'Custos',    value: 544,  color: '#ef4444', type: 'sub' },
+  { label: 'Despesas',  value: 502,  color: '#f97316', type: 'sub' },
+  { label: 'FCL',       value: 191,  color: '#f59e0b', type: 'result' },
 ];
 
-const MAX_VAL = 5549;
+const MAX_VAL = 1414;
 
 const RECOMENDACOES = [
   {
     icon: <TrendingUp className="w-4 h-4 text-amber-400" />,
-    titulo: 'Margem Bruta estável acima de 50%',
-    texto: 'A eficiência operacional principal está saudável. Foco agora deve ser na redução de despesas rateadas, que respondem por 34% das saídas totais.',
+    titulo: 'Margem Bruta estável acima de 55%',
+    texto: 'A eficiência operacional principal fechou em 56,0%. Foco agora deve ser na redução de despesas gerais, que respondem por 35,5% do faturamento.',
   },
   {
     icon: <BarChart2 className="w-4 h-4 text-emerald-400" />,
-    titulo: 'FCL com queda de 32% em jul/26',
-    texto: 'O Fluxo de Caixa Livre caiu de R$92k para R$63k no período. Identificamos aumento atípico em "Manutenção Corretiva" (R$215k) como principal driver.',
+    titulo: 'FCL com queda de 28% em jul/26',
+    texto: 'O Fluxo de Caixa Livre mensal recuou de R$ 31k para R$ 22k no período. Identificamos gasto pontual em "Manutenção e Equipamentos" (R$ 11,4k) como principal driver.',
   },
   {
     icon: <Sparkles className="w-4 h-4 text-blue-400" />,
     titulo: 'Oportunidade: Renegociar custos fixos recorrentes',
-    texto: 'Despesas com benefícios e alimentação somam R$380k no período. Consolidação de fornecedores pode gerar economia estimada de 12% ao mês.',
+    texto: 'Contratos recorrentes de software, telefonia e insumos somam R$ 48k no período. Consolidação de fornecedores pode gerar economia estimada de R$ 5,7k nos próximos meses.',
   },
 ];
 
@@ -66,10 +66,10 @@ export default function ReportShowcase() {
           </span>
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-5 leading-tight">
             Relatório Executivo Gerencial{' '}
-            <span className="text-shimmer-amber">pronto no dia 10</span>
+            <span className="text-shimmer-amber">entregue até o 5º dia útil</span>
           </h2>
           <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-            Sem planilhas confusas. Seu gestor recebe um relatório completo com DRE, análise de margens, fluxo de caixa e recomendações práticas — em PDF e no painel digital.
+            Sem planilhas confusas. Além da conciliação bancária diária, você recebe até o 5º dia útil um relatório completo com DRE, análise de margens, fluxo de caixa e recomendações práticas — em PDF, no painel digital e com pacote fiscal pronto para a contabilidade.
           </p>
         </div>
 
@@ -84,7 +84,7 @@ export default function ReportShowcase() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                 <div>
                   <h3 className="text-sm font-black text-white">DRE Sintética — Consolidado</h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Painel Executivo · Empresa Modelo · Jan–Jul/26</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Painel Executivo · Empresa Modelo (R$ 202k/mês) · Jan–Jul/26</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">Gerado por IA</span>
@@ -134,7 +134,7 @@ export default function ReportShowcase() {
               <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
                 <span className="text-[10px] text-slate-500 font-semibold">Margem Líquida Consolidada</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-black text-emerald-400">9,3%</span>
+                  <span className="text-sm font-black text-emerald-400">13,5%</span>
                   <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
                     <ArrowUpRight className="w-2.5 h-2.5" /> +1,1pp
                   </span>
@@ -161,7 +161,9 @@ export default function ReportShowcase() {
                           style={{ width: `${pct}%`, backgroundColor: item.color, opacity: item.type === 'sub' ? 0.75 : 1 }}
                         />
                       </div>
-                      <span className="text-[10px] font-bold text-white w-12 shrink-0 tabular-nums">R$ {item.value}k</span>
+                      <span className="text-[10px] font-bold text-white w-16 shrink-0 tabular-nums text-right">
+                        R$ {item.value.toLocaleString('pt-BR')}k
+                      </span>
                     </div>
                   );
                 })}
@@ -180,7 +182,7 @@ export default function ReportShowcase() {
               <h3 className="text-base font-black text-white">Parecer Executivo Analítico</h3>
             </div>
             <p className="text-[11px] text-slate-500 mb-5">
-              Inteligência Analítica BPO · Empresa Modelo · Período: Jan–Jul/26 · Elaborado em 29/08/2026
+              Inteligência Analítica BPO · Empresa Modelo · Período: Jan–Jul/26 · Entregue até o 5º dia útil
             </p>
 
             <div className="space-y-4">
@@ -202,22 +204,22 @@ export default function ReportShowcase() {
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Este parecer é elaborado mensalmente pela equipe de BPO Financeiro e revisado por analista sênior antes da entrega ao cliente.
+                  Este parecer é elaborado mensalmente pela equipe de BPO Financeiro e revisado por controladoria sênior antes da entrega até o 5º dia útil.
                 </p>
               </div>
             </div>
 
             {/* Entregas incluídas */}
             <div className="mt-5 rounded-xl bg-slate-800/60 p-4">
-              <p className="text-[10px] font-extrabold text-slate-300 uppercase tracking-wide mb-3">📦 Entregáveis incluídos</p>
+              <p className="text-[10px] font-extrabold text-slate-300 uppercase tracking-wide mb-3">Entregáveis incluídos</p>
               <ul className="space-y-1.5">
                 {[
-                  'DRE Gerencial Sintética e Analítica',
+                  'Conciliação bancária diária de todas as contas',
+                  'DRE Gerencial Sintética e Analítica (até o 5º dia útil)',
                   'Gráficos de Evolução de Margens',
                   'Análise de Fluxo de Caixa Livre (FCL)',
-                  'Comparativo vs. mês anterior',
-                  'Parecer com recomendações práticas',
-                  'Acesso ao Painel Executivo Digital',
+                  'Pacote Fiscal em .ZIP + CSV estruturado para contabilidade',
+                  'Parecer com recomendações práticas + Painel Executivo Digital',
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-[11px] text-slate-300">
                     <CheckCircle2 className="w-3 h-3 text-amber-400 shrink-0" />

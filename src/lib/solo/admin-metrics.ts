@@ -75,7 +75,7 @@ export async function collectAdminMetrics(): Promise<AdminMetricsData> {
 
   const clients = clientsRaw || [];
   const adminVariations = getIdentifierVariations(ADMIN_PERSONAL_WHATSAPP || '5514930855878');
-  const botVariations = getIdentifierVariations(OFFICIAL_BOT_WHATSAPP || '5513920099874');
+  const botVariations = getIdentifierVariations(OFFICIAL_BOT_WHATSAPP || '551331500987');
 
   // 2. Assinaturas e Planos Ativos
   const { data: subsRaw } = await supabase
